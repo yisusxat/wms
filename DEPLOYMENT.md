@@ -4,7 +4,8 @@
 
 1. Crear un Web Service conectado al repositorio `yisusxat/wms`.
 2. Usar el archivo `render.yaml` o configurar:
-   - Build: `npm ci && npm run db:generate && npm run build:api`
+   - Node: `22.x`
+   - Build: `npm ci --include=dev && npm run db:generate && npm run build:api`
    - Start: `npm run start:api`
    - Health check: `/api/health`
 3. Configurar los secretos `DATABASE_URL`, `INSFORGE_URL`,

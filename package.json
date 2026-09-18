@@ -2,6 +2,9 @@
   "name": "wms",
   "private": true,
   "version": "0.1.0",
+  "engines": {
+    "node": "22.x"
+  },
   "workspaces": [
     "apps/api",
     "apps/web"
@@ -9,7 +12,7 @@
   "scripts": {
     "dev:api": "npm --workspace apps/api run start:dev",
     "dev:web": "npm --workspace apps/web run dev",
-    "start:api": "npm --workspace apps/api run start",
+    "start:api": "node apps/api/dist/src/main.js",
     "build:api": "npm --workspace apps/api run build",
     "build:web": "npm --workspace apps/web run build",
     "start:web": "npm --workspace apps/web run start",
