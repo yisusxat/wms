@@ -16,5 +16,6 @@
     "strictNullChecks": true,
     "resolveJsonModule": true,
     "esModuleInterop": true
-  }
+  },
+  "exclude": ["node_modules", "dist", "test", "prisma"]
 }
