@@ -1,8 +1,15 @@
 import { Injectable, ServiceUnavailableException, UnauthorizedException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { createClient } from '@insforge/sdk';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuthenticatedUser, WmsRole } from './auth.types';
+
+type InsForgeCurrentUser = {
+  id: string;
+  email?: string;
+  profile?: {
+    name?: string;
+  };
+};
 
 @Injectable()
 export class AuthService {
@@ -18,23 +25,29 @@ export class AuthService {
       throw new ServiceUnavailableException('InsForge auth is not configured');
     }
 
-    const client = createClient({
-      baseUrl,
-      anonKey,
-      accessToken,
-      isServerMode: true,
+    const response = await fetch(`${baseUrl.replace(/\/$/, '')}/api/auth/sessions/current`, {
+      headers: {
+        Accept: 'application/json',
+        Authorization: `Bearer ${accessToken}`,
+      },
     });
-    const { data, error } = await client.auth.getCurrentUser();
-    if (error || !data?.user?.id) {
+
+    if (!response.ok) {
       throw new UnauthorizedException('Invalid or expired access token');
     }
 
-    let profile = await this.prisma.user.findUnique({ where: { id: data.user.id } });
+    const payload = (await response.json()) as { user?: InsForgeCurrentUser | null };
+    const user = payload.user;
+    if (!user?.id) {
+      throw new UnauthorizedException('Invalid or expired access token');
+    }
+
+    let profile = await this.prisma.user.findUnique({ where: { id: user.id } });
     if (!profile) {
       profile = await this.prisma.user.create({
         data: {
-          id: data.user.id,
-          name: data.user.profile?.name ?? data.user.email,
+          id: user.id,
+          name: user.profile?.name ?? user.email ?? 'Usuario',
         },
       });
     }
@@ -43,9 +56,9 @@ export class AuthService {
     }
 
     return {
-      id: data.user.id,
-      email: data.user.email,
-      name: data.user.profile?.name,
+      id: user.id,
+      email: user.email,
+      name: user.profile?.name,
       role: (profile?.role ?? 'VIEWER') as WmsRole,
     };
   }

@@ -15,7 +15,9 @@
   "scripts": {
     "dev:api": "npm --workspace apps/api run start:dev",
     "dev:web": "npm --workspace apps/web run dev",
-    "start:api": "node apps/api/dist/src/main.js",
+    "start:api": "node apps/api/dist/main.js",
+    "build": "npm run build:api",
+    "start": "npm run start:api",
     "build:api": "npm --workspace apps/api run build",
     "build:apiyarn": "npm run build:api",
     "build:web": "npm --workspace apps/web run build",
