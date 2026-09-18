@@ -16,8 +16,9 @@
 ## Frontend en Vercel
 
 1. Crear un proyecto Vercel conectado al mismo repositorio.
-2. Mantener el Root Directory en la raíz del monorepo.
-3. Usar `vercel.json` para instalar y construir `apps/web`.
+2. Usar `apps/web` como Root Directory. También está declarado en
+   `vercel.json`.
+3. Usar el build command `npm run build` desde ese workspace.
 4. Configurar:
    - `NEXT_PUBLIC_API_URL`: URL pública de Render sin `/api`.
    - `NEXT_PUBLIC_INSFORGE_URL`: URL pública de InsForge.
