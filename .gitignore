@@ -1,0 +1,26 @@
+node_modules/
+dist/
+.next/
+coverage/
+test-results/
+merge-preview*.sql
+.env
+.env.*
+!.env.example
+*.log
+
+
+# InsForge & AI agent skills
+.insforge
+.agent
+.agents
+.augment
+.claude
+.cline
+.github/copilot*
+.kilocode
+.qoder
+.qwen
+.roo
+.trae
+.windsurf
