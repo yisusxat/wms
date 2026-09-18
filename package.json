@@ -9,6 +9,9 @@
     "apps/api",
     "apps/web"
   ],
+  "dependencies": {
+    "next": "15.5.25"
+  },
   "scripts": {
     "dev:api": "npm --workspace apps/api run start:dev",
     "dev:web": "npm --workspace apps/web run dev",
