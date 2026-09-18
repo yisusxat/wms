@@ -11,10 +11,11 @@
     "dev:web": "npm --workspace apps/web run dev",
     "build:api": "npm --workspace apps/api run build",
     "build:web": "npm --workspace apps/web run build",
+    "start:web": "npm --workspace apps/web run start",
     "db:generate": "npm --workspace apps/api run prisma:generate",
     "db:seed": "npm --workspace apps/api run prisma:seed",
     "test:api": "npm --workspace apps/api run test",
-    "test:e2e": "playwright test",
+    "test:e2e": "npm run build:web && playwright test",
     "test:integration": "npm --workspace apps/api run test -- --runInBand --runTestsByPath test/integration.database.spec.ts"
   },
   "devDependencies": {

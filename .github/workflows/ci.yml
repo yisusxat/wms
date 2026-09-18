@@ -36,6 +36,5 @@ jobs:
       - run: for migration in migrations/*.sql; do psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f "$migration"; done
       - run: npm run build:api
       - run: npm run test:api
-      - run: npm run build:web
       - run: npx playwright install --with-deps chromium
       - run: npm run test:e2e

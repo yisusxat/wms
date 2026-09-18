@@ -43,6 +43,7 @@ GET  /api/inventory/product/:id
 GET  /api/movements?type=&search=&from=&to=&page=&pageSize=
 GET  /api/dashboard/summary
 GET  /api/docs
+GET  /api/auth/me
 
 POST /api/products
 PATCH /api/products/:id
