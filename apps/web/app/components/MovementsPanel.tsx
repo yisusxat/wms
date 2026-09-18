@@ -1,11 +1,11 @@
 'use client';
 
 import { FormEvent, useEffect, useState } from 'react';
-import { apiFetch, Location, Movement, Page, Product } from '../../lib/api';
+import { apiFetch, CurrentUser, Location, Movement, Page, Product } from '../../lib/api';
 
 type Mode = 'entry' | 'exit' | 'transfer' | 'adjustment';
 
-export function MovementsPanel({ token, onError }: { token: string; onError: (value: string) => void }) {
+export function MovementsPanel({ token, role, onError }: { token: string; role?: CurrentUser['role']; onError: (value: string) => void }) {
   const [mode, setMode] = useState<Mode>('entry');
   const [products, setProducts] = useState<Product[]>([]);
   const [locations, setLocations] = useState<Location[]>([]);
@@ -36,9 +36,12 @@ export function MovementsPanel({ token, onError }: { token: string; onError: (va
   }
 
   const locationLabel = (id: string) => locations.find(location => location.id === id)?.code ?? 'Seleccionar ubicación';
+  const canOperate = role === 'ADMIN' || role === 'SUPERVISOR' || role === 'OPERATOR';
+  const canAdjust = role === 'ADMIN' || role === 'SUPERVISOR';
+  const availableModes = (['entry', 'exit', 'transfer', ...(canAdjust ? ['adjustment'] : [])] as Mode[]);
   return <section className="space-y-5">
     <form onSubmit={submit} className="space-y-4 rounded-xl bg-white p-5 shadow-sm">
-      <div className="flex flex-wrap gap-2">{(['entry', 'exit', 'transfer', 'adjustment'] as Mode[]).map(item => <button type="button" key={item} onClick={() => setMode(item)} className={`rounded-lg px-3 py-2 text-sm font-semibold ${mode === item ? 'bg-brand text-white' : 'border bg-white'}`}>{({ entry: 'Entrada', exit: 'Salida', transfer: 'Transferencia', adjustment: 'Ajuste' } as Record<Mode, string>)[item]}</button>)}</div>
+      <div className="flex flex-wrap gap-2">{availableModes.map(item => <button type="button" key={item} onClick={() => setMode(item)} className={`rounded-lg px-3 py-2 text-sm font-semibold ${mode === item ? 'bg-brand text-white' : 'border bg-white'}`}>{({ entry: 'Entrada', exit: 'Salida', transfer: 'Transferencia', adjustment: 'Ajuste' } as Record<Mode, string>)[item]}</button>)}</div>
       <div className="grid gap-3 md:grid-cols-2">
         <label className="text-sm font-medium">Producto<select required className="mt-1 w-full rounded-lg border p-3" value={form.productId} onChange={e => setForm({ ...form, productId: e.target.value })}>{products.map(product => <option key={product.id} value={product.id}>{product.sku} — {product.name}</option>)}</select></label>
         <label className="text-sm font-medium">Ubicación<select required className="mt-1 w-full rounded-lg border p-3" value={form.locationId} onChange={e => setForm({ ...form, locationId: e.target.value })}>{locations.map(location => <option key={location.id} value={location.id}>{location.code} — {location.status}</option>)}</select></label>
@@ -48,7 +51,7 @@ export function MovementsPanel({ token, onError }: { token: string; onError: (va
         <label className="text-sm font-medium md:col-span-2">Motivo<input className="mt-1 w-full rounded-lg border p-3" value={form.reason} onChange={e => setForm({ ...form, reason: e.target.value })} /></label>
       </div>
       <p className="text-xs text-gray-500">{mode === 'transfer' ? `Origen: ${locationLabel(form.locationId)} → destino seleccionado` : mode === 'adjustment' ? 'El ajuste positivo suma stock; el negativo descuenta stock disponible.' : 'La operación se registra con el usuario autenticado.'}</p>
-      <button className="rounded-lg bg-brand px-4 py-3 font-semibold text-white">Confirmar {({ entry: 'entrada', exit: 'salida', transfer: 'transferencia', adjustment: 'ajuste' } as Record<Mode, string>)[mode]}</button>
+      {canOperate ? <button className="rounded-lg bg-brand px-4 py-3 font-semibold text-white">Confirmar {({ entry: 'entrada', exit: 'salida', transfer: 'transferencia', adjustment: 'ajuste' } as Record<Mode, string>)[mode]}</button> : <p className="rounded-lg bg-amber-50 p-3 text-sm text-amber-800">Tu rol es de solo lectura.</p>}
     </form>
     <div className="rounded-xl bg-white p-5 shadow-sm"><Table headers={['Tipo', 'Producto', 'Cantidad', 'Origen', 'Destino', 'Fecha']} rows={(movements?.items ?? []).map(item => [item.type, item.product?.sku ?? '-', item.quantity, item.sourceLocation?.code ?? '-', item.destinationLocation?.code ?? '-', new Date(item.createdAt).toLocaleString()])} /></div>
   </section>;
