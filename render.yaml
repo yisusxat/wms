@@ -1,0 +1,22 @@
+services:
+  - type: web
+    name: wms-api
+    runtime: node
+    plan: free
+    rootDir: .
+    buildCommand: npm ci && npm run db:generate && npm run build:api
+    startCommand: npm run start:api
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 10000
+      - key: DATABASE_URL
+        sync: false
+      - key: INSFORGE_URL
+        sync: false
+      - key: INSFORGE_ANON_KEY
+        sync: false
+      - key: WEB_ORIGIN
+        sync: false

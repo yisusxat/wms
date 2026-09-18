@@ -95,3 +95,5 @@ La integración PostgreSQL se ejecuta automáticamente en CI contra un servicio
 efímero. Para ejecutarla localmente se requiere un PostgreSQL de pruebas y
 `DATABASE_URL`; el bootstrap de compatibilidad está en
 `scripts/init-test-db.sql`.
+
+Las instrucciones de despliegue Vercel + Render están en `DEPLOYMENT.md`.
