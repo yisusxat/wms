@@ -42,6 +42,7 @@ GET  /api/inventory/location/:id
 GET  /api/inventory/product/:id
 GET  /api/movements?type=&search=&from=&to=&page=&pageSize=
 GET  /api/dashboard/summary
+GET  /api/docs
 
 POST /api/products
 PATCH /api/products/:id
@@ -54,6 +55,7 @@ PATCH /api/users/:id/role
 ```
 
 Todos los endpoints salvo `/api/health` requieren `Authorization: Bearer <token>`.
+La documentación interactiva OpenAPI está disponible en `/api/docs`.
 
 El seed genera una bodega, dos pasillos, cuatro racks y exactamente 148 ubicaciones.
 

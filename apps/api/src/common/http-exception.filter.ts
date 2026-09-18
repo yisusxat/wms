@@ -5,6 +5,8 @@ import { Prisma } from '@prisma/client';
 export class HttpExceptionFilter implements ExceptionFilter {
   catch(exception: unknown, host: ArgumentsHost) {
     const response = host.switchToHttp().getResponse();
+    const request = host.switchToHttp().getRequest();
+    const requestId = request.header?.('x-request-id');
     let status = HttpStatus.INTERNAL_SERVER_ERROR;
     let message = 'Internal server error';
     let code: string | undefined;
@@ -31,6 +33,6 @@ export class HttpExceptionFilter implements ExceptionFilter {
       }
     }
 
-    response.status(status).json({ statusCode: status, message, ...(code ? { code } : {}) });
+    response.status(status).json({ statusCode: status, message, ...(code ? { code } : {}), ...(requestId ? { requestId } : {}) });
   }
 }
