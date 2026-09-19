@@ -12,7 +12,15 @@ export async function apiFetch<T>(path: string, token: string, init?: RequestIni
 
 export type Page<T> = { items: T[]; total: number; page: number; pageSize: number };
 export type Product = { id: string; sku: string; name: string; unit: string; active: boolean };
-export type Location = { id: string; code: string; status: string; level: number; position: number };
+export type LocationRack = {
+  id: string;
+  code: string;
+  name?: string;
+  levels: number;
+  positions: number;
+  aisle?: { code: string };
+};
+export type Location = { id: string; code: string; status: string; level: number; position: number; rack?: LocationRack };
 export type InventoryItem = { id: string; quantity: number; reservedQuantity: number; product: Product; location: Location };
 export type Movement = { id: string; type: string; quantity: number; createdAt: string; product: Product; sourceLocation?: Location; destinationLocation?: Location; reason?: string };
 export type CurrentUser = { id: string; email?: string; name?: string; role: 'ADMIN' | 'SUPERVISOR' | 'OPERATOR' | 'VIEWER' };
