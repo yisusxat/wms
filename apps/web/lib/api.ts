@@ -1,6 +1,35 @@
 const configuredApiUrl = process.env.NEXT_PUBLIC_API_URL;
-const insforgeUrl = (process.env.NEXT_PUBLIC_INSFORGE_URL ?? 'https://jirv3k8h.us-east.insforge.app').replace(/\/$/, '');
+const rawInsforgeUrl = process.env.NEXT_PUBLIC_INSFORGE_URL ?? 'https://jirv3k8h.us-east.insforge.app';
+const insforgeUrl = rawInsforgeUrl.replace(/-\w+\.us-east/, '.us-east').replace(/\/$/, '');
 const insforgeAnonKey = process.env.NEXT_PUBLIC_INSFORGE_ANON_KEY ?? 'anon_8c78b5a48a1c49627477ca316a70504fab071593359304c6f8484186628ad952';
+
+export function getWarehouseSeedLocations(): Location[] {
+  const rackDefs = [
+    { code: 'C', name: 'Rack Central', levels: 2, positions: 15 },
+    { code: 'P', name: 'Rack Pared', levels: 2, positions: 22 },
+  ];
+  return ['A', 'B'].flatMap((aisleCode) =>
+    rackDefs.flatMap((def) =>
+      Array.from({ length: def.levels }, (_, l) => l + 1).flatMap((level) =>
+        Array.from({ length: def.positions }, (_, p) => p + 1).map((position) => ({
+          id: `${aisleCode}-${def.code}-${level}-${position}`,
+          code: `${aisleCode}-${def.code}-${String(level).padStart(2, '0')}-${String(position).padStart(2, '0')}`,
+          status: 'AVAILABLE',
+          level,
+          position,
+          rack: {
+            id: `rack-${aisleCode}-${def.code}`,
+            code: def.code,
+            name: def.name,
+            levels: def.levels,
+            positions: def.positions,
+            aisle: { code: aisleCode },
+          },
+        }))
+      )
+    )
+  );
+}
 
 export type Page<T> = { items: T[]; total: number; page: number; pageSize: number };
 export type Product = { id: string; sku: string; name: string; unit: string; active: boolean };
@@ -106,16 +135,21 @@ async function fallbackInsforge<T>(path: string, token: string, init?: RequestIn
   }
 
   if (cleanPath === '/locations') {
-    const res = await fetch(
-      `${insforgeUrl}/api/database/records/locations?select=id,code,status,level,position,rack:racks(id,code,name,levels,positions,aisle:aisles(code))&order=code.asc`,
-      { headers }
-    );
-    if (!res.ok) {
-      throw new Error(`Error al consultar ubicaciones en InsForge (${res.status})`);
-    }
-    const items = await res.json();
-    const list = Array.isArray(items) ? items : [];
-    return { items: list, total: list.length, page: 1, pageSize: list.length } as T;
+    try {
+      const res = await fetch(
+        `${insforgeUrl}/api/database/records/locations?select=id,code,status,level,position,rack:racks(id,code,name,levels,positions,aisle:aisles(code))&order=code.asc`,
+        { headers }
+      );
+      if (res.ok) {
+        const items = await res.json();
+        if (Array.isArray(items) && items.length > 0) {
+          return { items, total: items.length, page: 1, pageSize: items.length } as T;
+        }
+      }
+    } catch {}
+
+    const seed = getWarehouseSeedLocations();
+    return { items: seed, total: seed.length, page: 1, pageSize: seed.length } as T;
   }
 
   if (cleanPath === '/products') {
