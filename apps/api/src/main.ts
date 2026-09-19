@@ -16,8 +16,17 @@ async function bootstrap() {
     response.setHeader('x-request-id', requestId);
     next();
   });
+  const rawOrigin = config.get<string>('WEB_ORIGIN', 'http://localhost:3000');
+  const allowedOrigins = rawOrigin.split(',').map((o) => o.trim()).filter(Boolean);
   app.enableCors({
-    origin: config.get<string>('WEB_ORIGIN', 'http://localhost:3000'),
+    origin: (origin: string | undefined, callback: (err: Error | null, allow?: boolean) => void) => {
+      if (!origin) return callback(null, true);
+      if (allowedOrigins.some((allowed) => origin === allowed || allowed === '*')) {
+        return callback(null, true);
+      }
+      if (/\.vercel\.app$/.test(origin)) return callback(null, true);
+      return callback(new Error(`Origin ${origin} not allowed by CORS`));
+    },
     credentials: true,
   });
   app.useGlobalPipes(new ValidationPipe({ whitelist: true, transform: true }));
