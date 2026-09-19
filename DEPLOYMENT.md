@@ -15,14 +15,13 @@
 
 ## Frontend en Vercel
 
-1. Crear un proyecto Vercel conectado al mismo repositorio.
-2. Usar `apps/web` como Root Directory. También está declarado en
-   `vercel.json`.
-3. Usar el build command `npm run build` desde ese workspace.
-4. Configurar:
-   - `NEXT_PUBLIC_API_URL`: URL pública de Render sin `/api`.
-   - `NEXT_PUBLIC_INSFORGE_URL`: URL pública de InsForge.
-   - `NEXT_PUBLIC_INSFORGE_ANON_KEY`: anon key pública del proyecto.
+1. En el dashboard de Vercel, ve a **Settings** > **General** de tu proyecto (o configúralo al importarlo).
+2. En la sección **Root Directory**, haz clic en **Edit**, escribe `apps/web` y guarda los cambios.
+3. Vercel detectará automáticamente **Next.js**, los comandos de instalación (`npm install` respetando el monorepo) y el build (`next build`).
+4. Configurar las variables de entorno en Vercel (**Settings** > **Environment Variables**):
+   - `NEXT_PUBLIC_API_URL`: URL pública de la API en Render (ejemplo: `https://tu-api.onrender.com`).
+   - `NEXT_PUBLIC_INSFORGE_URL`: URL pública de InsForge (`https://jirv3k8h.us-east.insforge.app`).
+   - `NEXT_PUBLIC_INSFORGE_ANON_KEY`: anon key pública de InsForge.
 
 La `DATABASE_URL`, las claves administrativas y las credenciales E2E nunca
 deben configurarse como variables públicas de Vercel.
