@@ -3,250 +3,523 @@
 import { useEffect, useMemo, useState } from 'react';
 import { apiFetch, Location, LocationRack, Page } from '../../lib/api';
 
-const STATUS_COLORS: Record<string, string> = {
-  AVAILABLE: '#22C55E',
-  OCCUPIED: '#EF4444',
-  BLOCKED: '#64748B',
-  MAINTENANCE: '#F59E0B',
+const STATUS_COLORS: Record<string, { bg: string; text: string; border: string; label: string }> = {
+  AVAILABLE: { bg: '#22C55E', text: '#FFFFFF', border: '#16A34A', label: 'Disponible' },
+  OCCUPIED: { bg: '#EF4444', text: '#FFFFFF', border: '#DC2626', label: 'Ocupada' },
+  BLOCKED: { bg: '#64748B', text: '#FFFFFF', border: '#475569', label: 'Bloqueada' },
+  MAINTENANCE: { bg: '#F59E0B', text: '#FFFFFF', border: '#D97706', label: 'Mantención' },
 };
 
-const STATUS_LABELS: Record<string, string> = {
-  AVAILABLE: 'Disponible',
-  OCCUPIED: 'Ocupada',
-  BLOCKED: 'Bloqueada',
-  MAINTENANCE: 'Mantencion',
-};
-
-type RackGroup = {
-  id: string;
-  rack: LocationRack;
-  aisleCode: string;
-  locations: Location[];
-};
-
-function rackFromLocation(location: Location): LocationRack {
-  const parts = location.code.split('-');
-  return location.rack ?? {
-    id: `rack-${parts.slice(0, 2).join('-')}`,
-    code: parts[1] ?? 'X',
-    name: parts.slice(0, 2).join('-'),
-    levels: Math.max(location.level, 1),
-    positions: Math.max(location.position, 1),
-    aisle: { code: parts[0] ?? 'A' },
-  };
-}
-
-function buildRackGroups(locations: Location[]): RackGroup[] {
-  const groups = new Map<string, RackGroup>();
-  for (const location of locations) {
-    const rack = rackFromLocation(location);
-    const aisleCode = rack.aisle?.code ?? location.code.split('-')[0] ?? 'A';
-    const key = `${aisleCode}-${rack.code}`;
-    const existing = groups.get(key);
-    if (existing) {
-      existing.locations.push(location);
-      existing.rack.levels = Math.max(existing.rack.levels, location.level);
-      existing.rack.positions = Math.max(existing.rack.positions, location.position);
-    } else {
-      groups.set(key, { id: key, rack: { ...rack }, aisleCode, locations: [location] });
-    }
-  }
-  return [...groups.values()].sort((a, b) =>
-    `${a.aisleCode}-${a.rack.code}`.localeCompare(`${b.aisleCode}-${b.rack.code}`)
-  );
-}
-
-function getLocationAtLevelPosition(group: RackGroup, level: number, position: number): Location | undefined {
-  return group.locations.find((l) => l.level === level && l.position === position);
-}
-
-type TooltipData = {
+type TooltipInfo = {
   location: Location;
   x: number;
   y: number;
 };
 
-function RackGrid({ group, onHover, onClick, selectedId }: {
-  group: RackGroup;
-  onHover: (data: TooltipData | null) => void;
-  onClick: (location: Location) => void;
-  selectedId: string | null;
-}) {
-  const levels = group.rack.levels;
-  const positions = group.rack.positions;
-  const cellSize = Math.max(18, Math.min(32, Math.floor(200 / positions)));
-  const gap = 2;
-
-  return (
-    <div className="inline-block">
-      <div className="flex flex-col" style={{ gap: `${gap}px` }}>
-        {Array.from({ length: levels }, (_, li) => {
-          const level = levels - li;
-          return (
-            <div key={level} className="flex items-center" style={{ gap: `${gap}px` }}>
-              <span className="flex-shrink-0 text-right font-mono text-gray-400" style={{ fontSize: '10px', width: '18px' }}>
-                N{level}
-              </span>
-              {Array.from({ length: positions }, (_, pi) => {
-                const position = pi + 1;
-                const location = getLocationAtLevelPosition(group, level, position);
-                const color = location ? (STATUS_COLORS[location.status] ?? '#E2E8F0') : '#E2E8F0';
-                const isSelected = location?.id === selectedId;
-                return (
-                  <div
-                    key={position}
-                    title={location ? `${location.code} - ${STATUS_LABELS[location.status]}` : `N${level}/P${position}`}
-                    style={{
-                      width: `${cellSize}px`,
-                      height: `${cellSize}px`,
-                      backgroundColor: color,
-                      border: isSelected ? '2px solid #1E3A8A' : '1px solid rgba(0,0,0,0.12)',
-                      borderRadius: '3px',
-                      cursor: location ? 'pointer' : 'default',
-                      boxShadow: isSelected ? '0 0 0 2px #93C5FD' : undefined,
-                      flexShrink: 0,
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                    }}
-                    onMouseEnter={(e) => {
-                      if (location) {
-                        const rect = e.currentTarget.getBoundingClientRect();
-                        onHover({ location, x: rect.left, y: rect.bottom });
-                      }
-                    }}
-                    onMouseLeave={() => onHover(null)}
-                    onClick={() => { if (location) onClick(location); }}
-                  >
-                    {cellSize >= 24 && (
-                      <span style={{ fontSize: '8px', color: 'rgba(0,0,0,0.45)', fontWeight: 600, lineHeight: 1 }}>
-                        {position}
-                      </span>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-          );
-        })}
-        <div className="flex items-center" style={{ gap: `${gap}px` }}>
-          <span style={{ width: '18px', flexShrink: 0 }} />
-          {Array.from({ length: positions }, (_, pi) => (
-            <div key={pi} className="text-center font-mono text-gray-300" style={{ width: `${cellSize}px`, fontSize: '9px', flexShrink: 0 }}>
-              {pi + 1}
-            </div>
-          ))}
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function AisleBlock({ aisleCode, groups, onHover, onClick, selectedId }: {
-  aisleCode: string;
-  groups: RackGroup[];
-  onHover: (data: TooltipData | null) => void;
-  onClick: (location: Location) => void;
-  selectedId: string | null;
-}) {
-  const aisleGroups = groups.filter((g) => g.aisleCode === aisleCode);
-  return (
-    <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-      <div className="mb-4 flex items-center gap-2">
-        <span className="rounded-full bg-blue-900 px-3 py-0.5 text-xs font-bold text-white">Pasillo {aisleCode}</span>
-        <span className="text-xs text-gray-400">{aisleGroups.length} rack(s)</span>
-      </div>
-      <div className="flex flex-wrap gap-6">
-        {aisleGroups.map((group) => (
-          <div key={group.id} className="flex flex-col items-start">
-            <div className="mb-2 rounded bg-slate-100 px-2 py-0.5 text-xs font-semibold text-slate-600">
-              Rack {group.rack.code}
-              <span className="ml-1 font-normal text-slate-400">{group.rack.levels}N x {group.rack.positions}P</span>
-            </div>
-            <RackGrid group={group} onHover={onHover} onClick={onClick} selectedId={selectedId} />
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
-
 export function Warehouse2D({ token, onError }: { token: string; onError: (value: string) => void }) {
   const [locations, setLocations] = useState<Location[]>([]);
-  const [selected, setSelected] = useState<Location | null>(null);
-  const [tooltip, setTooltip] = useState<TooltipData | null>(null);
   const [loading, setLoading] = useState(true);
-  const groups = useMemo(() => buildRackGroups(locations), [locations]);
-  const aisleCodes = useMemo(() => [...new Set(groups.map((g) => g.aisleCode))].sort(), [groups]);
-  const stats = useMemo(() => locations.reduce((acc, loc) => {
-    acc[loc.status] = (acc[loc.status] ?? 0) + 1;
-    return acc;
-  }, {} as Record<string, number>), [locations]);
+  const [selected, setSelected] = useState<Location | null>(null);
+  const [tooltip, setTooltip] = useState<TooltipInfo | null>(null);
+  const [levelFilter, setLevelFilter] = useState<'all' | '1' | '2'>('all');
+  const [statusFilter, setStatusFilter] = useState<string>('all');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [orderAsc, setOrderAsc] = useState(true); // Pos 1 at top or bottom
 
   useEffect(() => {
     setLoading(true);
-    void apiFetch<Page<Location>>('/locations?pageSize=500', token)
-      .then((page) => setLocations(page.items))
-      .catch((error: Error) => onError(error.message))
+    apiFetch<Page<Location>>('/locations?pageSize=500', token)
+      .then((page) => {
+        setLocations(page.items);
+      })
+      .catch((err: Error) => onError(err.message))
       .finally(() => setLoading(false));
-  }, [onError, token]);
+  }, [token, onError]);
+
+  // Index locations by "Aisle-RackCode-Level-Position"
+  const locationMap = useMemo(() => {
+    const map = new Map<string, Location>();
+    for (const loc of locations) {
+      const parts = loc.code.split('-');
+      const aisle = parts[0] ?? loc.rack?.aisle?.code ?? 'A';
+      const rack = parts[1] ?? loc.rack?.code ?? 'C';
+      const level = loc.level;
+      const pos = loc.position;
+      map.set(`${aisle}-${rack}-${level}-${pos}`, loc);
+    }
+    return map;
+  }, [locations]);
+
+  // Stats calculation
+  const stats = useMemo(() => {
+    return locations.reduce(
+      (acc, loc) => {
+        acc[loc.status] = (acc[loc.status] ?? 0) + 1;
+        return acc;
+      },
+      { AVAILABLE: 0, OCCUPIED: 0, BLOCKED: 0, MAINTENANCE: 0 } as Record<string, number>
+    );
+  }, [locations]);
+
+  // Helper to get location by parameters
+  const getLocation = (aisle: string, rack: string, level: number, position: number) => {
+    return locationMap.get(`${aisle}-${rack}-${level}-${position}`);
+  };
+
+  // Check if a location matches current filters
+  const isMatch = (loc?: Location) => {
+    if (!loc) return false;
+    if (statusFilter !== 'all' && loc.status !== statusFilter) return false;
+    if (searchQuery.trim()) {
+      const q = searchQuery.trim().toLowerCase();
+      if (!loc.code.toLowerCase().includes(q)) return false;
+    }
+    return true;
+  };
+
+  const isHighlighted = (loc?: Location) => {
+    if (!loc || !searchQuery.trim()) return false;
+    return loc.code.toLowerCase().includes(searchQuery.trim().toLowerCase());
+  };
+
+  // Positions ranges
+  const wallPositions = useMemo(() => {
+    const arr = Array.from({ length: 22 }, (_, i) => i + 1);
+    return orderAsc ? arr : [...arr].reverse();
+  }, [orderAsc]);
+
+  const centralPositions = useMemo(() => {
+    const arr = Array.from({ length: 15 }, (_, i) => i + 1);
+    return orderAsc ? arr : [...arr].reverse();
+  }, [orderAsc]);
+
+  // Render a single position square
+  const renderSquare = (aisle: string, rack: string, level: number, position: number) => {
+    const loc = getLocation(aisle, rack, level, position);
+    if (!loc) {
+      return (
+        <div
+          key={`${level}-${position}`}
+          className="h-7 w-7 rounded border border-dashed border-slate-200 bg-slate-50 opacity-40"
+        />
+      );
+    }
+
+    const matched = isMatch(loc);
+    const highlighted = isHighlighted(loc);
+    const isSelected = selected?.id === loc.id;
+    const statusCfg = STATUS_COLORS[loc.status] ?? STATUS_COLORS.AVAILABLE;
+
+    return (
+      <button
+        key={loc.id}
+        type="button"
+        style={{
+          backgroundColor: statusCfg.bg,
+          borderColor: isSelected ? '#1E3A8A' : statusCfg.border,
+          opacity: statusFilter !== 'all' && !matched ? 0.25 : 1,
+        }}
+        className={`relative flex h-7 w-7 items-center justify-center rounded text-[10px] font-bold text-white transition-all duration-150 hover:z-20 hover:scale-125 hover:shadow-lg focus:outline-none ${
+          isSelected ? 'z-10 ring-4 ring-blue-500/50 scale-110' : 'border'
+        } ${highlighted ? 'ring-4 ring-amber-400 animate-pulse' : ''}`}
+        onMouseEnter={(e) => {
+          const rect = e.currentTarget.getBoundingClientRect();
+          setTooltip({
+            location: loc,
+            x: rect.right + 10,
+            y: rect.top,
+          });
+        }}
+        onMouseLeave={() => setTooltip(null)}
+        onClick={() => setSelected(loc)}
+      >
+        <span className="drop-shadow-sm">{String(position).padStart(2, '0')}</span>
+      </button>
+    );
+  };
 
   return (
     <section className="space-y-4">
-      <div className="grid gap-3 sm:grid-cols-4">
-        {(['AVAILABLE', 'OCCUPIED', 'BLOCKED', 'MAINTENANCE'] as const).map((key) => (
-          <div key={key} className="rounded-xl bg-white p-4 shadow-sm">
-            <div className="flex items-center gap-2">
-              <span className="h-3 w-3 rounded-full" style={{ backgroundColor: STATUS_COLORS[key] }} />
-              <p className="text-xs text-gray-500">{STATUS_LABELS[key]}s</p>
+      {/* 1. KPI Cards */}
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        {(['AVAILABLE', 'OCCUPIED', 'BLOCKED', 'MAINTENANCE'] as const).map((key) => {
+          const cfg = STATUS_COLORS[key];
+          return (
+            <div
+              key={key}
+              onClick={() => setStatusFilter(statusFilter === key ? 'all' : key)}
+              className={`cursor-pointer rounded-xl bg-white p-4 shadow-sm border transition-all ${
+                statusFilter === key ? 'border-blue-600 ring-2 ring-blue-100' : 'border-slate-100 hover:border-slate-300'
+              }`}
+            >
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-medium text-slate-500">{cfg.label}s</span>
+                <span className="h-3 w-3 rounded-full" style={{ backgroundColor: cfg.bg }} />
+              </div>
+              <p className="mt-2 text-2xl font-bold text-slate-800">{stats[key] ?? 0}</p>
             </div>
-            <p className="mt-1 text-2xl font-bold">{stats[key] ?? 0}</p>
+          );
+        })}
+      </div>
+
+      {/* 2. Control Toolbar */}
+      <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl bg-white p-4 shadow-sm border border-slate-100">
+        {/* Level Selector */}
+        <div className="flex items-center gap-2">
+          <span className="text-xs font-semibold uppercase text-slate-500">Niveles:</span>
+          <div className="inline-flex rounded-lg border border-slate-200 p-0.5 bg-slate-50">
+            <button
+              onClick={() => setLevelFilter('all')}
+              className={`px-3 py-1 text-xs font-semibold rounded-md transition ${
+                levelFilter === 'all' ? 'bg-blue-900 text-white shadow-sm' : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              Ambos (N1 + N2)
+            </button>
+            <button
+              onClick={() => setLevelFilter('1')}
+              className={`px-3 py-1 text-xs font-semibold rounded-md transition ${
+                levelFilter === '1' ? 'bg-blue-900 text-white shadow-sm' : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              Nivel 1 (Piso)
+            </button>
+            <button
+              onClick={() => setLevelFilter('2')}
+              className={`px-3 py-1 text-xs font-semibold rounded-md transition ${
+                levelFilter === '2' ? 'bg-blue-900 text-white shadow-sm' : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              Nivel 2 (Superior)
+            </button>
           </div>
-        ))}
+        </div>
+
+        {/* Search Input */}
+        <div className="flex items-center gap-2 flex-1 max-w-xs">
+          <input
+            type="text"
+            placeholder="Buscar código (ej: A-C-01-05)..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="w-full rounded-lg border border-slate-200 px-3 py-1.5 text-xs focus:border-blue-600 focus:outline-none focus:ring-1 focus:ring-blue-600"
+          />
+          {searchQuery && (
+            <button
+              onClick={() => setSearchQuery('')}
+              className="text-xs text-slate-400 hover:text-slate-600"
+            >
+              Limpiar
+            </button>
+          )}
+        </div>
+
+        {/* Orientation Toggle */}
+        <button
+          onClick={() => setOrderAsc(!orderAsc)}
+          className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-100"
+        >
+          {orderAsc ? 'Posición: 1 → 22' : 'Posición: 22 → 1'}
+        </button>
       </div>
-      <div className="flex flex-wrap items-center gap-4 rounded-xl bg-white px-4 py-3 text-sm shadow-sm">
-        <span className="font-semibold">Leyenda:</span>
-        {Object.entries(STATUS_LABELS).map(([key, label]) => (
-          <span key={key} className="inline-flex items-center gap-1.5">
-            <span className="inline-block h-3.5 w-3.5 rounded border border-black/10" style={{ backgroundColor: STATUS_COLORS[key] }} />
-            {label}
-          </span>
-        ))}
-        <span className="ml-auto text-xs text-gray-400">Cada cuadrado = 1 posicion - Filas = niveles (N)</span>
+
+      {/* 3. Main Warehouse 2D Layout Plan */}
+      <div className="relative overflow-x-auto rounded-2xl border-4 border-slate-700 bg-slate-100/70 p-6 shadow-inner">
+        {loading ? (
+          <div className="grid h-96 place-items-center">
+            <p className="text-sm font-semibold text-slate-400 animate-pulse">Cargando layout del almacén...</p>
+          </div>
+        ) : (
+          <div className="min-w-[840px] max-w-[1040px] mx-auto">
+            {/* Warehouse Header Banner */}
+            <div className="mb-4 flex items-center justify-between border-b-2 border-dashed border-slate-300 pb-2">
+              <div className="flex items-center gap-2">
+                <span className="h-2.5 w-2.5 rounded-full bg-emerald-500 animate-ping" />
+                <span className="text-xs font-bold uppercase tracking-wider text-slate-700">
+                  Bodega Principal · Vista en Planta (Layout Oficial)
+                </span>
+              </div>
+              <span className="text-xs text-slate-400 font-mono">148 Posiciones Totales</span>
+            </div>
+
+            {/* Layout Grid: 5 Columns (Pared A | Pasillo A | Central | Pasillo B | Pared B) */}
+            <div className="grid grid-cols-[auto_1fr_auto_1fr_auto] gap-3 items-start">
+              {/* ================= COLUMN 1: RACK PARED PASILLO A (22 POSICIONES) ================= */}
+              <div className="rounded-xl border-2 border-slate-800 bg-white p-2.5 shadow-md">
+                <div className="mb-2 text-center">
+                  <p className="text-[11px] font-black uppercase tracking-wide text-slate-800">Rack Pared</p>
+                  <p className="text-[9px] font-bold text-blue-800">Pasillo A (A-P)</p>
+                </div>
+
+                {/* Sub-headers for levels */}
+                <div className="mb-1 flex justify-between px-1 text-[9px] font-black text-slate-500">
+                  {(levelFilter === 'all' || levelFilter === '1') && <span>N1</span>}
+                  <span className="text-[8px] text-slate-400">PASILLO A</span>
+                  {(levelFilter === 'all' || levelFilter === '2') && <span>N2</span>}
+                </div>
+
+                {/* Grid of 22 positions with vertical middle label */}
+                <div className="flex gap-1.5 items-stretch">
+                  {/* Level 1 Column */}
+                  {(levelFilter === 'all' || levelFilter === '1') && (
+                    <div className="flex flex-col gap-1">
+                      {wallPositions.map((pos) => renderSquare('A', 'P', 1, pos))}
+                    </div>
+                  )}
+
+                  {/* Vertical Middle Strip like user diagram */}
+                  <div className="flex w-6 flex-col items-center justify-center rounded bg-slate-100 py-2 border border-slate-200">
+                    <span
+                      style={{ writingMode: 'vertical-rl' }}
+                      className="rotate-180 select-none text-[10px] font-black tracking-widest text-slate-600 uppercase"
+                    >
+                      N i v e l &nbsp; 2 &nbsp; P a s i l l o &nbsp; A
+                    </span>
+                  </div>
+
+                  {/* Level 2 Column */}
+                  {(levelFilter === 'all' || levelFilter === '2') && (
+                    <div className="flex flex-col gap-1">
+                      {wallPositions.map((pos) => renderSquare('A', 'P', 2, pos))}
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* ================= COLUMN 2: PASILLO A ================= */}
+              <div className="flex h-full min-h-[640px] flex-col items-center justify-center rounded-xl border border-dashed border-slate-300 bg-amber-50/20 px-4">
+                <div className="flex flex-col items-center gap-6 select-none opacity-80">
+                  <span className="text-xl text-slate-300 font-bold">▲</span>
+                  <div
+                    style={{ writingMode: 'vertical-rl' }}
+                    className="rotate-180 text-2xl font-black tracking-widest text-slate-400/90 uppercase"
+                  >
+                    P a s i l l o &nbsp; A
+                  </div>
+                  <span className="text-xl text-slate-300 font-bold">▼</span>
+                </div>
+                <div className="mt-8 text-center text-[10px] text-slate-400 font-mono">
+                  Carril de Tránsito
+                </div>
+              </div>
+
+              {/* ================= COLUMN 3: RACK CENTRAL (15 POSICIONES) ================= */}
+              <div className="flex flex-col items-center">
+                <div className="rounded-xl border-2 border-slate-800 bg-white p-2.5 shadow-md">
+                  <div className="mb-2 text-center">
+                    <p className="text-[11px] font-black uppercase tracking-wide text-slate-800">Rack Central (Isla)</p>
+                    <p className="text-[9px] font-bold text-slate-500">Pasillos A y B (15 Posiciones)</p>
+                  </div>
+
+                  <div className="flex gap-2 items-stretch">
+                    {/* --- Left Half: Pasillo A (A-C) --- */}
+                    <div className="flex gap-1.5 items-stretch border-r-2 border-slate-300 pr-2">
+                      {/* Level 1 */}
+                      {(levelFilter === 'all' || levelFilter === '1') && (
+                        <div className="flex flex-col gap-1">
+                          <div className="text-center text-[9px] font-black text-slate-500">N1</div>
+                          {centralPositions.map((pos) => renderSquare('A', 'C', 1, pos))}
+                        </div>
+                      )}
+
+                      {/* Vertical Strip */}
+                      <div className="flex w-5 flex-col items-center justify-center rounded bg-blue-50 py-2 border border-blue-100">
+                        <span
+                          style={{ writingMode: 'vertical-rl' }}
+                          className="rotate-180 select-none text-[9px] font-black tracking-widest text-blue-900 uppercase"
+                        >
+                          N i v e l &nbsp; 2 &nbsp; p a s i l l o &nbsp; A
+                        </span>
+                      </div>
+
+                      {/* Level 2 */}
+                      {(levelFilter === 'all' || levelFilter === '2') && (
+                        <div className="flex flex-col gap-1">
+                          <div className="text-center text-[9px] font-black text-slate-500">N2</div>
+                          {centralPositions.map((pos) => renderSquare('A', 'C', 2, pos))}
+                        </div>
+                      )}
+                    </div>
+
+                    {/* --- Right Half: Pasillo B (B-C) --- */}
+                    <div className="flex gap-1.5 items-stretch pl-1">
+                      {/* Level 1 */}
+                      {(levelFilter === 'all' || levelFilter === '1') && (
+                        <div className="flex flex-col gap-1">
+                          <div className="text-center text-[9px] font-black text-slate-500">N1</div>
+                          {centralPositions.map((pos) => renderSquare('B', 'C', 1, pos))}
+                        </div>
+                      )}
+
+                      {/* Vertical Strip */}
+                      <div className="flex w-5 flex-col items-center justify-center rounded bg-indigo-50 py-2 border border-indigo-100">
+                        <span
+                          style={{ writingMode: 'vertical-rl' }}
+                          className="rotate-180 select-none text-[9px] font-black tracking-widest text-indigo-900 uppercase"
+                        >
+                          N i v e l &nbsp; 2 &nbsp; p a s i l l o &nbsp; B
+                        </span>
+                      </div>
+
+                      {/* Level 2 */}
+                      {(levelFilter === 'all' || levelFilter === '2') && (
+                        <div className="flex flex-col gap-1">
+                          <div className="text-center text-[9px] font-black text-slate-500">N2</div>
+                          {centralPositions.map((pos) => renderSquare('B', 'C', 2, pos))}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Open staging space beneath Central Rack (just like the drawing) */}
+                <div className="mt-4 flex w-full flex-1 flex-col items-center justify-center rounded-xl border border-dashed border-slate-300 bg-slate-50/50 p-4">
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                    Área Libre / Maniobra
+                  </span>
+                </div>
+              </div>
+
+              {/* ================= COLUMN 4: PASILLO B ================= */}
+              <div className="flex h-full min-h-[640px] flex-col items-center justify-center rounded-xl border border-dashed border-slate-300 bg-amber-50/20 px-4">
+                <div className="flex flex-col items-center gap-6 select-none opacity-80">
+                  <span className="text-xl text-slate-300 font-bold">▲</span>
+                  <div
+                    style={{ writingMode: 'vertical-rl' }}
+                    className="rotate-180 text-2xl font-black tracking-widest text-slate-400/90 uppercase"
+                  >
+                    P a s i l l o &nbsp; B
+                  </div>
+                  <span className="text-xl text-slate-300 font-bold">▼</span>
+                </div>
+                <div className="mt-8 text-center text-[10px] text-slate-400 font-mono">
+                  Carril de Tránsito
+                </div>
+              </div>
+
+              {/* ================= COLUMN 5: RACK PARED PASILLO B (22 POSICIONES) ================= */}
+              <div className="rounded-xl border-2 border-slate-800 bg-white p-2.5 shadow-md">
+                <div className="mb-2 text-center">
+                  <p className="text-[11px] font-black uppercase tracking-wide text-slate-800">Rack Pared</p>
+                  <p className="text-[9px] font-bold text-indigo-800">Pasillo B (B-P)</p>
+                </div>
+
+                {/* Sub-headers for levels */}
+                <div className="mb-1 flex justify-between px-1 text-[9px] font-black text-slate-500">
+                  {(levelFilter === 'all' || levelFilter === '1') && <span>N1</span>}
+                  <span className="text-[8px] text-slate-400">PASILLO B</span>
+                  {(levelFilter === 'all' || levelFilter === '2') && <span>N2</span>}
+                </div>
+
+                {/* Grid of 22 positions with vertical middle label */}
+                <div className="flex gap-1.5 items-stretch">
+                  {/* Level 1 Column */}
+                  {(levelFilter === 'all' || levelFilter === '1') && (
+                    <div className="flex flex-col gap-1">
+                      {wallPositions.map((pos) => renderSquare('B', 'P', 1, pos))}
+                    </div>
+                  )}
+
+                  {/* Vertical Middle Strip */}
+                  <div className="flex w-6 flex-col items-center justify-center rounded bg-slate-100 py-2 border border-slate-200">
+                    <span
+                      style={{ writingMode: 'vertical-rl' }}
+                      className="rotate-180 select-none text-[10px] font-black tracking-widest text-slate-600 uppercase"
+                    >
+                      N i v e l &nbsp; 2 &nbsp; P a s i l l o &nbsp; B
+                    </span>
+                  </div>
+
+                  {/* Level 2 Column */}
+                  {(levelFilter === 'all' || levelFilter === '2') && (
+                    <div className="flex flex-col gap-1">
+                      {wallPositions.map((pos) => renderSquare('B', 'P', 2, pos))}
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* ================= BOTTOM GATE: ENTRADA / SALIDA ================= */}
+            <div className="mt-6 flex justify-center">
+              <div className="w-full max-w-md rounded-xl border-2 border-slate-800 bg-gradient-to-r from-amber-400 via-amber-300 to-amber-400 p-3 text-center shadow-lg">
+                <div className="flex items-center justify-center gap-2">
+                  <span className="text-sm">🚪</span>
+                  <span className="text-sm font-black uppercase tracking-widest text-slate-900">
+                    Entrada / Salida
+                  </span>
+                  <span className="text-sm">📦</span>
+                </div>
+                <p className="mt-0.5 text-[10px] font-medium text-slate-800">
+                  Muelle de Carga, Recepción y Despacho
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
-      {loading ? (
-        <div className="grid h-48 place-items-center rounded-xl bg-white shadow-sm">
-          <p className="text-sm text-gray-400">Cargando layout...</p>
-        </div>
-      ) : locations.length === 0 ? (
-        <div className="grid h-48 place-items-center rounded-xl bg-white shadow-sm">
-          <p className="text-sm text-gray-400">No hay ubicaciones registradas</p>
-        </div>
-      ) : (
-        <div className="space-y-4 overflow-x-auto">
-          {aisleCodes.map((aisleCode) => (
-            <AisleBlock key={aisleCode} aisleCode={aisleCode} groups={groups} onHover={setTooltip} onClick={setSelected} selectedId={selected?.id ?? null} />
-          ))}
-        </div>
-      )}
+
+      {/* 4. Floating Tooltip */}
       {tooltip && (
-        <div className="pointer-events-none fixed z-50 rounded-lg bg-slate-900 px-3 py-2 text-xs text-white shadow-xl" style={{ left: tooltip.x, top: tooltip.y + 6 }}>
-          <p className="font-bold">{tooltip.location.code}</p>
-          <p className="mt-0.5 text-slate-300">{STATUS_LABELS[tooltip.location.status] ?? tooltip.location.status}</p>
-          <p className="text-slate-400">Nivel {tooltip.location.level} - Posicion {tooltip.location.position}</p>
-        </div>
-      )}
-      {selected && (
-        <div className="flex items-start gap-3 rounded-xl border border-blue-100 bg-blue-50 p-4">
-          <div className="mt-0.5 h-5 w-5 flex-shrink-0 rounded border border-black/10" style={{ backgroundColor: STATUS_COLORS[selected.status] }} />
-          <div className="flex-1">
-            <p className="font-bold">{selected.code}</p>
-            <p className="text-sm text-gray-600">Estado: <strong>{STATUS_LABELS[selected.status] ?? selected.status}</strong> - Nivel {selected.level} - Posicion {selected.position}</p>
+        <div
+          className="pointer-events-none fixed z-50 min-w-[180px] rounded-xl bg-slate-900/95 p-3 text-white shadow-2xl backdrop-blur-sm border border-slate-700"
+          style={{ left: Math.min(tooltip.x, window.innerWidth - 200), top: tooltip.y }}
+        >
+          <div className="flex items-center justify-between gap-2 border-b border-slate-800 pb-1.5">
+            <span className="font-mono text-sm font-black text-amber-400">{tooltip.location.code}</span>
+            <span
+              className="h-2 w-2 rounded-full"
+              style={{ backgroundColor: STATUS_COLORS[tooltip.location.status]?.bg }}
+            />
           </div>
-          <button className="text-gray-400 hover:text-gray-600" onClick={() => setSelected(null)}>x</button>
+          <div className="mt-2 space-y-1 text-xs">
+            <p className="text-slate-300">
+              Estado: <strong className="text-white">{STATUS_COLORS[tooltip.location.status]?.label}</strong>
+            </p>
+            <p className="text-slate-400">
+              Nivel: <span className="font-semibold text-white">{tooltip.location.level}</span> · Posición:{' '}
+              <span className="font-semibold text-white">{tooltip.location.position}</span>
+            </p>
+            <p className="text-slate-400">
+              Rack: <span className="font-semibold text-white">{tooltip.location.rack?.name ?? tooltip.location.code.split('-')[1]}</span>
+            </p>
+          </div>
         </div>
       )}
-      <p className="text-xs text-gray-400">Cada fila dentro del rack representa un nivel (N1 = piso, N2 = segundo nivel). Cada columna es una posicion. Haz clic en un cuadrado para ver el detalle.</p>
+
+      {/* 5. Selected Location Detail Bar */}
+      {selected && (
+        <div className="flex flex-wrap items-center justify-between gap-4 rounded-xl border-2 border-blue-200 bg-blue-50/80 p-4 shadow-sm animate-fadeIn">
+          <div className="flex items-center gap-3">
+            <div
+              className="flex h-10 w-10 items-center justify-center rounded-lg text-xs font-bold text-white shadow"
+              style={{ backgroundColor: STATUS_COLORS[selected.status]?.bg }}
+            >
+              N{selected.level}
+            </div>
+            <div>
+              <p className="text-xs uppercase font-bold text-blue-900">Ubicación Seleccionada</p>
+              <h4 className="text-lg font-black text-slate-800 font-mono">{selected.code}</h4>
+              <p className="text-xs text-slate-600">
+                Estado: <strong>{STATUS_COLORS[selected.status]?.label}</strong> · Nivel {selected.level} · Posición {selected.position} · Rack {selected.rack?.name ?? selected.code.split('-')[1]}
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setSelected(null)}
+              className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50"
+            >
+              Cerrar detalle
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* 6. Footer Note */}
+      <p className="text-xs text-slate-400">
+        📌 Plano 2D interactivo: Diseñado a escala respetando la distribución arquitectónica del almacén (Pasillo A, Pasillo B, Rack Central Isla y Entrada/Salida). Haz clic o pasa el cursor sobre cada cuadrado para inspeccionar el estado en tiempo real.
+      </p>
     </section>
   );
 }
