@@ -144,14 +144,14 @@ export function Warehouse2D({ token, onError }: { token: string; onError: (value
     return loc.code.toLowerCase().includes(searchQuery.trim().toLowerCase());
   };
 
-  // Row positions
+  // Row positions: 01 starts from the bottom (Entrada/Salida) and the highest number is at the top (Fondo)
   const wallPositions = useMemo(() => {
-    const arr = Array.from({ length: 22 }, (_, i) => i + 1);
+    const arr = Array.from({ length: 22 }, (_, i) => 22 - i); // [22, 21, ..., 01]
     return orderAsc ? arr : [...arr].reverse();
   }, [orderAsc]);
 
   const centralPositions = useMemo(() => {
-    const arr = Array.from({ length: 15 }, (_, i) => i + 1);
+    const arr = Array.from({ length: 15 }, (_, i) => 15 - i); // [15, 14, ..., 01]
     return orderAsc ? arr : [...arr].reverse();
   }, [orderAsc]);
 
@@ -306,7 +306,7 @@ export function Warehouse2D({ token, onError }: { token: string; onError: (value
             onClick={() => setOrderAsc(!orderAsc)}
             className="rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs font-bold text-slate-700 hover:bg-slate-50 shadow-sm"
           >
-            {orderAsc ? 'Posición: 1 → 22' : 'Posición: 22 → 1'}
+            {orderAsc ? 'Orden: Entrada (01) → Fondo' : 'Orden: Fondo (01) → Entrada'}
           </button>
         </div>
       </div>
