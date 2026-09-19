@@ -12,6 +12,8 @@ enum LocationStatus {
   OCCUPIED
   BLOCKED
   MAINTENANCE
+
+  @@map("location_status")
 }
 
 enum MovementType {
@@ -19,6 +21,8 @@ enum MovementType {
   ISSUE
   TRANSFER
   ADJUSTMENT
+
+  @@map("movement_type")
 }
 
 enum UserRole {
@@ -26,6 +30,8 @@ enum UserRole {
   SUPERVISOR
   OPERATOR
   VIEWER
+
+  @@map("user_role")
 }
 
 model Warehouse {
