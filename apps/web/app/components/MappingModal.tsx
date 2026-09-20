@@ -690,10 +690,10 @@ function MappingModalInner({
               ? "bg-white/10 text-white hover:bg-white/20 border border-white/20"
               : "text-indigo-800 hover:bg-indigo-100 text-base"
           }`}
-          title={inline ? "Cerrar sección de mapeo" : "Cerrar modal"}
+          title={inline ? "Ir a Vista 2D" : "Cerrar modal"}
         >
-          <span>✕</span>
-          {inline && <span>Cerrar Sección</span>}
+          <span>{inline ? "🗺️" : "✕"}</span>
+          {inline && <span>Ir a Vista 2D</span>}
         </button>
       </div>
 

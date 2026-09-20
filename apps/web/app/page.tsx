@@ -6,6 +6,7 @@ import { apiFetch, CurrentUser, InventoryItem, Location, Page, Product } from '.
 import { MovementsPanel } from './components/MovementsPanel';
 import { Warehouse3D } from './components/Warehouse3D';
 import { Warehouse2D } from './components/Warehouse2D';
+import { WarehouseMappingView } from './components/WarehouseMappingView';
 import { TeamPanel } from './components/TeamPanel';
 import { SupportModal } from './components/SupportModal';
 import { ForgotPasswordModal } from './components/ForgotPasswordModal';
@@ -35,6 +36,7 @@ type Tab =
   | 'movements'
   | 'warehouse3d'
   | 'warehouse2d'
+  | 'mapping'
   | 'team';
 
 const baseTabs: { id: Tab; label: string; icon?: string }[] = [
@@ -47,6 +49,7 @@ const baseTabs: { id: Tab; label: string; icon?: string }[] = [
   { id: 'movements', label: 'Movimientos', icon: '🔄' },
   { id: 'warehouse3d', label: 'Vista 3D', icon: '🧊' },
   { id: 'warehouse2d', label: 'Vista 2D', icon: '🗺️' },
+  { id: 'mapping', label: 'Mapeo Almacén', icon: '🔍' },
 ];
 
 export default function HomePage() {
@@ -67,6 +70,7 @@ export default function HomePage() {
   const [auditOpen, setAuditOpen] = useState(false);
   const [legalOpen, setLegalOpen] = useState(false);
   const [twoFactorOpen, setTwoFactorOpen] = useState(false);
+  const [mappingInitialLocation, setMappingInitialLocation] = useState<string | null>(null);
 
   useEffect(() => {
     let active = true;
@@ -360,7 +364,28 @@ export default function HomePage() {
           {tab === 'inventory' && <Inventory token={token} onError={setError} />}
           {tab === 'movements' && <MovementsPanel token={token} role={profile?.role} onError={setError} />}
           {tab === 'warehouse3d' && <Warehouse3D token={token} onError={setError} />}
-          {tab === 'warehouse2d' && <Warehouse2D token={token} onError={setError} />}
+          {tab === 'warehouse2d' && (
+            <Warehouse2D
+              token={token}
+              onError={setError}
+              onNavigate={(nextTab, locCode) => {
+                if (nextTab === 'mapping') {
+                  if (locCode) setMappingInitialLocation(locCode);
+                  setTab('mapping');
+                } else {
+                  setTab(nextTab as Tab);
+                }
+              }}
+            />
+          )}
+          {tab === 'mapping' && (
+            <WarehouseMappingView
+              token={token}
+              onError={setError}
+              initialLocationCode={mappingInitialLocation}
+              onNavigate={(nextTab) => setTab(nextTab as Tab)}
+            />
+          )}
           {tab === 'team' && profile?.role === 'ADMIN' && <TeamPanel token={token} onError={setError} />}
         </div>
       </section>
