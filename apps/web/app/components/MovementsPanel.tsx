@@ -5,6 +5,7 @@ import { apiFetch, CurrentUser, Location, Movement, Page, Product } from "../../
 import BarcodeScanner from "./BarcodeScanner";
 import { LabelModal, LabelModalData } from "./LabelModal";
 import { PickingModal } from "./PickingModal";
+import { queueOfflineMovement, getPendingMovements, syncOfflineMovements, PendingMovement } from "../../lib/offlineSync";
 
 type Mode = "entry" | "exit" | "transfer" | "adjustment";
 
@@ -58,6 +59,10 @@ export function MovementsPanel({
   // Labels & Picking state
   const [labelData, setLabelData] = useState<LabelModalData | null>(null);
   const [pickingOpen, setPickingOpen] = useState(false);
+
+  // Offline queue state
+  const [pendingOffline, setPendingOffline] = useState<PendingMovement[]>([]);
+  const [isSyncing, setIsSyncing] = useState(false);
 
   const loadMovements = () =>
     apiFetch<Page<Movement>>("/movements?pageSize=100", token)
@@ -117,6 +122,33 @@ export function MovementsPanel({
     }
   }, [mode, form.productId, form.quantity, token]);
 
+  // Cargar cola offline al inicio y escuchar estado de red
+  useEffect(() => {
+    getPendingMovements().then(setPendingOffline).catch(() => {});
+    const onOnline = () => handleSyncOffline();
+    window.addEventListener("online", onOnline);
+    return () => window.removeEventListener("online", onOnline);
+  }, []);
+
+  const handleSyncOffline = async () => {
+    if (!navigator.onLine) return;
+    setIsSyncing(true);
+    try {
+      const apiBase = process.env.NEXT_PUBLIC_API_URL ?? "https://wms-api-service.onrender.com";
+      const result = await syncOfflineMovements(token, apiBase);
+      if (result.synced > 0) {
+        await loadMovements();
+        alert(`✅ Sincronizados ${result.synced} movimientos pendientes de la cola offline.`);
+      }
+      const updated = await getPendingMovements();
+      setPendingOffline(updated);
+    } catch {
+      // Ignorar errores de sync silencioso
+    } finally {
+      setIsSyncing(false);
+    }
+  };
+
   async function submit(event: FormEvent) {
     event.preventDefault();
     const payload =
@@ -144,11 +176,37 @@ export function MovementsPanel({
             reason: form.reason,
             reference: form.reference,
           };
+
+    // Si no hay conexión a internet, guardar en cola local IndexedDB
+    if (!navigator.onLine) {
+      await queueOfflineMovement({
+        mode,
+        payload,
+        timestamp: new Date().toISOString(),
+      });
+      const updated = await getPendingMovements();
+      setPendingOffline(updated);
+      alert("📶 Estás sin conexión: el movimiento fue guardado en IndexedDB local y se sincronizará automáticamente al recuperar señal.");
+      return;
+    }
+
     try {
       await apiFetch(`/movements/${mode}`, token, { method: "POST", body: JSON.stringify(payload) });
       await loadMovements();
     } catch (e) {
-      onError((e as Error).message);
+      // Si falló por desconexión de red repentina
+      if (!navigator.onLine || (e as Error).message.includes("Failed to fetch") || (e as Error).message.includes("NetworkError")) {
+        await queueOfflineMovement({
+          mode,
+          payload,
+          timestamp: new Date().toISOString(),
+        });
+        const updated = await getPendingMovements();
+        setPendingOffline(updated);
+        alert("📶 Conexión perdida: el movimiento se guardó localmente en la cola offline.");
+      } else {
+        onError((e as Error).message);
+      }
     }
   }
 
@@ -225,6 +283,17 @@ export function MovementsPanel({
         </div>
 
         <div className="flex items-center gap-2">
+          {pendingOffline.length > 0 && (
+            <button
+              type="button"
+              onClick={handleSyncOffline}
+              disabled={isSyncing}
+              className="flex items-center gap-1.5 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-xs font-bold text-amber-900 hover:bg-amber-100 transition animate-pulse"
+              title="Movimientos guardados en IndexedDB pendientes de subir"
+            >
+              {isSyncing ? "⏳ Sincronizando..." : `📶 Sincronizar (${pendingOffline.length} offline)`}
+            </button>
+          )}
           <button
             type="button"
             onClick={() => setPickingOpen(true)}
