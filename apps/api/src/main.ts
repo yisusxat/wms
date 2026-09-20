@@ -6,8 +6,17 @@ import { HttpExceptionFilter } from './common/http-exception.filter';
 import { Request, Response, NextFunction } from 'express';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { randomUUID } from 'node:crypto';
+import * as Sentry from '@sentry/node';
 
 async function bootstrap() {
+  if (process.env.SENTRY_DSN) {
+    Sentry.init({
+      dsn: process.env.SENTRY_DSN,
+      environment: process.env.NODE_ENV ?? 'development',
+      tracesSampleRate: 1.0,
+    });
+  }
+
   const app = await NestFactory.create(AppModule);
   const config = app.get(ConfigService);
   app.setGlobalPrefix('api');

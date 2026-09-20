@@ -211,5 +211,59 @@ async function fallbackInsforge<T>(path: string, token: string, init?: RequestIn
     return { items, total: items.length, page: 1, pageSize: 100 } as T;
   }
 
+  if (cleanPath === '/users') {
+    if (init?.method === 'POST' && init.body) {
+      const parsed = JSON.parse(init.body as string);
+      // Register in InsForge Auth
+      const authRes = await fetch(`${insforgeUrl}/api/auth/users`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({
+          email: parsed.email,
+          password: parsed.password,
+          name: parsed.name,
+        }),
+      });
+      if (!authRes.ok) {
+        const errPayload = await authRes.json().catch(() => null);
+        throw new Error(errPayload?.message ?? 'No fue posible registrar el usuario');
+      }
+      return { status: 'ok', name: parsed.name, email: parsed.email, role: parsed.role ?? 'OPERATOR' } as T;
+    }
+
+    const res = await fetch(`${insforgeUrl}/api/database/records/user_profiles?order=created_at.desc`, { headers });
+    const profiles = res.ok ? await res.json().catch(() => []) : [];
+    return profiles.map((p: any) => ({
+      id: p.id,
+      name: p.name,
+      email: '',
+      role: p.role,
+      active: p.active ?? true,
+      createdAt: p.created_at,
+    })) as T;
+  }
+
+  if (cleanPath.startsWith('/users/')) {
+    const parts = cleanPath.split('/');
+    const userId = parts[2];
+    const action = parts[3]; // 'role' or 'status'
+    const parsed = init?.body ? JSON.parse(init.body as string) : {};
+
+    const patchBody: Record<string, any> = {};
+    if (action === 'role' && parsed.role) patchBody.role = parsed.role;
+    if (action === 'status' && typeof parsed.active === 'boolean') patchBody.active = parsed.active;
+
+    const res = await fetch(`${insforgeUrl}/api/database/records/user_profiles?id=eq.${userId}`, {
+      method: 'PATCH',
+      headers,
+      body: JSON.stringify(patchBody),
+    });
+    if (!res.ok) {
+      const errPayload = await res.json().catch(() => null);
+      throw new Error(errPayload?.message ?? 'Error al actualizar usuario');
+    }
+    return (await res.json()) as T;
+  }
+
   throw new Error(`Operación no disponible sin API en ${path}`);
 }

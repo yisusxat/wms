@@ -33,6 +33,15 @@ export class HttpExceptionFilter implements ExceptionFilter {
       }
     }
 
+    if (status >= 500 && process.env.SENTRY_DSN) {
+      import('@sentry/node').then((Sentry) => {
+        Sentry.withScope((scope) => {
+          if (requestId) scope.setTag('requestId', requestId);
+          Sentry.captureException(exception);
+        });
+      }).catch(() => null);
+    }
+
     response.status(status).json({ statusCode: status, message, ...(code ? { code } : {}), ...(requestId ? { requestId } : {}) });
   }
 }
