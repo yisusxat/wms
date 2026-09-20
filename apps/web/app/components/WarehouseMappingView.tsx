@@ -2,9 +2,12 @@
 
 import { MappingModal } from './MappingModal';
 
+import { Location } from '../../lib/api';
+
 interface WarehouseMappingViewProps {
   token: string;
   onError: (value: string) => void;
+  locations?: Location[];
   initialLocationCode?: string | null;
   onNavigate?: (tab: string) => void;
 }
@@ -12,6 +15,7 @@ interface WarehouseMappingViewProps {
 export function WarehouseMappingView({
   token,
   onError,
+  locations,
   initialLocationCode,
   onNavigate,
 }: WarehouseMappingViewProps) {
@@ -21,6 +25,7 @@ export function WarehouseMappingView({
         inline={true}
         isOpen={true}
         token={token}
+        locations={locations}
         initialLocationCode={initialLocationCode}
         onClose={() => {
           if (onNavigate) {

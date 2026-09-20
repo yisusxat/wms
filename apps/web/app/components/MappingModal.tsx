@@ -1,6 +1,6 @@
 "use client";
 import { useState, useEffect, useMemo, Component, ErrorInfo, ReactNode } from "react";
-import { apiFetch, Location, Product, InventoryItem } from "../../lib/api";
+import { apiFetch, Location, Product, InventoryItem, getWarehouseSeedLocations } from "../../lib/api";
 
 // Error boundary to protect the UI
 class ModalErrorBoundary extends Component<
@@ -125,18 +125,22 @@ function MappingModalInner({
   isOpen,
   onClose,
   token,
-  locations = [],
+  locations,
   initialLocationCode,
   onSuccess,
   inline = false,
 }: Props) {
+  const [locationsList, setLocationsList] = useState<Location[]>(() => {
+    if (Array.isArray(locations) && locations.length > 0) return locations;
+    return getWarehouseSeedLocations();
+  });
   const [items, setItems] = useState<AuditItem[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(false);
   const [search, setSearch] = useState("");
   const [filterTab, setFilterTab] = useState<"ALL" | "WITH_STOCK" | "PENDING" | "DISCREPANCY" | "MATCHED">("ALL");
   const [editingCode, setEditingCode] = useState<string | null>(null);
-  const [selectedLocationCode, setSelectedLocationCode] = useState<string | null>(null);
+  const [selectedLocationCode, setSelectedLocationCode] = useState<string | null>(initialLocationCode || null);
 
   // View switch: 2D Layout Plan vs Table List
   const [viewMode, setViewMode] = useState<"LAYOUT_2D" | "TABLE">("LAYOUT_2D");
@@ -187,16 +191,36 @@ function MappingModalInner({
       setSelectedLocationCode(initialLocationCode);
     } else {
       setSearch("");
-      setSelectedLocationCode("A-P-01-01");
+      setSelectedLocationCode(null);
     }
+
+    const fetchLocationsPromise = (locations && locations.length > 0)
+      ? Promise.resolve({ items: locations })
+      : apiFetch<{ items?: Location[] }>("/locations?pageSize=500", token).catch(() => ({ items: [] }));
 
     Promise.all([
       apiFetch<{ items?: InventoryItem[] }>("/inventory?pageSize=500", token).catch(() => ({ items: [] })),
       apiFetch<{ items?: Product[] }>("/products?pageSize=200", token).catch(() => ({ items: [] })),
+      fetchLocationsPromise,
     ])
-      .then(([invRes, prodRes]) => {
+      .then(([invRes, prodRes, locRes]) => {
         const prodList = (prodRes && Array.isArray(prodRes.items) ? prodRes.items : []) as Product[];
         setProducts(prodList);
+
+        // Merge seed locations (all 148 standard warehouse positions) with live locations from API
+        const seedLocs = getWarehouseSeedLocations();
+        const liveLocs = (locRes && Array.isArray(locRes.items) ? locRes.items : (Array.isArray(locations) && locations.length > 0 ? locations : [])) as Location[];
+        const locMap = new Map<string, Location>();
+        for (const loc of seedLocs) {
+          locMap.set(loc.code, loc);
+        }
+        for (const loc of liveLocs) {
+          if (loc && loc.code) {
+            locMap.set(loc.code, { ...(locMap.get(loc.code) || {}), ...loc });
+          }
+        }
+        const allWarehouseLocs = Array.from(locMap.values());
+        setLocationsList(allWarehouseLocs);
 
         // Map existing inventory by location code and ID
         const invMap = new Map<string, InventoryItem>();
@@ -211,9 +235,8 @@ function MappingModalInner({
           }
         }
 
-        // Build audit list based on all known warehouse locations
-        const safeLocations = Array.isArray(locations) && locations.length > 0 ? locations : [];
-        const auditList: AuditItem[] = safeLocations.map((loc) => {
+        // Build audit list based on all warehouse locations
+        const auditList: AuditItem[] = allWarehouseLocs.map((loc) => {
           const inv = invMap.get(loc.code) || invMap.get(loc.id);
           const hasInv = Boolean(inv && (inv.quantity || 0) > 0);
           const prod = inv && typeof inv.product === "object" ? inv.product : undefined;
@@ -238,8 +261,8 @@ function MappingModalInner({
         });
 
         setItems(auditList);
-        if (!initialLocationCode && auditList.length > 0) {
-          setSelectedLocationCode(auditList[0].locationCode);
+        if (initialLocationCode) {
+          setSelectedLocationCode(initialLocationCode);
         }
       })
       .catch((err) => console.warn("Error cargando inventario de mapeo:", err))
@@ -311,12 +334,31 @@ function MappingModalInner({
 
   // The active item selected on the 2D layout map
   const activeSelectedItem = useMemo(() => {
-    if (!selectedLocationCode) return items[0] || null;
-    return auditMap.get(selectedLocationCode) || items.find((i) => i.locationCode === selectedLocationCode) || null;
+    if (!selectedLocationCode) return null;
+    const found = auditMap.get(selectedLocationCode) || items.find((i) => i.locationCode === selectedLocationCode);
+    if (found) return found;
+
+    // Fallback on-the-fly synthesis if ever clicked a code not currently in map
+    return {
+      locationId: selectedLocationCode,
+      locationCode: selectedLocationCode,
+      systemProductName: "Posición Disponible (Vacía)",
+      systemProductSku: "VACÍO",
+      systemProductUnit: "u",
+      systemQuantity: 0,
+      status: "PENDING" as const,
+      physicalQuantity: 0,
+      physicalProductUnit: "u",
+      reason: COMMON_REASONS[0],
+      notes: "",
+    };
   }, [selectedLocationCode, auditMap, items]);
 
   // Safe collections
-  const safeLocations = Array.isArray(locations) ? locations : [];
+  const safeLocations = useMemo(() => {
+    if (Array.isArray(locationsList) && locationsList.length > 0) return locationsList;
+    return getWarehouseSeedLocations();
+  }, [locationsList]);
   const safeProducts = Array.isArray(products) ? products : [];
 
   // Quick Action: Mark as Matched (Physical matches system)
@@ -1157,8 +1199,16 @@ function MappingModalInner({
         )}
 
         {/* ================= MODIFICATION & AUDIT POPUP MODAL ================= */}
-        {step === "AUDIT" && activeSelectedItem && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 p-4 backdrop-blur-xs animate-fadeIn">
+        {step === "AUDIT" && selectedLocationCode && activeSelectedItem && (
+          <div
+            onClick={(e) => {
+              if (e.target === e.currentTarget) {
+                setSelectedLocationCode(null);
+                setEditingCode(null);
+              }
+            }}
+            className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 p-4 backdrop-blur-xs animate-fadeIn"
+          >
             <div className="w-full max-w-md sm:max-w-lg max-h-[92vh] flex flex-col rounded-3xl bg-white shadow-2xl border border-slate-200 overflow-hidden">
               {/* Modal Header */}
               <div className="flex items-center justify-between border-b px-6 py-4 bg-slate-50">
@@ -1280,7 +1330,7 @@ function MappingModalInner({
                 {editingCode !== activeSelectedItem.locationCode ? (
                   <div className="space-y-3 pt-2">
                     <button
-                      onClick={() => handleMarkMatched(activeSelectedItem.locationCode, true)}
+                      onClick={() => handleMarkMatched(activeSelectedItem.locationCode, false)}
                       className="w-full rounded-2xl bg-emerald-600 py-3 text-xs font-black text-white shadow-md hover:bg-emerald-700 transition hover:scale-102 active:scale-98 flex items-center justify-center gap-2 cursor-pointer"
                     >
                       <span>✅</span>
