@@ -17,8 +17,7 @@ export function SupportModal({ isOpen, onClose, user, profile }: SupportModalPro
   const [description, setDescription] = useState('');
   const [sent, setSent] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [deliveryNote, setDeliveryNote] = useState('');
-  const [errorMsg, setErrorMsg] = useState('');
+  const [deliveryDetails, setDeliveryDetails] = useState<{ channel: string; status: 'ok' | 'fail'; detail: string }[]>([]);
 
   if (!isOpen) return null;
 
@@ -29,7 +28,13 @@ export function SupportModal({ isOpen, onClose, user, profile }: SupportModalPro
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
-    setErrorMsg('');
+    const details: { channel: string; status: 'ok' | 'fail'; detail: string }[] = [];
+
+    // Generate 32-character hexadecimal event ID for Sentry
+    const rawUuid = typeof crypto !== 'undefined' && crypto.randomUUID
+      ? crypto.randomUUID()
+      : Math.random().toString(36).substring(2) + Math.random().toString(36).substring(2) + Math.random().toString(36).substring(2);
+    const sentryEventId = rawUuid.replace(/-/g, '').substring(0, 32).padEnd(32, '0');
 
     const report = {
       subject,
@@ -40,13 +45,106 @@ export function SupportModal({ isOpen, onClose, user, profile }: SupportModalPro
       url: currentUrl,
       userAgent,
       screenResolution,
+      sentryEventId,
       timestamp: new Date().toISOString(),
     };
 
     console.log('Technical report generated:', report);
 
-    // 1. Dispatch email notification via Next.js backend API
-    let emailStatus = '';
+    // 1. Direct Transmission to Sentry Ingest (Infalible HTTP Envelope)
+    const SENTRY_DSN = process.env.NEXT_PUBLIC_SENTRY_DSN || 'https://c209787c1c56ffddbbadd2b36a226ee5@o4512119900536832.ingest.us.sentry.io/4512119917117440';
+    const SENTRY_KEY = 'c209787c1c56ffddbbadd2b36a226ee5';
+    const SENTRY_ENVELOPE_URL = 'https://o4512119900536832.ingest.us.sentry.io/api/4512119917117440/envelope/';
+
+    try {
+      const header = JSON.stringify({
+        event_id: sentryEventId,
+        sent_at: new Date().toISOString(),
+        dsn: SENTRY_DSN,
+      });
+      const itemHeader = JSON.stringify({ type: 'event', content_type: 'application/json' });
+      const eventPayload = JSON.stringify({
+        event_id: sentryEventId,
+        timestamp: Date.now() / 1000,
+        platform: 'javascript',
+        level: category === 'BUG' ? 'error' : 'info',
+        message: `[Soporte ${category}] ${subject}`,
+        user: { email: user?.email ?? 'anonymous' },
+        tags: { category, role: profile?.role ?? 'VIEWER', source: 'wms_platform' },
+        extra: { ...report },
+      });
+      const body = header + '\n' + itemHeader + '\n' + eventPayload + '\n';
+
+      const sentryRes = await fetch(`${SENTRY_ENVELOPE_URL}?sentry_key=${SENTRY_KEY}&sentry_version=7`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-sentry-envelope' },
+        body,
+        mode: 'cors',
+      });
+
+      if (sentryRes.ok) {
+        details.push({ channel: 'Sentry.io', status: 'ok', detail: `Evento registrado (#${sentryEventId.substring(0, 8)})` });
+      } else {
+        details.push({ channel: 'Sentry.io', status: 'fail', detail: `HTTP ${sentryRes.status}` });
+      }
+
+      // Also dispatch through Sentry SDK if loaded
+      try {
+        Sentry.captureMessage(`[Soporte ${category}] ${subject}`, {
+          level: category === 'BUG' ? 'error' : 'info',
+          extra: report,
+          user: { email: user?.email ?? 'anonymous' },
+        });
+      } catch (_) {}
+    } catch (sentryErr: any) {
+      console.warn('Sentry envelope direct dispatch error:', sentryErr);
+      details.push({ channel: 'Sentry.io', status: 'fail', detail: sentryErr.message || 'Error de red' });
+    }
+
+    // 2. Persistent Inmutable Storage in InsForge PostgreSQL backend
+    try {
+      const insforgeUrl = process.env.NEXT_PUBLIC_INSFORGE_URL || 'https://jirv3k8h.us-east.insforge.app';
+      const anonKey = process.env.NEXT_PUBLIC_INSFORGE_ANON_KEY || 'anon_8c78b5a48a1c49627477ca316a70504fab071593359304c6f8484186628ad952';
+      const dbRecord = {
+        action: 'SUPPORT_TICKET_CREATED',
+        entity: 'SUPPORT_TICKET',
+        user_agent: userAgent || 'Web Browser',
+        details: {
+          subject,
+          category,
+          description,
+          user: user?.email ?? 'anonymous',
+          role: profile?.role ?? 'VIEWER',
+          url: currentUrl,
+          screenResolution,
+          sentryEventId,
+          timestamp: new Date().toISOString(),
+        },
+      };
+
+      const dbRes = await fetch(`${insforgeUrl}/api/database/records/audit_logs`, {
+        method: 'POST',
+        headers: {
+          apikey: anonKey,
+          Authorization: 'Bearer ' + anonKey,
+          'Content-Type': 'application/json',
+          Prefer: 'return=representation',
+        },
+        body: JSON.stringify([dbRecord]),
+      });
+
+      if (dbRes.ok) {
+        details.push({ channel: 'Base de Datos (InsForge)', status: 'ok', detail: 'Ticket persistido en audit_logs' });
+      } else {
+        const errTxt = await dbRes.text().catch(() => '');
+        details.push({ channel: 'Base de Datos (InsForge)', status: 'fail', detail: errTxt.slice(0, 60) || 'Error al persistir' });
+      }
+    } catch (dbErr: any) {
+      console.warn('InsForge direct audit log error:', dbErr);
+      details.push({ channel: 'Base de Datos (InsForge)', status: 'fail', detail: dbErr.message || 'Error de conexión' });
+    }
+
+    // 3. Dispatch transactional email via /api/support (Resend)
     try {
       const res = await fetch('/api/support', {
         method: 'POST',
@@ -54,30 +152,21 @@ export function SupportModal({ isOpen, onClose, user, profile }: SupportModalPro
         body: JSON.stringify(report),
       });
       const data = await res.json().catch(() => null);
-      if (res.ok) {
-        emailStatus = data?.emailStatus || 'ok';
+      if (res.ok && data?.emailStatus && !data.emailStatus.startsWith('failed') && !data.emailStatus.startsWith('error')) {
+        details.push({ channel: 'Correo Electrónico (Resend)', status: 'ok', detail: `Entregado a yisusxat@gmail.com ${data.resendId ? `(#${data.resendId.slice(0, 8)})` : ''}` });
       } else {
-        console.error('Support API returned error:', data);
-      }
-    } catch (err: any) {
-      console.warn('Could not post report to /api/support:', err);
-    }
-
-    // 2. Capture message in Sentry for monitoring & error tracking
-    if (process.env.NEXT_PUBLIC_SENTRY_DSN) {
-      try {
-        Sentry.captureMessage(`[Soporte ${category}] ${subject}`, {
-          level: category === 'BUG' ? 'error' : 'info',
-          extra: { ...report, emailStatus },
-          user: { email: user?.email ?? 'anonymous' },
+        details.push({
+          channel: 'Correo Electrónico (Resend)',
+          status: 'fail',
+          detail: data?.emailStatus || `HTTP ${res.status} (Notificación pendiente)`,
         });
-        await Sentry.flush(2000).catch(() => null);
-      } catch (err) {
-        console.warn('Could not forward report to Sentry:', err);
       }
+    } catch (apiErr: any) {
+      console.warn('Could not reach /api/support:', apiErr);
+      details.push({ channel: 'Correo Electrónico (Resend)', status: 'fail', detail: 'Servidor no disponible para envío SMTP directo' });
     }
 
-    setDeliveryNote(emailStatus ? `Notificación por correo: ${emailStatus}` : '');
+    setDeliveryDetails(details);
     setLoading(false);
     setSent(true);
   };
@@ -111,25 +200,43 @@ export function SupportModal({ isOpen, onClose, user, profile }: SupportModalPro
         </div>
 
         {sent ? (
-          <div className="my-8 text-center space-y-3">
-            <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-emerald-100 text-emerald-600 text-3xl">
+          <div className="my-6 text-center space-y-4">
+            <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-emerald-100 text-emerald-600 text-2xl font-black">
               ✓
             </div>
-            <h4 className="text-xl font-bold text-slate-800">Reporte Enviado con Éxito</h4>
-            <p className="text-xs text-slate-500 max-w-sm mx-auto">
-              Se ha capturado el contexto técnico y tus datos. Nuestro equipo de soporte o el administrador revisará la incidencia a la brevedad.
-            </p>
-            {deliveryNote && (
-              <p className="text-[11px] font-mono font-medium text-emerald-700 bg-emerald-50 py-1.5 px-3 rounded-lg inline-block border border-emerald-200">
-                ✓ {deliveryNote}
+            <div>
+              <h4 className="text-lg font-bold text-slate-900">Reporte Despachado y Registrado</h4>
+              <p className="text-xs text-slate-500 max-w-sm mx-auto mt-1">
+                La incidencia ha sido procesada mediante la arquitectura de triple redundancia operativa.
               </p>
-            )}
-            <div className="pt-4">
+            </div>
+
+            {/* Detailed multi-channel status list */}
+            <div className="rounded-2xl border border-slate-200 bg-slate-50/80 p-3.5 text-left space-y-2">
+              <p className="text-[11px] font-bold text-slate-700 uppercase tracking-wider">Estado de Canales de Recepción:</p>
+              <div className="space-y-1.5 text-xs">
+                {deliveryDetails.map((item, idx) => (
+                  <div key={idx} className="flex items-start justify-between gap-2 p-1.5 rounded-lg bg-white border border-slate-100 shadow-sm">
+                    <div className="flex items-center gap-2">
+                      <span className={item.status === 'ok' ? 'text-emerald-600 font-bold' : 'text-amber-500 font-bold'}>
+                        {item.status === 'ok' ? '✓' : '⚠️'}
+                      </span>
+                      <span className="font-semibold text-slate-800">{item.channel}</span>
+                    </div>
+                    <span className={`text-[11px] font-mono ${item.status === 'ok' ? 'text-emerald-700' : 'text-amber-700'} text-right truncate max-w-[210px]`}>
+                      {item.detail}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="pt-2">
               <button
                 onClick={handleClose}
-                className="rounded-xl bg-slate-900 px-6 py-2.5 text-xs font-bold text-white shadow hover:bg-slate-800"
+                className="rounded-xl bg-slate-900 px-7 py-2.5 text-xs font-bold text-white shadow hover:bg-slate-800 transition"
               >
-                Entendido
+                Cerrar y Continuar
               </button>
             </div>
           </div>
