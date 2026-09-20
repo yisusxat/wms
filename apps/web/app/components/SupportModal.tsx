@@ -17,6 +17,8 @@ export function SupportModal({ isOpen, onClose, user, profile }: SupportModalPro
   const [description, setDescription] = useState('');
   const [sent, setSent] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [deliveryNote, setDeliveryNote] = useState('');
+  const [errorMsg, setErrorMsg] = useState('');
 
   if (!isOpen) return null;
 
@@ -27,6 +29,7 @@ export function SupportModal({ isOpen, onClose, user, profile }: SupportModalPro
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
+    setErrorMsg('');
 
     const report = {
       subject,
@@ -43,13 +46,20 @@ export function SupportModal({ isOpen, onClose, user, profile }: SupportModalPro
     console.log('Technical report generated:', report);
 
     // 1. Dispatch email notification via Next.js backend API
+    let emailStatus = '';
     try {
-      await fetch('/api/support', {
+      const res = await fetch('/api/support', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(report),
       });
-    } catch (err) {
+      const data = await res.json().catch(() => null);
+      if (res.ok) {
+        emailStatus = data?.emailStatus || 'ok';
+      } else {
+        console.error('Support API returned error:', data);
+      }
+    } catch (err: any) {
       console.warn('Could not post report to /api/support:', err);
     }
 
@@ -58,14 +68,16 @@ export function SupportModal({ isOpen, onClose, user, profile }: SupportModalPro
       try {
         Sentry.captureMessage(`[Soporte ${category}] ${subject}`, {
           level: category === 'BUG' ? 'error' : 'info',
-          extra: report,
+          extra: { ...report, emailStatus },
           user: { email: user?.email ?? 'anonymous' },
         });
+        await Sentry.flush(2000).catch(() => null);
       } catch (err) {
         console.warn('Could not forward report to Sentry:', err);
       }
     }
 
+    setDeliveryNote(emailStatus ? `Notificación por correo: ${emailStatus}` : '');
     setLoading(false);
     setSent(true);
   };
@@ -107,6 +119,11 @@ export function SupportModal({ isOpen, onClose, user, profile }: SupportModalPro
             <p className="text-xs text-slate-500 max-w-sm mx-auto">
               Se ha capturado el contexto técnico y tus datos. Nuestro equipo de soporte o el administrador revisará la incidencia a la brevedad.
             </p>
+            {deliveryNote && (
+              <p className="text-[11px] font-mono font-medium text-emerald-700 bg-emerald-50 py-1.5 px-3 rounded-lg inline-block border border-emerald-200">
+                ✓ {deliveryNote}
+              </p>
+            )}
             <div className="pt-4">
               <button
                 onClick={handleClose}
