@@ -8,6 +8,9 @@ import { Warehouse3D } from './components/Warehouse3D';
 import { Warehouse2D } from './components/Warehouse2D';
 import { TeamPanel } from './components/TeamPanel';
 import { SupportModal } from './components/SupportModal';
+import { ForgotPasswordModal } from './components/ForgotPasswordModal';
+import { AuditLogsModal } from './components/AuditLogsModal';
+import { LegalModal } from './components/LegalModal';
 
 type Summary = {
   products: number;
@@ -49,7 +52,12 @@ export default function HomePage() {
   const [tab, setTab] = useState<Tab>('dashboard');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(true);
+
+  // Modals state
   const [supportOpen, setSupportOpen] = useState(false);
+  const [forgotOpen, setForgotOpen] = useState(false);
+  const [auditOpen, setAuditOpen] = useState(false);
+  const [legalOpen, setLegalOpen] = useState(false);
 
   useEffect(() => {
     let active = true;
@@ -120,6 +128,14 @@ export default function HomePage() {
     setSummary(null);
   }
 
+  async function revokeAll() {
+    if (!confirm('¿Cerrar sesión en todos los dispositivos activos?')) return;
+    if (token) {
+      await apiFetch('/auth/revoke-all', token, { method: 'POST' }).catch(() => null);
+    }
+    await signOut();
+  }
+
   if (loading) {
     return (
       <main className="grid min-h-screen place-items-center bg-slate-50 text-slate-600">
@@ -134,34 +150,57 @@ export default function HomePage() {
   if (!user || !token) {
     return (
       <main className="grid min-h-screen place-items-center bg-slate-50 p-6">
-        <form onSubmit={signIn} className="w-full max-w-md space-y-5 rounded-2xl bg-white p-8 shadow-sm border border-slate-100">
-          <p className="text-sm font-semibold uppercase tracking-widest text-brand">WMS</p>
-          <h1 className="text-3xl font-bold">Iniciar sesión</h1>
-          <label className="block text-sm font-medium">
-            Correo
-            <input
-              className="mt-2 w-full rounded-lg border p-3 outline-blue-600"
-              type="email"
-              required
-              value={email}
-              onChange={e => setEmail(e.target.value)}
-            />
-          </label>
-          <label className="block text-sm font-medium">
-            Contraseña
-            <input
-              className="mt-2 w-full rounded-lg border p-3 outline-blue-600"
-              type="password"
-              required
-              value={password}
-              onChange={e => setPassword(e.target.value)}
-            />
-          </label>
-          {error && <p className="rounded-lg bg-red-50 p-3 text-sm text-danger">{error}</p>}
-          <button className="w-full rounded-lg bg-brand p-3 font-semibold text-white transition hover:bg-blue-800">
-            Entrar
-          </button>
-        </form>
+        <div className="w-full max-w-md space-y-4">
+          <form onSubmit={signIn} className="rounded-2xl bg-white p-8 shadow-sm border border-slate-100 space-y-4">
+            <p className="text-sm font-semibold uppercase tracking-widest text-brand">WMS</p>
+            <h1 className="text-3xl font-bold text-slate-900">Iniciar sesión</h1>
+            <label className="block text-sm font-medium">
+              Correo
+              <input
+                className="mt-1.5 w-full rounded-lg border p-3 outline-blue-600"
+                type="email"
+                required
+                value={email}
+                onChange={e => setEmail(e.target.value)}
+              />
+            </label>
+            <label className="block text-sm font-medium">
+              Contraseña
+              <input
+                className="mt-1.5 w-full rounded-lg border p-3 outline-blue-600"
+                type="password"
+                required
+                value={password}
+                onChange={e => setPassword(e.target.value)}
+              />
+            </label>
+            <div className="flex justify-end">
+              <button
+                type="button"
+                onClick={() => setForgotOpen(true)}
+                className="text-xs font-semibold text-blue-600 hover:text-blue-800 transition"
+              >
+                ¿Olvidaste tu contraseña?
+              </button>
+            </div>
+            {error && <p className="rounded-lg bg-red-50 p-3 text-sm text-danger">{error}</p>}
+            <button className="w-full rounded-lg bg-brand p-3 font-semibold text-white transition hover:bg-blue-800">
+              Entrar
+            </button>
+          </form>
+
+          <div className="text-center">
+            <button
+              onClick={() => setLegalOpen(true)}
+              className="text-xs text-slate-400 hover:text-slate-600 transition"
+            >
+              ⚖️ Términos de Servicio · SLA · Privacidad & RGPD
+            </button>
+          </div>
+        </div>
+
+        <ForgotPasswordModal isOpen={forgotOpen} onClose={() => setForgotOpen(false)} />
+        <LegalModal isOpen={legalOpen} onClose={() => setLegalOpen(false)} />
       </main>
     );
   }
@@ -192,31 +231,59 @@ export default function HomePage() {
           </nav>
         </div>
 
-        <div className="mt-8 pt-6 border-t border-blue-700/50 text-xs text-blue-200">
-          <p className="font-medium text-white">{user.email}</p>
-          <p className="text-[11px] capitalize text-blue-300">Rol: {profile?.role ?? 'Usuario'}</p>
+        <div className="mt-8 pt-6 border-t border-blue-700/50 text-xs text-blue-200 space-y-3">
+          <div>
+            <p className="font-medium text-white truncate">{user.email}</p>
+            <p className="text-[11px] capitalize text-blue-300">Rol: {profile?.role ?? 'Usuario'}</p>
+          </div>
+          <button
+            onClick={() => setLegalOpen(true)}
+            className="text-[11px] text-blue-300 hover:text-white flex items-center gap-1 transition"
+          >
+            ⚖️ Términos, SLA y Privacidad
+          </button>
         </div>
       </aside>
 
       <section className="flex-1 p-6 lg:p-10">
         <header className="flex flex-wrap items-center justify-between gap-4 border-b border-slate-200 pb-5">
           <div>
-            <p className="text-sm text-gray-500">
-              Panel operacional · <span className="font-medium uppercase text-blue-700">{profile?.role ?? 'cargando rol'}</span>
-            </p>
-            <h1 className="text-3xl font-bold text-gray-900">{visibleTabs.find(item => item.id === tab)?.label}</h1>
+            <div className="flex items-center gap-2">
+              <span className="inline-flex items-center gap-1 rounded-full bg-blue-100 px-2.5 py-0.5 text-xs font-semibold text-blue-800">
+                🏢 Bodega Central
+              </span>
+              <span className="text-xs text-slate-400">· Multi-Tenant</span>
+            </div>
+            <h1 className="mt-1 text-3xl font-bold text-gray-900">{visibleTabs.find(item => item.id === tab)?.label}</h1>
           </div>
-          <div className="flex items-center gap-3">
+
+          <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+            {profile?.role === 'ADMIN' && (
+              <button
+                onClick={() => setAuditOpen(true)}
+                className="flex items-center gap-1.5 rounded-lg border border-indigo-200 bg-indigo-50 px-3 py-2 text-sm font-medium text-indigo-900 transition hover:bg-indigo-100 shadow-xs"
+                title="Ver bitácora de auditoría"
+              >
+                📜 Auditoría
+              </button>
+            )}
             <button
               onClick={() => setSupportOpen(true)}
-              className="flex items-center gap-1.5 rounded-lg border border-amber-300 bg-amber-50 px-3.5 py-2 text-sm font-medium text-amber-900 transition hover:bg-amber-100 shadow-xs"
+              className="flex items-center gap-1.5 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-sm font-medium text-amber-900 transition hover:bg-amber-100 shadow-xs"
               title="Reportar problema técnico"
             >
-              <span className="text-amber-600 font-bold">⚠</span> Reportar problema
+              <span className="text-amber-600 font-bold">⚠</span> Soporte
+            </button>
+            <button
+              onClick={revokeAll}
+              className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-medium text-slate-600 hover:bg-slate-50 transition shadow-xs"
+              title="Cerrar sesión en todos los dispositivos"
+            >
+              Cerrar en todos
             </button>
             <button
               onClick={signOut}
-              className="rounded-lg border bg-white px-4 py-2 text-sm font-medium text-gray-700 transition hover:bg-gray-100 shadow-xs"
+              className="rounded-lg border bg-white px-3.5 py-2 text-sm font-medium text-gray-700 transition hover:bg-gray-100 shadow-xs"
             >
               Cerrar sesión
             </button>
@@ -237,12 +304,10 @@ export default function HomePage() {
         </div>
       </section>
 
-      <SupportModal
-        isOpen={supportOpen}
-        onClose={() => setSupportOpen(false)}
-        user={user}
-        profile={profile}
-      />
+      {/* Modals */}
+      <SupportModal isOpen={supportOpen} onClose={() => setSupportOpen(false)} user={user} profile={profile} />
+      <AuditLogsModal isOpen={auditOpen} onClose={() => setAuditOpen(false)} token={token} />
+      <LegalModal isOpen={legalOpen} onClose={() => setLegalOpen(false)} token={token} onAnonymized={signOut} />
     </main>
   );
 }

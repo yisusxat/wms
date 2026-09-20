@@ -36,13 +36,16 @@ enum UserRole {
 
 model Warehouse {
   id String @id @default(uuid()) @db.Uuid
+  organizationId String? @map("organization_id") @db.Uuid
   code String @unique
   name String
   description String?
   active Boolean @default(true)
+  organization Organization? @relation(fields: [organizationId], references: [id])
   zones Zone[]
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
+  @@index([organizationId])
   @@map("warehouses")
 }
 
@@ -117,6 +120,7 @@ model Location {
 
 model Product {
   id String @id @default(uuid()) @db.Uuid
+  organizationId String? @map("organization_id") @db.Uuid
   sku String @unique
   name String
   description String?
@@ -125,10 +129,12 @@ model Product {
   category String?
   brand String?
   active Boolean @default(true)
+  organization Organization? @relation(fields: [organizationId], references: [id])
   inventory Inventory[]
   movements Movement[]
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
+  @@index([organizationId])
   @@index([name])
   @@map("products")
 }
@@ -151,6 +157,7 @@ model Inventory {
 
 model Movement {
   id String @id @default(uuid()) @db.Uuid
+  organizationId String? @map("organization_id") @db.Uuid
   type MovementType
   productId String @map("product_id") @db.Uuid
   quantity Int
@@ -159,11 +166,13 @@ model Movement {
   reference String?
   reason String?
   userId String? @map("user_id") @db.Uuid
+  organization Organization? @relation(fields: [organizationId], references: [id])
   product Product @relation(fields: [productId], references: [id])
   sourceLocation Location? @relation("sourceLocation", fields: [sourceLocationId], references: [id])
   destinationLocation Location? @relation("destinationLocation", fields: [destinationLocationId], references: [id])
   user User? @relation(fields: [userId], references: [id])
   createdAt DateTime @default(now()) @map("created_at")
+  @@index([organizationId])
   @@index([productId])
   @@index([createdAt])
   @@index([type])
@@ -176,7 +185,55 @@ model User {
   role UserRole @default(OPERATOR)
   active Boolean @default(true)
   movements Movement[]
+  memberships Membership[]
+  auditLogs AuditLog[]
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
   @@map("user_profiles")
+}
+
+model Organization {
+  id String @id @default(uuid()) @db.Uuid
+  name String
+  slug String @unique
+  warehouses Warehouse[]
+  products Product[]
+  movements Movement[]
+  memberships Membership[]
+  auditLogs AuditLog[]
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+  @@map("organizations")
+}
+
+model Membership {
+  id String @id @default(uuid()) @db.Uuid
+  organizationId String @map("organization_id") @db.Uuid
+  userId String @map("user_id") @db.Uuid
+  role UserRole @default(OPERATOR)
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+  @@unique([organizationId, userId])
+  @@map("memberships")
+}
+
+model AuditLog {
+  id String @id @default(uuid()) @db.Uuid
+  organizationId String? @map("organization_id") @db.Uuid
+  userId String? @map("user_id") @db.Uuid
+  action String
+  entity String
+  entityId String? @map("entity_id")
+  details Json?
+  ip String?
+  userAgent String? @map("user_agent")
+  organization Organization? @relation(fields: [organizationId], references: [id], onDelete: SetNull)
+  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+  createdAt DateTime @default(now()) @map("created_at")
+  @@index([organizationId])
+  @@index([action])
+  @@index([createdAt])
+  @@map("audit_logs")
 }

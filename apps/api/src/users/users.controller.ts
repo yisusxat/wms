@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Patch, Post, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Param, Patch, Post, Req, UseGuards } from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
 import { AuthGuard } from '../auth/auth.guard';
 import { Roles } from '../auth/roles.decorator';
@@ -7,31 +7,50 @@ import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateRoleDto } from './dto/update-role.dto';
 import { UpdateStatusDto } from './dto/update-status.dto';
 import { UsersService } from './users.service';
+import { Request } from 'express';
 
 @Controller('users')
-@UseGuards(AuthGuard, RolesGuard)
-@Roles('ADMIN')
+@UseGuards(AuthGuard)
 export class UsersController {
   constructor(private readonly users: UsersService) {}
 
   @Get()
-  findAll() {
-    return this.users.findAll();
+  @UseGuards(RolesGuard)
+  @Roles('ADMIN')
+  findAll(@Req() req: Request) {
+    const orgId = req.header('x-organization-id');
+    return this.users.findAll(orgId);
   }
 
   @Throttle({ default: { limit: 10, ttl: 60000 } })
   @Post()
-  createUser(@Body() body: CreateUserDto) {
-    return this.users.createUser(body);
+  @UseGuards(RolesGuard)
+  @Roles('ADMIN')
+  createUser(@Req() req: Request, @Body() body: CreateUserDto) {
+    const adminId = (req as any).user.sub;
+    const orgId = req.header('x-organization-id');
+    return this.users.createUser(body, orgId, adminId);
   }
 
   @Patch(':id/role')
-  updateRole(@Param('id') id: string, @Body() body: UpdateRoleDto) {
-    return this.users.updateRole(id, body);
+  @UseGuards(RolesGuard)
+  @Roles('ADMIN')
+  updateRole(@Req() req: Request, @Param('id') id: string, @Body() body: UpdateRoleDto) {
+    const adminId = (req as any).user.sub;
+    return this.users.updateRole(id, body, adminId);
   }
 
   @Patch(':id/status')
-  updateStatus(@Param('id') id: string, @Body() body: UpdateStatusDto) {
-    return this.users.updateStatus(id, body);
+  @UseGuards(RolesGuard)
+  @Roles('ADMIN')
+  updateStatus(@Req() req: Request, @Param('id') id: string, @Body() body: UpdateStatusDto) {
+    const adminId = (req as any).user.sub;
+    return this.users.updateStatus(id, body, adminId);
+  }
+
+  @Post('me/anonymize')
+  anonymizeMe(@Req() req: Request) {
+    const userId = (req as any).user.sub;
+    return this.users.anonymizeUser(userId);
   }
 }

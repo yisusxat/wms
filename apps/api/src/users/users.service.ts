@@ -1,6 +1,8 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../prisma/prisma.service';
+import { EmailService } from '../email/email.service';
+import { AuditService } from '../audit/audit.service';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateRoleDto } from './dto/update-role.dto';
 import { UpdateStatusDto } from './dto/update-status.dto';
@@ -10,10 +12,30 @@ export class UsersService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly config: ConfigService,
+    private readonly emailService: EmailService,
+    private readonly audit: AuditService,
   ) {}
 
-  async findAll() {
-    const profiles = await this.prisma.user.findMany({ orderBy: { createdAt: 'desc' } });
+  async findAll(organizationId?: string) {
+    let whereClause: any = {};
+    if (organizationId) {
+      whereClause = {
+        memberships: {
+          some: { organizationId },
+        },
+      };
+    }
+
+    const profiles = await this.prisma.user.findMany({
+      where: whereClause,
+      include: {
+        memberships: {
+          include: { organization: true },
+        },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+
     try {
       const authUsers: { id: string; email: string }[] = await this.prisma.$queryRaw`
         SELECT id::text, email FROM auth.users
@@ -28,7 +50,7 @@ export class UsersService {
     }
   }
 
-  async createUser(dto: CreateUserDto) {
+  async createUser(dto: CreateUserDto, organizationId?: string, adminUserId?: string) {
     const rawUrl = this.config.get<string>('INSFORGE_URL', 'https://jirv3k8h.us-east.insforge.app');
     const insforgeUrl = rawUrl.replace(/-\w+\.us-east/, '.us-east').replace(/\/$/, '');
     const anonKey = this.config.get<string>(
@@ -88,17 +110,91 @@ export class UsersService {
       },
     });
 
+    // 5. Associate with Organization
+    const defaultOrg = await this.prisma.organization.findFirst({
+      where: organizationId ? { id: organizationId } : { slug: 'bodega-central' },
+    });
+
+    if (defaultOrg) {
+      await this.prisma.membership.upsert({
+        where: {
+          organizationId_userId: {
+            organizationId: defaultOrg.id,
+            userId,
+          },
+        },
+        update: { role: dto.role ?? 'OPERATOR' },
+        create: {
+          organizationId: defaultOrg.id,
+          userId,
+          role: dto.role ?? 'OPERATOR',
+        },
+      });
+
+      // 6. Send welcome email via Resend
+      await this.emailService.sendWelcomeEmail(dto.email, defaultOrg.name, dto.password, dto.name);
+    }
+
+    // 7. Audit log
+    await this.audit.log({
+      organizationId: defaultOrg?.id,
+      userId: adminUserId,
+      action: 'USER_CREATED',
+      entity: 'user',
+      entityId: userId,
+      details: { email: dto.email, role: dto.role, name: dto.name },
+    });
+
     return {
       ...profile,
       email: dto.email,
     };
   }
 
-  updateRole(id: string, data: UpdateRoleDto) {
-    return this.prisma.user.update({ where: { id }, data: { role: data.role } });
+  async updateRole(id: string, data: UpdateRoleDto, adminUserId?: string) {
+    const updated = await this.prisma.user.update({ where: { id }, data: { role: data.role } });
+    await this.prisma.membership.updateMany({
+      where: { userId: id },
+      data: { role: data.role },
+    });
+    await this.audit.log({
+      userId: adminUserId,
+      action: 'ROLE_UPDATED',
+      entity: 'user',
+      entityId: id,
+      details: { newRole: data.role },
+    });
+    return updated;
   }
 
-  updateStatus(id: string, data: UpdateStatusDto) {
-    return this.prisma.user.update({ where: { id }, data: { active: data.active } });
+  async updateStatus(id: string, data: UpdateStatusDto, adminUserId?: string) {
+    const updated = await this.prisma.user.update({ where: { id }, data: { active: data.active } });
+    await this.audit.log({
+      userId: adminUserId,
+      action: data.active ? 'USER_ACTIVATED' : 'USER_SUSPENDED',
+      entity: 'user',
+      entityId: id,
+    });
+    return updated;
+  }
+
+  async anonymizeUser(userId: string) {
+    const anonEmail = `anonymized_${userId.slice(0, 8)}@deleted.local`;
+    await this.prisma.$executeRawUnsafe(
+      `UPDATE "user_profiles" SET name = 'Usuario Anonimizado', active = false, updated_at = NOW() WHERE id = $1::uuid`,
+      userId,
+    );
+    await this.prisma.$executeRawUnsafe(
+      `UPDATE auth.users SET email = $1, email_verified = false, updated_at = NOW() WHERE id = $2::uuid`,
+      anonEmail,
+      userId,
+    );
+    await this.audit.log({
+      userId,
+      action: 'USER_GDPR_ANONYMIZED',
+      entity: 'user',
+      entityId: userId,
+    });
+    return { message: 'Tu cuenta ha sido anonimizada y dada de baja exitosamente.' };
   }
 }

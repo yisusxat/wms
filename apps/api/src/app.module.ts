@@ -13,9 +13,27 @@ import { DashboardModule } from './dashboard/dashboard.module';
 import { WarehousesModule } from './warehouses/warehouses.module';
 import { UsersModule } from './users/users.module';
 import { HttpLoggerMiddleware } from './common/logger.middleware';
+import { EmailModule } from './email/email.module';
+import { AuditModule } from './audit/audit.module';
+import { OrganizationsModule } from './organizations/organizations.module';
 
 @Module({
-  imports: [ConfigModule.forRoot({ isGlobal: true }), ThrottlerModule.forRoot([{ ttl: 60000, limit: 120 }]), PrismaModule, AuthModule, ProductsModule, MovementsModule, LocationsModule, InventoryModule, DashboardModule, WarehousesModule, UsersModule],
+  imports: [
+    ConfigModule.forRoot({ isGlobal: true }),
+    ThrottlerModule.forRoot([{ ttl: 60000, limit: 120 }]),
+    PrismaModule,
+    EmailModule,
+    AuditModule,
+    OrganizationsModule,
+    AuthModule,
+    ProductsModule,
+    MovementsModule,
+    LocationsModule,
+    InventoryModule,
+    DashboardModule,
+    WarehousesModule,
+    UsersModule,
+  ],
   controllers: [HealthController],
   providers: [{ provide: APP_GUARD, useClass: ThrottlerGuard }],
 })
