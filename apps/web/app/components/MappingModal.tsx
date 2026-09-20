@@ -142,6 +142,7 @@ function MappingModalInner({
   const [viewMode, setViewMode] = useState<"LAYOUT_2D" | "TABLE">("LAYOUT_2D");
   const [levelFilter, setLevelFilter] = useState<"all" | "1" | "2">("all");
   const [orderAsc, setOrderAsc] = useState(true);
+  const [showProductDetails, setShowProductDetails] = useState(false);
 
   // Modal Step: AUDIT -> PRE_REPORT -> REPORT
   const [step, setStep] = useState<"AUDIT" | "PRE_REPORT" | "REPORT">("AUDIT");
@@ -608,15 +609,52 @@ function MappingModalInner({
       }
     }
 
+    if (showProductDetails) {
+      return (
+        <button
+          key={code}
+          type="button"
+          onClick={() => {
+            setSelectedLocationCode(code);
+            setEditingCode(null);
+          }}
+          title={`${code} · ${item?.systemProductName || 'Vacío'} · Cantidad: ${item?.systemQuantity ?? 0} ${item?.systemProductUnit || 'u'} · ${
+            isMatched ? "Verificado OK" : isDiscrepancy ? "Discrepancia" : "Pendiente"
+          }`}
+          style={{ backgroundColor: bg, borderColor: isSelected ? "#312E81" : border }}
+          className={`relative flex flex-col justify-between w-28 sm:w-32 h-11 p-1 rounded-lg text-white shadow-xs transition-all duration-150 cursor-pointer focus:outline-none text-left border ${
+            isSelected
+              ? "z-30 scale-105 ring-4 ring-indigo-600 shadow-xl"
+              : "hover:z-20 hover:scale-105 hover:shadow-md hover:ring-2 hover:ring-white"
+          }`}
+        >
+          <div className="flex items-center justify-between w-full text-[10px] font-black leading-none">
+            <span className="bg-black/25 px-1 py-0.5 rounded text-[9px] font-mono">
+              #{String(position).padStart(2, "0")}
+            </span>
+            <span className="bg-white/20 px-1 py-0.5 rounded text-[9px] font-black">
+              {hasStock ? `${item?.systemQuantity ?? 0} u` : "0 u"}
+            </span>
+          </div>
+          <p className="truncate text-[9px] font-bold text-white/95 leading-tight mt-0.5" title={item?.systemProductName || "Vacío"}>
+            {item?.systemProductName || "(Vacío)"}
+          </p>
+          {badge && (
+            <span className="absolute -top-1.5 -right-1.5 flex h-4 w-4 items-center justify-center rounded-full bg-white text-[10px] font-black text-slate-900 shadow">
+              {badge}
+            </span>
+          )}
+        </button>
+      );
+    }
+
     return (
       <button
         key={code}
         type="button"
         onClick={() => {
           setSelectedLocationCode(code);
-          if (editingCode && editingCode !== code) {
-            setEditingCode(null);
-          }
+          setEditingCode(null);
         }}
         title={`${code} · ${item?.systemProductName || 'Vacío'} · ${
           isMatched ? "Verificado OK" : isDiscrepancy ? "Discrepancia" : "Pendiente"
@@ -793,6 +831,19 @@ function MappingModalInner({
                   >
                     {orderAsc ? "Orden: Entrada (01) → Fondo" : "Orden: Fondo (01) → Entrada"}
                   </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setShowProductDetails(!showProductDetails)}
+                    className={`rounded-lg px-2.5 py-1 text-[11px] font-bold transition flex items-center gap-1 border shadow-xs ${
+                      showProductDetails
+                        ? "bg-indigo-600 text-white border-indigo-700 shadow-sm"
+                        : "bg-white text-slate-700 border-slate-200 hover:bg-slate-50"
+                    }`}
+                    title="Mostrar u ocultar los nombres de productos y cantidades en las posiciones"
+                  >
+                    <span>{showProductDetails ? "👁️ Ocultar Detalles" : "👁️ Mostrar Productos y Cantidades"}</span>
+                  </button>
                 </div>
               )}
 
@@ -814,15 +865,17 @@ function MappingModalInner({
             </div>
 
             {/* Content Area */}
-            <div className={`flex flex-col md:flex-row ${inline ? "h-[740px]" : "flex-1 overflow-hidden"}`}>
-              {/* ================= VIEW 1: OFFICIAL 2D LAYOUT PLAN ================= */}
+            <div className={`flex flex-col ${inline ? "min-h-[750px]" : "flex-1 overflow-hidden"}`}>
+              {/* ================= VIEW 1: OFFICIAL 2D LAYOUT PLAN (FULL WIDTH) ================= */}
               {viewMode === "LAYOUT_2D" && (
-                <div className="flex-1 overflow-y-auto overflow-x-auto p-4 bg-slate-100/70 border-r border-slate-200">
-                  <div className="min-w-[760px] max-w-[880px] mx-auto space-y-3">
+                <div className="w-full overflow-y-auto overflow-x-auto p-6 bg-slate-100/70">
+                  <div className={`mx-auto space-y-4 ${showProductDetails ? "min-w-[1060px] max-w-[1320px]" : "min-w-[760px] max-w-[960px]"}`}>
                     {/* 2D Grid Header */}
-                    <div className="flex items-center justify-between text-xs text-slate-500 border-b pb-1.5 font-bold">
-                      <span>Bodega Principal · Haz clic en cualquier casillero para auditarlo en orden</span>
-                      <span>Posición activa: <strong className="font-mono text-indigo-700">{selectedLocationCode || "Ninguna"}</strong></span>
+                    <div className="flex items-center justify-between text-xs text-slate-500 border-b pb-2 font-bold">
+                      <span>Bodega Principal · Haz clic en cualquier casillero para abrir la auditoría y modificar</span>
+                      <span className="text-[11px] text-indigo-700 bg-indigo-50 px-2.5 py-1 rounded-lg border border-indigo-200">
+                        {showProductDetails ? "Mostrando SKUs y stock en casilleros" : "Vista compacta (Activa el botón para ver SKUs)"}
+                      </span>
                     </div>
 
                     {/* 5-Column Grid */}
@@ -836,9 +889,9 @@ function MappingModalInner({
                           <p className="text-[11px] font-black text-slate-800 mt-0.5">Pasillo A (A-P)</p>
                         </div>
                         <div className="mb-1 flex justify-between px-1 text-[9px] font-black text-slate-600">
-                          {(levelFilter === "all" || levelFilter === "2") && <span className="w-8 text-center text-blue-900">N2</span>}
+                          {(levelFilter === "all" || levelFilter === "2") && <span className={showProductDetails ? "w-28 sm:w-32 text-center text-blue-900" : "w-8 text-center text-blue-900"}>N2</span>}
                           <span className="flex-1 text-center text-[8px] text-slate-400">PARED ◀ | ▶ A</span>
-                          {(levelFilter === "all" || levelFilter === "1") && <span className="w-8 text-center text-slate-700">N1</span>}
+                          {(levelFilter === "all" || levelFilter === "1") && <span className={showProductDetails ? "w-28 sm:w-32 text-center text-slate-700" : "w-8 text-center text-slate-700"}>N1</span>}
                         </div>
                         <div className="flex gap-1.5 items-stretch">
                           {(levelFilter === "all" || levelFilter === "2") && (
@@ -948,9 +1001,9 @@ function MappingModalInner({
                           <p className="text-[11px] font-black text-slate-800 mt-0.5">Pasillo B (B-P)</p>
                         </div>
                         <div className="mb-1 flex justify-between px-1 text-[9px] font-black text-slate-600">
-                          {(levelFilter === "all" || levelFilter === "1") && <span className="w-8 text-center text-slate-700">N1</span>}
+                          {(levelFilter === "all" || levelFilter === "1") && <span className={showProductDetails ? "w-28 sm:w-32 text-center text-slate-700" : "w-8 text-center text-slate-700"}>N1</span>}
                           <span className="flex-1 text-center text-[8px] text-slate-400">B ◀ | ▶ PARED</span>
-                          {(levelFilter === "all" || levelFilter === "2") && <span className="w-8 text-center text-blue-900">N2</span>}
+                          {(levelFilter === "all" || levelFilter === "2") && <span className={showProductDetails ? "w-28 sm:w-32 text-center text-blue-900" : "w-8 text-center text-blue-900"}>N2</span>}
                         </div>
                         <div className="flex gap-1.5 items-stretch">
                           {(levelFilter === "all" || levelFilter === "1") && (
@@ -1099,310 +1152,328 @@ function MappingModalInner({
                   </div>
                 </div>
               )}
+            </div>
+          </div>
+        )}
 
-              {/* ================= DOCKED INSPECTOR & AUDIT PANEL (RIGHT SIDE) ================= */}
-              <div className="w-full md:w-80 lg:w-96 flex flex-col bg-white overflow-y-auto p-4 space-y-4">
-                {activeSelectedItem ? (
-                  <div className="space-y-4 animate-fadeIn text-xs">
-                    {/* Position Title & Navigation */}
-                    <div className="flex items-center justify-between border-b pb-3">
-                      <div>
-                        <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
-                          Posición Seleccionada
-                        </span>
-                        <h4 className="text-base font-black text-indigo-950 font-mono">
-                          {activeSelectedItem.locationCode}
-                        </h4>
-                      </div>
+        {/* ================= MODIFICATION & AUDIT POPUP MODAL ================= */}
+        {step === "AUDIT" && activeSelectedItem && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 p-4 backdrop-blur-xs animate-fadeIn">
+            <div className="w-full max-w-md sm:max-w-lg max-h-[92vh] flex flex-col rounded-3xl bg-white shadow-2xl border border-slate-200 overflow-hidden">
+              {/* Modal Header */}
+              <div className="flex items-center justify-between border-b px-6 py-4 bg-slate-50">
+                <div>
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                    Auditoría y Modificación
+                  </span>
+                  <h4 className="text-xl font-black text-indigo-950 font-mono">
+                    {activeSelectedItem.locationCode}
+                  </h4>
+                </div>
 
-                      {/* Navigation buttons */}
-                      <div className="flex items-center gap-1.5">
-                        <button
-                          onClick={() => handleNavigatePosition(-1)}
-                          className="rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-1 text-xs font-bold text-slate-600 hover:bg-slate-100"
-                          title="Casillero anterior"
-                        >
-                          ◀
-                        </button>
-                        <button
-                          onClick={() => handleNavigatePosition(1)}
-                          className="rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-1 text-xs font-bold text-slate-600 hover:bg-slate-100"
-                          title="Casillero siguiente"
-                        >
-                          ▶
-                        </button>
-                      </div>
+                <div className="flex items-center gap-2">
+                  {/* Sequential navigation buttons */}
+                  <div className="flex items-center gap-1 border border-slate-200 rounded-xl bg-white p-0.5">
+                    <button
+                      onClick={() => handleNavigatePosition(-1)}
+                      className="rounded-lg px-2 py-1 text-xs font-bold text-slate-600 hover:bg-slate-100 hover:text-slate-900"
+                      title="Casillero anterior"
+                    >
+                      ◀ Ant
+                    </button>
+                    <button
+                      onClick={() => handleNavigatePosition(1)}
+                      className="rounded-lg px-2 py-1 text-xs font-bold text-slate-600 hover:bg-slate-100 hover:text-slate-900"
+                      title="Casillero siguiente"
+                    >
+                      Sig ▶
+                    </button>
+                  </div>
+
+                  <button
+                    onClick={() => {
+                      setSelectedLocationCode(null);
+                      setEditingCode(null);
+                    }}
+                    className="rounded-xl p-1.5 text-slate-400 hover:bg-slate-200 hover:text-slate-700 transition font-bold text-base leading-none"
+                    title="Cerrar ventana"
+                  >
+                    ✕
+                  </button>
+                </div>
+              </div>
+
+              {/* Modal Body */}
+              <div className="flex-1 overflow-y-auto p-6 space-y-4 text-xs">
+                {/* Status Badge */}
+                <div className="flex items-center justify-between">
+                  <span className="text-[11px] font-bold text-slate-500">Estado de Mapeo:</span>
+                  {activeSelectedItem.status === "MATCHED" && (
+                    <span className="rounded-full bg-emerald-100 px-3 py-1 text-xs font-black text-emerald-800">
+                      ✅ Coincide Físicamente (OK)
+                    </span>
+                  )}
+                  {activeSelectedItem.status === "DISCREPANCY" && (
+                    <span className="rounded-full bg-amber-100 px-3 py-1 text-xs font-black text-amber-800">
+                      ⚠️ Discrepancia Registrada
+                    </span>
+                  )}
+                  {activeSelectedItem.status === "PENDING" && (
+                    <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-bold text-slate-500">
+                      ⏳ Pendiente de Auditoría
+                    </span>
+                  )}
+                </div>
+
+                {/* System Registered Info Box */}
+                <div className="rounded-2xl border border-slate-200 bg-slate-50/70 p-4 space-y-2">
+                  <span className="text-[10px] uppercase font-bold text-slate-400">
+                    Información Registrada en Sistema:
+                  </span>
+                  <div>
+                    <p className="font-bold text-slate-900 text-sm">{activeSelectedItem.systemProductName}</p>
+                    <p className="font-mono text-slate-500 text-[11px]">SKU: {activeSelectedItem.systemProductSku}</p>
+                  </div>
+                  <div className="flex items-baseline justify-between border-t border-slate-200 pt-2">
+                    <span className="text-slate-500 font-medium">Stock en Sistema:</span>
+                    <span className="text-base font-black text-slate-900">
+                      {activeSelectedItem.systemQuantity} {activeSelectedItem.systemProductUnit}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Discrepancy details if modified */}
+                {activeSelectedItem.status === "DISCREPANCY" && editingCode !== activeSelectedItem.locationCode && (
+                  <div className="rounded-2xl border border-amber-300 bg-amber-50/50 p-3.5 space-y-2">
+                    <div className="flex items-center justify-between font-bold text-amber-900">
+                      <span>⚠️ Modificaciones a Aplicar:</span>
                     </div>
-
-                    {/* Status Badge */}
-                    <div className="flex items-center justify-between">
-                      <span className="text-[11px] font-bold text-slate-500">Estado de Mapeo:</span>
-                      {activeSelectedItem.status === "MATCHED" && (
-                        <span className="rounded-full bg-emerald-100 px-3 py-0.5 text-xs font-black text-emerald-800">
-                          ✅ Coincide Físicamente (OK)
-                        </span>
+                    <div className="space-y-1 text-xs">
+                      <p>
+                        <span className="text-slate-500">Stock Real:</span>{" "}
+                        <strong className="text-amber-950 font-black">
+                          {activeSelectedItem.physicalQuantity} {activeSelectedItem.physicalProductUnit}
+                        </strong>{" "}
+                        ({activeSelectedItem.physicalQuantity - activeSelectedItem.systemQuantity > 0
+                          ? `+${activeSelectedItem.physicalQuantity - activeSelectedItem.systemQuantity}`
+                          : activeSelectedItem.physicalQuantity - activeSelectedItem.systemQuantity}{" "}
+                        u)
+                      </p>
+                      {activeSelectedItem.physicalProductSku !== activeSelectedItem.systemProductSku && (
+                        <p>
+                          <span className="text-slate-500">Nuevo Producto:</span>{" "}
+                          <strong>{activeSelectedItem.physicalProductName} [{activeSelectedItem.physicalProductSku}]</strong>
+                        </p>
                       )}
-                      {activeSelectedItem.status === "DISCREPANCY" && (
-                        <span className="rounded-full bg-amber-100 px-3 py-0.5 text-xs font-black text-amber-800">
-                          ⚠️ Discrepancia Registrada
-                        </span>
+                      {activeSelectedItem.reassignedLocationCode && (
+                        <p>
+                          <span className="text-slate-500">Reasignar a:</span>{" "}
+                          <strong className="text-indigo-700 font-mono">➔ {activeSelectedItem.reassignedLocationCode}</strong>
+                        </p>
                       )}
-                      {activeSelectedItem.status === "PENDING" && (
-                        <span className="rounded-full bg-slate-100 px-3 py-0.5 text-xs font-bold text-slate-500">
-                          ⏳ Pendiente de Auditoría
-                        </span>
-                      )}
+                      <p className="text-slate-600 italic">Causa: {activeSelectedItem.reason}</p>
                     </div>
+                  </div>
+                )}
 
-                    {/* System Registered Info Box */}
-                    <div className="rounded-2xl border border-slate-200 bg-slate-50/70 p-3.5 space-y-2">
-                      <span className="text-[10px] uppercase font-bold text-slate-400">
-                        Información Registrada en Sistema:
+                {/* Normal Actions (When not in edit mode) */}
+                {editingCode !== activeSelectedItem.locationCode ? (
+                  <div className="space-y-3 pt-2">
+                    <button
+                      onClick={() => handleMarkMatched(activeSelectedItem.locationCode, true)}
+                      className="w-full rounded-2xl bg-emerald-600 py-3 text-xs font-black text-white shadow-md hover:bg-emerald-700 transition hover:scale-102 active:scale-98 flex items-center justify-center gap-2 cursor-pointer"
+                    >
+                      <span>✅</span>
+                      <span>Coincide Físicamente (OK)</span>
+                    </button>
+
+                    <button
+                      onClick={() => handleOpenEdit(activeSelectedItem)}
+                      className="w-full rounded-2xl border-2 border-indigo-200 bg-indigo-50/80 py-2.5 text-xs font-bold text-indigo-900 hover:bg-indigo-100 transition flex items-center justify-center gap-2 cursor-pointer"
+                    >
+                      <span>✏️</span>
+                      <span>
+                        {activeSelectedItem.status === "DISCREPANCY"
+                          ? "Editar Modificación Registrada"
+                          : "Reportar Discrepancia / Modificar Posición"}
                       </span>
-                      <div>
-                        <p className="font-bold text-slate-900 text-sm">{activeSelectedItem.systemProductName}</p>
-                        <p className="font-mono text-slate-500 text-[11px]">SKU: {activeSelectedItem.systemProductSku}</p>
-                      </div>
-                      <div className="flex items-baseline justify-between border-t border-slate-200 pt-2">
-                        <span className="text-slate-500 font-medium">Stock en Sistema:</span>
-                        <span className="text-sm font-black text-slate-900">
-                          {activeSelectedItem.systemQuantity} {activeSelectedItem.systemProductUnit}
-                        </span>
-                      </div>
+                    </button>
+
+                    <div className="flex items-center justify-between text-[11px] text-slate-400 pt-2 border-t">
+                      <button
+                        onClick={() => {
+                          setSelectedLocationCode(null);
+                          setEditingCode(null);
+                        }}
+                        className="text-slate-500 hover:text-slate-800 font-bold"
+                      >
+                        Cerrar Ventana
+                      </button>
+                      <button
+                        onClick={() => handleNavigatePosition(1)}
+                        className="font-bold text-indigo-600 hover:underline"
+                      >
+                        Siguiente Posición ➔
+                      </button>
                     </div>
-
-                    {/* Discrepancy details if modified */}
-                    {activeSelectedItem.status === "DISCREPANCY" && editingCode !== activeSelectedItem.locationCode && (
-                      <div className="rounded-2xl border border-amber-300 bg-amber-50/50 p-3 space-y-2">
-                        <div className="flex items-center justify-between font-bold text-amber-900">
-                          <span>⚠️ Modificaciones a Aplicar:</span>
-                        </div>
-                        <div className="space-y-1 text-[11px]">
-                          <p>
-                            <span className="text-slate-500">Stock Real:</span>{" "}
-                            <strong className="text-amber-950 font-black">
-                              {activeSelectedItem.physicalQuantity} {activeSelectedItem.physicalProductUnit}
-                            </strong>{" "}
-                            ({activeSelectedItem.physicalQuantity - activeSelectedItem.systemQuantity > 0
-                              ? `+${activeSelectedItem.physicalQuantity - activeSelectedItem.systemQuantity}`
-                              : activeSelectedItem.physicalQuantity - activeSelectedItem.systemQuantity}{" "}
-                            u)
-                          </p>
-                          {activeSelectedItem.physicalProductSku !== activeSelectedItem.systemProductSku && (
-                            <p>
-                              <span className="text-slate-500">Nuevo Producto:</span>{" "}
-                              <strong>{activeSelectedItem.physicalProductName} [{activeSelectedItem.physicalProductSku}]</strong>
-                            </p>
-                          )}
-                          {activeSelectedItem.reassignedLocationCode && (
-                            <p>
-                              <span className="text-slate-500">Reasignar a:</span>{" "}
-                              <strong className="text-indigo-700 font-mono">➔ {activeSelectedItem.reassignedLocationCode}</strong>
-                            </p>
-                          )}
-                          <p className="text-slate-600 italic">Causa: {activeSelectedItem.reason}</p>
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Normal Actions (When not in edit mode) */}
-                    {editingCode !== activeSelectedItem.locationCode ? (
-                      <div className="space-y-2 pt-2">
-                        <button
-                          onClick={() => handleMarkMatched(activeSelectedItem.locationCode, true)}
-                          className="w-full rounded-2xl bg-emerald-600 py-3 text-xs font-black text-white shadow-md hover:bg-emerald-700 transition hover:scale-102 active:scale-98 flex items-center justify-center gap-2"
-                        >
-                          <span>✅</span>
-                          <span>Coincide Físicamente (OK)</span>
-                        </button>
-
-                        <button
-                          onClick={() => handleOpenEdit(activeSelectedItem)}
-                          className="w-full rounded-2xl border-2 border-indigo-200 bg-indigo-50/80 py-2.5 text-xs font-bold text-indigo-900 hover:bg-indigo-100 transition flex items-center justify-center gap-2"
-                        >
-                          <span>✏️</span>
-                          <span>
-                            {activeSelectedItem.status === "DISCREPANCY"
-                              ? "Editar Modificación"
-                              : "Reportar Discrepancia / Modificar"}
-                          </span>
-                        </button>
-
-                        <div className="flex items-center justify-between text-[11px] text-slate-400 pt-1">
-                          <span>Siguiente posición en rack:</span>
-                          <button
-                            onClick={() => handleNavigatePosition(1)}
-                            className="font-bold text-indigo-600 hover:underline"
-                          >
-                            Avanzar ➔
-                          </button>
-                        </div>
-                      </div>
-                    ) : (
-                      /* Inline Discrepancy Edit Form */
-                      <div className="rounded-2xl border-2 border-indigo-300 bg-white p-3.5 space-y-3 shadow-sm animate-fadeIn">
-                        <div className="flex items-center justify-between border-b pb-1.5">
-                          <span className="font-black text-indigo-950 uppercase tracking-wider text-[11px]">
-                            Editar Posición {activeSelectedItem.locationCode}
-                          </span>
-                          <button
-                            onClick={() => setEditingCode(null)}
-                            className="text-slate-400 hover:text-slate-600 font-bold"
-                          >
-                            ✕
-                          </button>
-                        </div>
-
-                        {/* 1. Cantidad Real */}
-                        <div>
-                          <label className="block font-bold text-slate-700 text-[11px]">
-                            1. Cantidad Física Real Encontrada:
-                          </label>
-                          <div className="mt-1 flex items-center gap-2">
-                            <input
-                              type="number"
-                              min={0}
-                              value={editForm.physicalQuantity}
-                              onChange={(e) =>
-                                setEditForm({
-                                  ...editForm,
-                                  physicalQuantity: Math.max(0, Number(e.target.value)),
-                                })
-                              }
-                              className="w-24 rounded-xl border border-slate-300 p-2 font-black text-sm focus:border-indigo-600 focus:outline-none"
-                            />
-                            <span className="font-bold text-slate-500">
-                              {activeSelectedItem.systemProductUnit}
-                            </span>
-                            {editForm.physicalQuantity !== activeSelectedItem.systemQuantity && (
-                              <span
-                                className={`rounded px-1.5 py-0.5 font-bold text-[10px] ${
-                                  editForm.physicalQuantity - activeSelectedItem.systemQuantity > 0
-                                    ? "bg-emerald-100 text-emerald-800"
-                                    : "bg-red-100 text-red-800"
-                                }`}
-                              >
-                                {editForm.physicalQuantity - activeSelectedItem.systemQuantity > 0
-                                  ? `+${editForm.physicalQuantity - activeSelectedItem.systemQuantity}`
-                                  : editForm.physicalQuantity - activeSelectedItem.systemQuantity}{" "}
-                                u
-                              </span>
-                            )}
-                          </div>
-                        </div>
-
-                        {/* 2. Cambiar Producto */}
-                        <div>
-                          <div className="flex items-center justify-between mb-1">
-                            <label className="font-bold text-slate-700 text-[11px]">
-                              2. ¿Es otro producto diferente?
-                            </label>
-                            <input
-                              type="checkbox"
-                              checked={editForm.differentProduct}
-                              onChange={(e) =>
-                                setEditForm({ ...editForm, differentProduct: e.target.checked })
-                              }
-                              className="h-4 w-4 rounded text-indigo-600"
-                            />
-                          </div>
-                          {editForm.differentProduct && (
-                            <select
-                              value={editForm.physicalProductId}
-                              onChange={(e) =>
-                                setEditForm({ ...editForm, physicalProductId: e.target.value })
-                              }
-                              className="w-full rounded-xl border border-slate-300 p-1.5 text-xs bg-white"
-                            >
-                              {safeProducts.map((p) => (
-                                <option key={p.id} value={p.id}>
-                                  [{p.sku}] {p.name}
-                                </option>
-                              ))}
-                            </select>
-                          )}
-                        </div>
-
-                        {/* 3. Reasignar Ubicación */}
-                        <div>
-                          <div className="flex items-center justify-between mb-1">
-                            <label className="font-bold text-slate-700 text-[11px]">
-                              3. ¿Está en otra posición física?
-                            </label>
-                            <input
-                              type="checkbox"
-                              checked={editForm.reassignLocation}
-                              onChange={(e) =>
-                                setEditForm({ ...editForm, reassignLocation: e.target.checked })
-                              }
-                              className="h-4 w-4 rounded text-indigo-600"
-                            />
-                          </div>
-                          {editForm.reassignLocation && (
-                            <select
-                              value={editForm.reassignedLocationId}
-                              onChange={(e) =>
-                                setEditForm({ ...editForm, reassignedLocationId: e.target.value })
-                              }
-                              className="w-full rounded-xl border border-slate-300 p-1.5 text-xs font-mono bg-white"
-                            >
-                              {safeLocations.map((l) => (
-                                <option key={l.id || l.code} value={l.id || l.code}>
-                                  {l.code} ({l.rack?.name ?? "Rack"} - N{l.level})
-                                </option>
-                              ))}
-                            </select>
-                          )}
-                        </div>
-
-                        {/* 4. Causa */}
-                        <div>
-                          <label className="block font-bold text-slate-700 text-[11px] mb-1">
-                            4. Motivo / Causa:
-                          </label>
-                          <select
-                            value={editForm.reason}
-                            onChange={(e) => setEditForm({ ...editForm, reason: e.target.value })}
-                            className="w-full rounded-xl border border-slate-300 p-1.5 text-xs bg-white mb-1.5"
-                          >
-                            {COMMON_REASONS.map((r) => (
-                              <option key={r} value={r}>
-                                {r}
-                              </option>
-                            ))}
-                          </select>
-                          <input
-                            type="text"
-                            placeholder="Nota adicional (opcional)..."
-                            value={editForm.notes}
-                            onChange={(e) => setEditForm({ ...editForm, notes: e.target.value })}
-                            className="w-full rounded-xl border border-slate-200 bg-slate-50 p-1.5 text-xs"
-                          />
-                        </div>
-
-                        {/* Form Buttons */}
-                        <div className="flex gap-2 pt-1">
-                          <button
-                            onClick={() => setEditingCode(null)}
-                            className="flex-1 rounded-xl border border-slate-200 py-2 font-bold text-slate-600 hover:bg-slate-50"
-                          >
-                            Cancelar
-                          </button>
-                          <button
-                            onClick={() => handleSaveEdit(activeSelectedItem.locationCode)}
-                            className="flex-1 rounded-xl bg-indigo-600 py-2 font-bold text-white hover:bg-indigo-700 shadow-sm"
-                          >
-                            Guardar
-                          </button>
-                        </div>
-                      </div>
-                    )}
                   </div>
                 ) : (
-                  <div className="h-full flex flex-col items-center justify-center text-center p-6 text-slate-400">
-                    <span className="text-3xl mb-2">👈</span>
-                    <p className="font-bold text-slate-600 text-xs">Selecciona un casillero en el plano 2D</p>
-                    <p className="text-[11px] mt-1">Haz clic en cualquier cuadrado para auditarlo en orden.</p>
+                  /* Inline Discrepancy Edit Form */
+                  <div className="rounded-2xl border-2 border-indigo-300 bg-white p-4 space-y-3 shadow-sm animate-fadeIn">
+                    <div className="flex items-center justify-between border-b pb-2">
+                      <span className="font-black text-indigo-950 uppercase tracking-wider text-xs">
+                        Modificar Posición {activeSelectedItem.locationCode}
+                      </span>
+                      <button
+                        onClick={() => setEditingCode(null)}
+                        className="text-slate-400 hover:text-slate-600 font-bold"
+                      >
+                        ✕
+                      </button>
+                    </div>
+
+                    {/* 1. Cantidad Real */}
+                    <div>
+                      <label className="block font-bold text-slate-700 text-xs">
+                        1. Cantidad Física Real Encontrada:
+                      </label>
+                      <div className="mt-1 flex items-center gap-2">
+                        <input
+                          type="number"
+                          min={0}
+                          value={editForm.physicalQuantity}
+                          onChange={(e) =>
+                            setEditForm({
+                              ...editForm,
+                              physicalQuantity: Math.max(0, Number(e.target.value)),
+                            })
+                          }
+                          className="w-28 rounded-xl border border-slate-300 p-2 font-black text-sm focus:border-indigo-600 focus:outline-none"
+                        />
+                        <span className="font-bold text-slate-500">
+                          {activeSelectedItem.systemProductUnit}
+                        </span>
+                        {editForm.physicalQuantity !== activeSelectedItem.systemQuantity && (
+                          <span
+                            className={`rounded px-2 py-0.5 font-bold text-xs ${
+                              editForm.physicalQuantity - activeSelectedItem.systemQuantity > 0
+                                ? "bg-emerald-100 text-emerald-800"
+                                : "bg-red-100 text-red-800"
+                            }`}
+                          >
+                            {editForm.physicalQuantity - activeSelectedItem.systemQuantity > 0
+                              ? `+${editForm.physicalQuantity - activeSelectedItem.systemQuantity}`
+                              : editForm.physicalQuantity - activeSelectedItem.systemQuantity}{" "}
+                            u
+                          </span>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* 2. Cambiar Producto */}
+                    <div>
+                      <div className="flex items-center justify-between mb-1">
+                        <label className="font-bold text-slate-700 text-xs">
+                          2. ¿Es otro producto diferente?
+                        </label>
+                        <input
+                          type="checkbox"
+                          checked={editForm.differentProduct}
+                          onChange={(e) =>
+                            setEditForm({ ...editForm, differentProduct: e.target.checked })
+                          }
+                          className="h-4 w-4 rounded text-indigo-600"
+                        />
+                      </div>
+                      {editForm.differentProduct && (
+                        <select
+                          value={editForm.physicalProductId}
+                          onChange={(e) =>
+                            setEditForm({ ...editForm, physicalProductId: e.target.value })
+                          }
+                          className="w-full rounded-xl border border-slate-300 p-2 text-xs bg-white"
+                        >
+                          {safeProducts.map((p) => (
+                            <option key={p.id} value={p.id}>
+                              [{p.sku}] {p.name}
+                            </option>
+                          ))}
+                        </select>
+                      )}
+                    </div>
+
+                    {/* 3. Reasignar Ubicación */}
+                    <div>
+                      <div className="flex items-center justify-between mb-1">
+                        <label className="font-bold text-slate-700 text-xs">
+                          3. ¿Está en otra posición física?
+                        </label>
+                        <input
+                          type="checkbox"
+                          checked={editForm.reassignLocation}
+                          onChange={(e) =>
+                            setEditForm({ ...editForm, reassignLocation: e.target.checked })
+                          }
+                          className="h-4 w-4 rounded text-indigo-600"
+                        />
+                      </div>
+                      {editForm.reassignLocation && (
+                        <select
+                          value={editForm.reassignedLocationId}
+                          onChange={(e) =>
+                            setEditForm({ ...editForm, reassignedLocationId: e.target.value })
+                          }
+                          className="w-full rounded-xl border border-slate-300 p-2 text-xs font-mono bg-white"
+                        >
+                          {safeLocations.map((l) => (
+                            <option key={l.id || l.code} value={l.id || l.code}>
+                              {l.code} ({l.rack?.name ?? "Rack"} - N{l.level})
+                            </option>
+                          ))}
+                        </select>
+                      )}
+                    </div>
+
+                    {/* 4. Causa */}
+                    <div>
+                      <label className="block font-bold text-slate-700 text-xs mb-1">
+                        4. Motivo / Causa:
+                      </label>
+                      <select
+                        value={editForm.reason}
+                        onChange={(e) => setEditForm({ ...editForm, reason: e.target.value })}
+                        className="w-full rounded-xl border border-slate-300 p-2 text-xs bg-white mb-2"
+                      >
+                        {COMMON_REASONS.map((r) => (
+                          <option key={r} value={r}>
+                            {r}
+                          </option>
+                        ))}
+                      </select>
+                      <input
+                        type="text"
+                        placeholder="Nota adicional (opcional)..."
+                        value={editForm.notes}
+                        onChange={(e) => setEditForm({ ...editForm, notes: e.target.value })}
+                        className="w-full rounded-xl border border-slate-200 bg-slate-50 p-2 text-xs"
+                      />
+                    </div>
+
+                    {/* Form Buttons */}
+                    <div className="flex gap-2 pt-2">
+                      <button
+                        onClick={() => setEditingCode(null)}
+                        className="flex-1 rounded-xl border border-slate-200 py-2.5 font-bold text-slate-600 hover:bg-slate-50"
+                      >
+                        Cancelar
+                      </button>
+                      <button
+                        onClick={() => handleSaveEdit(activeSelectedItem.locationCode)}
+                        className="flex-1 rounded-xl bg-indigo-600 py-2.5 font-bold text-white hover:bg-indigo-700 shadow-md"
+                      >
+                        Guardar Modificación
+                      </button>
+                    </div>
                   </div>
                 )}
               </div>
