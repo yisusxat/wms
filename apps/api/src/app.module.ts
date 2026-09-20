@@ -17,6 +17,7 @@ import { EmailModule } from './email/email.module';
 import { AuditModule } from './audit/audit.module';
 import { OrganizationsModule } from './organizations/organizations.module';
 import { ReportsModule } from './reports/reports.module';
+import { OperationsModule } from './operations/operations.module';
 
 @Module({
   imports: [
@@ -33,6 +34,7 @@ import { ReportsModule } from './reports/reports.module';
     InventoryModule,
     DashboardModule,
     ReportsModule,
+    OperationsModule,
     WarehousesModule,
     UsersModule,
   ],

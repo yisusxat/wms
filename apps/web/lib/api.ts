@@ -32,7 +32,7 @@ export function getWarehouseSeedLocations(): Location[] {
 }
 
 export type Page<T> = { items: T[]; total: number; page: number; pageSize: number };
-export type Product = { id: string; sku: string; name: string; unit: string; active: boolean };
+export type Product = { id: string; sku: string; name: string; unit: string; active: boolean; barcode?: string; category?: string };
 export type LocationRack = {
   id: string;
   code: string;
