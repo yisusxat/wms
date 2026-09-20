@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import * as Sentry from '@sentry/nextjs';
 import { CurrentUser } from '../../lib/api';
 
 type SupportModalProps = {
@@ -40,6 +41,19 @@ export function SupportModal({ isOpen, onClose, user, profile }: SupportModalPro
     };
 
     console.log('Technical report generated:', report);
+
+    if (process.env.NEXT_PUBLIC_SENTRY_DSN) {
+      try {
+        Sentry.captureMessage(`[Soporte ${category}] ${subject}`, {
+          level: category === 'BUG' ? 'error' : 'info',
+          extra: report,
+          user: { email: user?.email ?? 'anonymous' },
+        });
+      } catch (err) {
+        console.warn('Could not forward report to Sentry:', err);
+      }
+    }
+
     await new Promise((resolve) => setTimeout(resolve, 600));
 
     setLoading(false);
