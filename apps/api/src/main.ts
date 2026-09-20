@@ -7,6 +7,7 @@ import { Request, Response, NextFunction } from 'express';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { randomUUID } from 'node:crypto';
 import * as Sentry from '@sentry/node';
+import helmet from 'helmet';
 
 async function bootstrap() {
   if (process.env.SENTRY_DSN) {
@@ -19,6 +20,12 @@ async function bootstrap() {
 
   const app = await NestFactory.create(AppModule);
   const config = app.get(ConfigService);
+  app.use(
+    helmet({
+      contentSecurityPolicy: false,
+      crossOriginEmbedderPolicy: false,
+    }),
+  );
   app.setGlobalPrefix('api');
   app.use((request: Request, response: Response, next: NextFunction) => {
     const requestId = request.header('x-request-id') || randomUUID();

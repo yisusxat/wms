@@ -1,4 +1,5 @@
 import { Body, Controller, Get, Param, Patch, Post, UseGuards } from '@nestjs/common';
+import { Throttle } from '@nestjs/throttler';
 import { AuthGuard } from '../auth/auth.guard';
 import { Roles } from '../auth/roles.decorator';
 import { RolesGuard } from '../auth/roles.guard';
@@ -18,6 +19,7 @@ export class UsersController {
     return this.users.findAll();
   }
 
+  @Throttle({ default: { limit: 10, ttl: 60000 } })
   @Post()
   createUser(@Body() body: CreateUserDto) {
     return this.users.createUser(body);
