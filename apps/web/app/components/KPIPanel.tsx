@@ -1,7 +1,6 @@
-﻿"use client";
+"use client";
 import { useEffect, useState, useCallback } from "react";
-
-const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "https://wms-api-service.onrender.com";
+import { apiFetch } from "../../lib/api";
 
 interface KpiData {
   occupancy: {
@@ -96,11 +95,9 @@ export default function KPIPanel({ token, organizationId }: Props) {
     try {
       const params = new URLSearchParams();
       if (organizationId) params.set("organizationId", organizationId);
-      const res = await fetch(`${API_BASE}/dashboard/kpis?${params}`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      setKpis(await res.json());
+      const queryStr = params.toString() ? `?${params}` : "";
+      const data = await apiFetch<KpiData>(`/dashboard/kpis${queryStr}`, token);
+      setKpis(data);
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : "Error desconocido");
     } finally {

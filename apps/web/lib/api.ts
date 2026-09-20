@@ -60,7 +60,8 @@ export async function apiFetch<T>(path: string, token: string, init?: RequestIni
       if (response.ok) {
         return (await response.json()) as T;
       }
-      if (response.status >= 400 && response.status < 500 && response.status !== 404) {
+      // If endpoint doesn't exist on NestJS backend (404), fall back to InsForge computation
+      if (response.status !== 404 && response.status >= 400 && response.status < 500) {
         const payload = await response.json().catch(() => null);
         throw new Error(payload?.message ?? `Error (${response.status})`);
       }
@@ -131,6 +132,108 @@ async function fallbackInsforge<T>(path: string, token: string, init?: RequestIn
       totalUnits,
       entriesToday: 0,
       issuesToday: 0,
+    } as T;
+  }
+
+  if (cleanPath === '/dashboard/kpis') {
+    const [locRes, prodRes, invRes, movRes] = await Promise.all([
+      fetch(`${insforgeUrl}/api/database/records/locations?select=id,code,status,level,position,rack:racks(code,aisle:aisles(code,zone:zones(code,name)))`, { headers }).catch(() => null),
+      fetch(`${insforgeUrl}/api/database/records/products?select=id,sku,name,active`, { headers }).catch(() => null),
+      fetch(`${insforgeUrl}/api/database/records/inventory?select=id,product_id,location_id,quantity`, { headers }).catch(() => null),
+      fetch(`${insforgeUrl}/api/database/records/movements?select=id,type,product_id,quantity,created_at&order=created_at.desc&limit=500`, { headers }).catch(() => null),
+    ]);
+
+    const locs: any[] = locRes && locRes.ok ? await locRes.json().catch(() => []) : [];
+    const prods: any[] = prodRes && prodRes.ok ? await prodRes.json().catch(() => []) : [];
+    const invs: any[] = invRes && invRes.ok ? await invRes.json().catch(() => []) : [];
+    const movs: any[] = movRes && movRes.ok ? await movRes.json().catch(() => []) : [];
+
+    const totalLocations = locs.length;
+    const occupiedLocations = locs.filter((l) => l.status === 'OCCUPIED').length;
+    const occupancyRate = totalLocations > 0 ? Math.round((occupiedLocations / totalLocations) * 1000) / 10 : 0;
+
+    const prodMap = new Map(prods.map((p) => [p.id, p]));
+
+    // Agrupar salidas por producto
+    const issueMoves = movs.filter((m) => m.type === 'ISSUE');
+    const totalIssued = issueMoves.reduce((s, m) => s + (m.quantity || 0), 0);
+
+    const issuesByProd = new Map<string, number>();
+    for (const m of issueMoves) {
+      issuesByProd.set(m.product_id, (issuesByProd.get(m.product_id) || 0) + (m.quantity || 0));
+    }
+
+    const sortedIssues = Array.from(issuesByProd.entries())
+      .map(([productId, quantity]) => ({
+        productId,
+        sku: prodMap.get(productId)?.sku || productId,
+        name: prodMap.get(productId)?.name || 'Producto',
+        issues: quantity,
+      }))
+      .sort((a, b) => b.issues - a.issues);
+
+    let cumulative = 0;
+    const classA: typeof sortedIssues = [];
+    const classB: typeof sortedIssues = [];
+    const classC: typeof sortedIssues = [];
+
+    for (const item of sortedIssues) {
+      cumulative += totalIssued > 0 ? (item.issues / totalIssued) * 100 : 0;
+      if (cumulative <= 80) classA.push(item);
+      else if (cumulative <= 95) classB.push(item);
+      else classC.push(item);
+    }
+
+    const totalStock = invs.reduce((acc, i) => acc + (i.quantity || 0), 0);
+    const avgDailyIssues = totalIssued / 30;
+    const dsiValue = avgDailyIssues > 0 ? Math.round(totalStock / avgDailyIssues) : 9999;
+
+    // Throughput últimos 7 días
+    const now = new Date();
+    const trend: { date: string; receipts: number; issues: number }[] = [];
+    for (let i = 6; i >= 0; i--) {
+      const d = new Date(now);
+      d.setDate(d.getDate() - i);
+      const dateStr = d.toISOString().split('T')[0];
+
+      const dayReceipts = movs
+        .filter((m) => m.type === 'RECEIPT' && m.created_at?.startsWith(dateStr))
+        .reduce((s, m) => s + (m.quantity || 0), 0);
+
+      const dayIssues = movs
+        .filter((m) => m.type === 'ISSUE' && m.created_at?.startsWith(dateStr))
+        .reduce((s, m) => s + (m.quantity || 0), 0);
+
+      trend.push({ date: dateStr, receipts: dayReceipts, issues: dayIssues });
+    }
+
+    const totalReceipts7d = trend.reduce((s, t) => s + t.receipts, 0);
+    const totalIssues7d = trend.reduce((s, t) => s + t.issues, 0);
+
+    // Ajustes e IRA
+    const adjustments = movs.filter((m) => m.type === 'ADJUSTMENT');
+    const totalAdj = adjustments.reduce((s, m) => s + Math.abs(m.quantity || 0), 0);
+    const devRate = totalStock > 0 ? Math.round((totalAdj / totalStock) * 10000) / 100 : 0;
+    const iraPercentage = Math.max(0, Math.round((100 - devRate) * 10) / 10);
+
+    return {
+      occupancy: {
+        rate: occupancyRate,
+        occupied: occupiedLocations,
+        total: totalLocations,
+        alert: occupancyRate > 85,
+        byZone: [],
+      },
+      abcClassification: {
+        classA: { skuCount: classA.length, percentage: Math.round((classA.length / Math.max(sortedIssues.length, 1)) * 100), items: classA },
+        classB: { skuCount: classB.length, percentage: Math.round((classB.length / Math.max(sortedIssues.length, 1)) * 100), items: classB },
+        classC: { skuCount: classC.length, percentage: Math.round((classC.length / Math.max(sortedIssues.length, 1)) * 100), items: classC },
+      },
+      deadStock: { count: 0, items: [] },
+      dsi: { value: dsiValue, totalStock, avgDailyIssues: Math.round(avgDailyIssues * 10) / 10, alert: dsiValue < 7 || dsiValue === 9999 },
+      throughput: { trend, totalReceipts7d, totalIssues7d, balance: totalReceipts7d - totalIssues7d },
+      ira: { percentage: iraPercentage, totalAdjustments: adjustments.length, totalStock, deviationRate: devRate, alert: iraPercentage < 95 },
+      breakRisk: { count: 0, items: [] },
     } as T;
   }
 
