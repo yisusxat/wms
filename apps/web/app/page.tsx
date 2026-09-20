@@ -211,7 +211,7 @@ export default function HomePage() {
 
   return (
     <main className="min-h-screen lg:flex bg-slate-50">
-      <aside className="bg-[#1E3A8A] p-6 text-white lg:min-h-screen lg:w-64 flex flex-col justify-between">
+      <aside className="bg-[#1E3A8A] p-6 text-white lg:h-screen lg:w-64 lg:sticky lg:top-0 flex flex-col justify-between shrink-0 overflow-y-auto z-30">
         <div>
           <div className="flex items-center gap-2">
             <span className="rounded bg-white/20 px-2 py-0.5 text-xs font-bold tracking-wider">WMS</span>
