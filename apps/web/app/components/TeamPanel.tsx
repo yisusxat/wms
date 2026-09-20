@@ -1,7 +1,6 @@
-'use client';
-
 import { useEffect, useState } from 'react';
 import { apiFetch, CurrentUser } from '../../lib/api';
+import { PermissionsModal, UserPermissions } from './PermissionsModal';
 
 export type TeamMember = {
   id: string;
@@ -9,6 +8,7 @@ export type TeamMember = {
   email: string;
   role: CurrentUser['role'];
   active: boolean;
+  permissions?: UserPermissions;
   createdAt: string;
 };
 
@@ -25,6 +25,7 @@ export function TeamPanel({ token, onError }: { token: string; onError: (msg: st
   const [search, setSearch] = useState('');
   const [showModal, setShowModal] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [editingMember, setEditingMember] = useState<TeamMember | null>(null);
 
   // New user form state
   const [form, setForm] = useState({
@@ -94,6 +95,27 @@ export function TeamPanel({ token, onError }: { token: string; onError: (msg: st
       );
     } catch (err: any) {
       onError(err?.message ?? 'No fue posible cambiar el estado del usuario');
+    }
+  };
+
+  const handleSavePermissions = async (
+    userId: string,
+    permissions: UserPermissions,
+    newRole: CurrentUser['role']
+  ) => {
+    try {
+      await apiFetch(`/users/${userId}`, token, {
+        method: 'PATCH',
+        body: JSON.stringify({ permissions, role: newRole }),
+      });
+      setMembers((prev) =>
+        prev.map((m) =>
+          m.id === userId ? { ...m, permissions, role: newRole } : m
+        )
+      );
+    } catch (err: any) {
+      onError(err?.message ?? 'No fue posible guardar los permisos');
+      throw err;
     }
   };
 
@@ -200,16 +222,24 @@ export function TeamPanel({ token, onError }: { token: string; onError: (msg: st
                       </span>
                     </td>
                     <td className="p-4">
-                      <button
-                        onClick={() => handleToggleStatus(member.id, member.active)}
-                        className={`rounded-lg px-2.5 py-1 text-[11px] font-bold border transition ${
-                          member.active
-                            ? 'border-rose-200 text-rose-700 hover:bg-rose-50'
-                            : 'border-emerald-200 text-emerald-700 hover:bg-emerald-50'
-                        }`}
-                      >
-                        {member.active ? 'Suspender' : 'Reactivar'}
-                      </button>
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => setEditingMember(member)}
+                          className="flex items-center gap-1 rounded-lg bg-blue-50 border border-blue-200 px-3 py-1.5 text-[11px] font-bold text-blue-700 hover:bg-blue-100 transition shadow-2xs"
+                        >
+                          ⚙️ Permisos
+                        </button>
+                        <button
+                          onClick={() => handleToggleStatus(member.id, member.active)}
+                          className={`rounded-lg px-2.5 py-1.5 text-[11px] font-bold border transition ${
+                            member.active
+                              ? 'border-rose-200 text-rose-700 hover:bg-rose-50'
+                              : 'border-emerald-200 text-emerald-700 hover:bg-emerald-50'
+                          }`}
+                        >
+                          {member.active ? 'Suspender' : 'Reactivar'}
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 );
@@ -307,6 +337,15 @@ export function TeamPanel({ token, onError }: { token: string; onError: (msg: st
           </div>
         </div>
       )}
+
+      {/* Modal: Granular Permissions Manager */}
+      <PermissionsModal
+        member={editingMember}
+        isOpen={editingMember !== null}
+        onClose={() => setEditingMember(null)}
+        onSave={handleSavePermissions}
+        onToggleStatus={handleToggleStatus}
+      />
     </section>
   );
 }

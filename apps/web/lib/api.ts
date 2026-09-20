@@ -342,6 +342,7 @@ async function fallbackInsforge<T>(path: string, token: string, init?: RequestIn
       email: '',
       role: p.role,
       active: p.active ?? true,
+      permissions: p.permissions ?? null,
       createdAt: p.created_at,
     })) as T;
   }
@@ -349,12 +350,18 @@ async function fallbackInsforge<T>(path: string, token: string, init?: RequestIn
   if (cleanPath.startsWith('/users/')) {
     const parts = cleanPath.split('/');
     const userId = parts[2];
-    const action = parts[3]; // 'role' or 'status'
+    const action = parts[3]; // 'role', 'status', 'permissions'
     const parsed = init?.body ? JSON.parse(init.body as string) : {};
 
     const patchBody: Record<string, any> = {};
     if (action === 'role' && parsed.role) patchBody.role = parsed.role;
     if (action === 'status' && typeof parsed.active === 'boolean') patchBody.active = parsed.active;
+    if (action === 'permissions' && parsed.permissions) patchBody.permissions = parsed.permissions;
+    if (!action && parsed) {
+      if (parsed.role) patchBody.role = parsed.role;
+      if (typeof parsed.active === 'boolean') patchBody.active = parsed.active;
+      if (parsed.permissions) patchBody.permissions = parsed.permissions;
+    }
 
     const res = await fetch(`${insforgeUrl}/api/database/records/user_profiles?id=eq.${userId}`, {
       method: 'PATCH',
