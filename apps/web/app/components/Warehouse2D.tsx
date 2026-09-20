@@ -69,7 +69,7 @@ export function Warehouse2D({ token, onError }: { token: string; onError: (value
   const [orderAsc, setOrderAsc] = useState(true);
   const [entryModalOpen, setEntryModalOpen] = useState(false);
   const [exitModalOpen, setExitModalOpen] = useState(false);
-  const [mappingModalOpen, setMappingModalOpen] = useState(false);
+  const [isMappingActive, setIsMappingActive] = useState(false);
   const [mappingInitialLocation, setMappingInitialLocation] = useState<string | null>(null);
 
   const refreshLocations = () => {
@@ -349,13 +349,24 @@ export function Warehouse2D({ token, onError }: { token: string; onError: (value
           <button
             onClick={() => {
               setMappingInitialLocation(null);
-              setMappingModalOpen(true);
+              setIsMappingActive(true);
+              setTimeout(() => {
+                const el = document.getElementById('seccion-mapeo-almacen');
+                if (el) {
+                  el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                }
+              }, 100);
             }}
-            className="flex items-center gap-1.5 rounded-xl bg-indigo-600 px-3.5 py-1.5 text-xs font-bold text-white hover:bg-indigo-700 shadow-sm transition hover:scale-105 active:scale-95"
-            title="Verificar y conciliar inventario físico vs sistema"
+            className={`flex items-center gap-1.5 rounded-xl px-3.5 py-1.5 text-xs font-bold shadow-sm transition hover:scale-105 active:scale-95 ${
+              isMappingActive
+                ? 'bg-indigo-900 text-white ring-2 ring-indigo-400'
+                : 'bg-indigo-600 text-white hover:bg-indigo-700'
+            }`}
+            title="Verificar y conciliar inventario físico vs sistema debajo de la vista 2D"
           >
             <span>🔍</span>
             <span>Mapeo Almacén</span>
+            {isMappingActive && <span className="h-2 w-2 rounded-full bg-emerald-400 animate-pulse" />}
           </button>
         </div>
       </div>
@@ -608,6 +619,58 @@ export function Warehouse2D({ token, onError }: { token: string; onError: (value
         </div>
       </div>
 
+      {/* 3.1. Dedicated Mapeo Almacén Section below 2D layout */}
+      <div id="seccion-mapeo-almacen" className="mt-8 scroll-mt-6">
+        {isMappingActive ? (
+          <MappingModal
+            inline={true}
+            isOpen={isMappingActive}
+            onClose={() => {
+              setIsMappingActive(false);
+              setMappingInitialLocation(null);
+            }}
+            token={token}
+            locations={locations}
+            initialLocationCode={mappingInitialLocation}
+            onSuccess={() => {
+              refreshLocations();
+            }}
+          />
+        ) : (
+          <div className="flex flex-col sm:flex-row items-center justify-between rounded-3xl border-2 border-dashed border-indigo-200 bg-gradient-to-r from-indigo-50/70 via-slate-50 to-indigo-50/70 p-6 shadow-sm transition hover:border-indigo-300">
+            <div className="flex items-center gap-4 mb-4 sm:mb-0">
+              <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-indigo-600 text-white shadow-md text-2xl">
+                🔍
+              </div>
+              <div>
+                <div className="flex items-center gap-2">
+                  <h3 className="font-bold text-slate-800 text-base">
+                    Mapeo y Conciliación Física de Almacén
+                  </h3>
+                  <span className="rounded-full bg-indigo-100 px-2.5 py-0.5 text-[10px] font-black uppercase text-indigo-700">
+                    Verificación 2D
+                  </span>
+                </div>
+                <p className="mt-1 text-xs text-slate-500">
+                  Compara en tiempo real la posición física de cada producto vs el registro en sistema, ajusta stock, reasigna ubicaciones y genera reportes oficiales.
+                </p>
+              </div>
+            </div>
+            <button
+              onClick={() => {
+                setIsMappingActive(true);
+                setTimeout(() => {
+                  document.getElementById('seccion-mapeo-almacen')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                }, 100);
+              }}
+              className="flex items-center gap-2 rounded-xl bg-indigo-600 px-5 py-2.5 text-xs font-bold text-white hover:bg-indigo-700 shadow-md transition hover:scale-105 active:scale-95 whitespace-nowrap"
+            >
+              <span>🚀 Abrir Mapeo Aquí</span>
+            </button>
+          </div>
+        )}
+      </div>
+
       {/* 4. Floating Tooltip */}
       {tooltip && (
         <div
@@ -805,7 +868,10 @@ export function Warehouse2D({ token, onError }: { token: string; onError: (value
                   const targetCode = selected?.code ?? null;
                   setSelected(null);
                   setMappingInitialLocation(targetCode);
-                  setMappingModalOpen(true);
+                  setIsMappingActive(true);
+                  setTimeout(() => {
+                    document.getElementById('seccion-mapeo-almacen')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                  }, 120);
                 }}
                 className="flex items-center gap-1.5 rounded-xl border border-indigo-200 bg-indigo-50 px-4 py-2 text-xs font-bold text-indigo-700 hover:bg-indigo-100 transition shadow-sm"
               >
@@ -855,23 +921,6 @@ export function Warehouse2D({ token, onError }: { token: string; onError: (value
           refreshLocations();
         }}
       />
-
-      {/* 6. Mapping & Warehouse Physical Audit Modal */}
-      {mappingModalOpen && (
-        <MappingModal
-          isOpen={mappingModalOpen}
-          onClose={() => {
-            setMappingModalOpen(false);
-            setMappingInitialLocation(null);
-          }}
-          token={token}
-          locations={locations}
-          initialLocationCode={mappingInitialLocation}
-          onSuccess={() => {
-            refreshLocations();
-          }}
-        />
-      )}
     </section>
   );
 }

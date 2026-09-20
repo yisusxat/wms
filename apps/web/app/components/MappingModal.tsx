@@ -4,10 +4,10 @@ import { apiFetch, Location, Product, InventoryItem } from "../../lib/api";
 
 // Error boundary to protect the UI
 class ModalErrorBoundary extends Component<
-  { children: ReactNode; onClose: () => void },
+  { children: ReactNode; onClose: () => void; inline?: boolean },
   { hasError: boolean; error: string }
 > {
-  constructor(props: { children: ReactNode; onClose: () => void }) {
+  constructor(props: { children: ReactNode; onClose: () => void; inline?: boolean }) {
     super(props);
     this.state = { hasError: false, error: "" };
   }
@@ -22,6 +22,31 @@ class ModalErrorBoundary extends Component<
 
   render() {
     if (this.state.hasError) {
+      if (this.props.inline) {
+        return (
+          <div className="w-full rounded-3xl bg-white p-8 shadow-xl border-2 border-red-300 text-center space-y-4">
+            <span className="text-4xl">⚠️</span>
+            <h3 className="font-bold text-base text-slate-800">Aviso en Sección de Mapeo de Almacén</h3>
+            <p className="text-xs text-slate-500">
+              Ocurrió un detalle al procesar las posiciones: {this.state.error}
+            </p>
+            <div className="flex justify-center gap-2">
+              <button
+                onClick={() => this.setState({ hasError: false, error: "" })}
+                className="rounded-xl bg-indigo-600 px-4 py-2 text-xs font-bold text-white hover:bg-indigo-700"
+              >
+                Reintentar
+              </button>
+              <button
+                onClick={this.props.onClose}
+                className="rounded-xl border border-slate-200 px-4 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50"
+              >
+                Cerrar Sección
+              </button>
+            </div>
+          </div>
+        );
+      }
       return (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 p-4 backdrop-blur-sm animate-fadeIn">
           <div className="w-full max-w-md rounded-3xl bg-white p-6 shadow-2xl border border-red-200 text-center space-y-4">
@@ -84,6 +109,7 @@ interface Props {
   locations?: Location[];
   initialLocationCode?: string | null;
   onSuccess: () => void;
+  inline?: boolean;
 }
 
 const COMMON_REASONS = [
@@ -102,6 +128,7 @@ function MappingModalInner({
   locations = [],
   initialLocationCode,
   onSuccess,
+  inline = false,
 }: Props) {
   const [items, setItems] = useState<AuditItem[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
@@ -614,43 +641,67 @@ function MappingModalInner({
   // Safe early exit placed AFTER all hooks
   if (!isOpen) return null;
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/70 p-2 sm:p-4 backdrop-blur-sm animate-fadeIn">
-      <div className="w-full max-w-6xl max-h-[96vh] flex flex-col rounded-3xl bg-white shadow-2xl border border-slate-200 overflow-hidden">
-        {/* ================= HEADER ================= */}
-        <div className="flex items-center justify-between border-b px-6 py-3.5 bg-indigo-50 text-indigo-950">
-          <div className="flex items-center gap-3">
-            <span className="flex h-10 w-10 items-center justify-center rounded-2xl bg-indigo-600 text-white shadow-md text-xl">
-              🔍
-            </span>
-            <div>
-              <div className="flex items-center gap-2">
-                <h3 className="font-black text-base text-slate-900">Mapeo y Auditoría de Almacén</h3>
-                <span className="rounded-full bg-indigo-200 px-2.5 py-0.5 text-[10px] font-black uppercase text-indigo-800">
-                  Plano 2D Interactivo
-                </span>
-              </div>
-              <p className="text-xs text-indigo-700">
-                {step === "AUDIT" && "Recorre los pasillos y casilleros en orden físico para verificar inventario en tiempo real"}
-                {step === "PRE_REPORT" && "Pre-Reporte de modificaciones y ajustes detectados antes de sincronizar"}
-                {step === "REPORT" && "Reporte oficial de auditoría y modificaciones de almacén generado"}
-              </p>
-            </div>
-          </div>
-          <button
-            onClick={onClose}
-            className="rounded-xl p-1.5 text-indigo-800 hover:bg-indigo-100 transition text-base font-bold"
-            title="Cerrar modal"
-          >
-            ✕
-          </button>
-        </div>
+  const containerClass = inline
+    ? "w-full rounded-3xl bg-white shadow-2xl border-4 border-indigo-950/20 overflow-hidden flex flex-col animate-fadeIn"
+    : "w-full max-w-6xl max-h-[96vh] flex flex-col rounded-3xl bg-white shadow-2xl border border-slate-200 overflow-hidden";
 
-        {/* ================= KPI & PROGRESS BAR ================= */}
-        {step === "AUDIT" && (
-          <div className="border-b border-slate-100 bg-slate-50/90 px-6 py-2.5 text-xs">
-            <div className="grid grid-cols-2 sm:grid-cols-6 gap-2">
-              <div className="rounded-xl border border-slate-200 bg-white p-2 text-center shadow-xs">
+  const renderContent = () => (
+    <div className={containerClass}>
+      {/* ================= HEADER ================= */}
+      <div
+        className={`flex items-center justify-between border-b px-6 py-4 ${
+          inline
+            ? "bg-gradient-to-r from-indigo-950 via-indigo-900 to-indigo-950 text-white"
+            : "bg-indigo-50 text-indigo-950"
+        }`}
+      >
+        <div className="flex items-center gap-3">
+          <span
+            className={`flex h-10 w-10 items-center justify-center rounded-2xl shadow-md text-xl ${
+              inline ? "bg-white/10 text-white border border-white/20" : "bg-indigo-600 text-white"
+            }`}
+          >
+            🔍
+          </span>
+          <div>
+            <div className="flex items-center gap-2">
+              <h3 className={`font-black text-base ${inline ? "text-white" : "text-slate-900"}`}>
+                Mapeo y Conciliación Física de Almacén
+              </h3>
+              <span
+                className={`rounded-full px-2.5 py-0.5 text-[10px] font-black uppercase ${
+                  inline ? "bg-amber-400 text-slate-950" : "bg-indigo-200 text-indigo-800"
+                }`}
+              >
+                {inline ? "Sección Oficial" : "Plano 2D Interactivo"}
+              </span>
+            </div>
+            <p className={`text-xs ${inline ? "text-indigo-200 font-medium" : "text-indigo-700"}`}>
+              {step === "AUDIT" && "Recorre los pasillos y casilleros en orden físico para verificar inventario en tiempo real"}
+              {step === "PRE_REPORT" && "Pre-Reporte de modificaciones y ajustes detectados antes de sincronizar"}
+              {step === "REPORT" && "Reporte oficial de auditoría y modificaciones de almacén generado"}
+            </p>
+          </div>
+        </div>
+        <button
+          onClick={onClose}
+          className={`rounded-xl px-3 py-1.5 transition text-xs font-bold flex items-center gap-1.5 ${
+            inline
+              ? "bg-white/10 text-white hover:bg-white/20 border border-white/20"
+              : "text-indigo-800 hover:bg-indigo-100 text-base"
+          }`}
+          title={inline ? "Cerrar sección de mapeo" : "Cerrar modal"}
+        >
+          <span>✕</span>
+          {inline && <span>Cerrar Sección</span>}
+        </button>
+      </div>
+
+      {/* ================= KPI & PROGRESS BAR ================= */}
+      {step === "AUDIT" && (
+        <div className="border-b border-slate-100 bg-slate-50/90 px-6 py-2.5 text-xs">
+          <div className="grid grid-cols-2 sm:grid-cols-6 gap-2">
+            <div className="rounded-xl border border-slate-200 bg-white p-2 text-center shadow-xs">
                 <span className="text-[10px] uppercase font-bold text-slate-400">Total Posiciones</span>
                 <p className="text-sm font-black text-slate-800">{stats.total}</p>
               </div>
@@ -763,7 +814,7 @@ function MappingModalInner({
             </div>
 
             {/* Content Area */}
-            <div className="flex-1 overflow-hidden flex flex-col md:flex-row">
+            <div className={`flex flex-col md:flex-row ${inline ? "h-[740px]" : "flex-1 overflow-hidden"}`}>
               {/* ================= VIEW 1: OFFICIAL 2D LAYOUT PLAN ================= */}
               {viewMode === "LAYOUT_2D" && (
                 <div className="flex-1 overflow-y-auto overflow-x-auto p-4 bg-slate-100/70 border-r border-slate-200">
@@ -1620,20 +1671,29 @@ function MappingModalInner({
                 onClick={onClose}
                 className="rounded-xl bg-slate-900 px-6 py-2.5 font-bold text-white shadow-md hover:bg-slate-800 transition"
               >
-                Finalizar y Volver al Plano 2D
+                {inline ? "Finalizar y Cerrar Sección" : "Finalizar y Volver al Plano 2D"}
               </button>
             </>
           )}
         </div>
       </div>
-    </div>
-  );
-}
+    );
 
-export function MappingModal(props: Props) {
-  return (
-    <ModalErrorBoundary onClose={props.onClose}>
-      <MappingModalInner {...props} />
-    </ModalErrorBoundary>
-  );
-}
+    if (inline) {
+      return renderContent();
+    }
+
+    return (
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/70 p-2 sm:p-4 backdrop-blur-sm animate-fadeIn">
+        {renderContent()}
+      </div>
+    );
+  }
+
+  export function MappingModal(props: Props) {
+    return (
+      <ModalErrorBoundary onClose={props.onClose} inline={props.inline}>
+        <MappingModalInner {...props} />
+      </ModalErrorBoundary>
+    );
+  }
