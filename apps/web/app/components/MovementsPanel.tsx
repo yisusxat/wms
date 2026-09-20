@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { FormEvent, useEffect, useState } from "react";
 import { apiFetch, CurrentUser, Location, Movement, Page, Product } from "../../lib/api";
@@ -48,6 +48,10 @@ export function MovementsPanel({
   const [slottingSuggestions, setSlottingSuggestions] = useState<SlottingSuggestion[]>([]);
   const [loadingSlotting, setLoadingSlotting] = useState(false);
 
+  // FIFO State
+  const [fifoSuggestion, setFifoSuggestion] = useState<any>(null);
+  const [loadingFifo, setLoadingFifo] = useState(false);
+
   // Scanner modal state
   const [scannerTarget, setScannerTarget] = useState<"product" | "location" | null>(null);
 
@@ -95,6 +99,23 @@ export function MovementsPanel({
       setSlottingSuggestions([]);
     }
   }, [mode, form.productId, token]);
+
+  // Consultar Sugerencia FIFO cuando cambia el producto o cantidad en modo salida
+  useEffect(() => {
+    if (mode === "exit" && form.productId && form.quantity > 0) {
+      setLoadingFifo(true);
+      apiFetch<any>(`/operations/fifo/suggest/${form.productId}/${form.quantity}`, token)
+        .then((data) => {
+          setFifoSuggestion(data);
+        })
+        .catch(() => {
+          setFifoSuggestion(null);
+        })
+        .finally(() => setLoadingFifo(false));
+    } else {
+      setFifoSuggestion(null);
+    }
+  }, [mode, form.productId, form.quantity, token]);
 
   async function submit(event: FormEvent) {
     event.preventDefault();
@@ -272,6 +293,57 @@ export function MovementsPanel({
                   className="mt-2 text-xs font-semibold text-blue-600 hover:text-blue-800 bg-blue-50 py-1.5 rounded text-center"
                 >
                   {form.locationId === sug.locationId ? "✓ Seleccionada" : "⚡ Asignar esta ubicación"}
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* FIFO Recommendation Banner (Exit Mode) */}
+      {mode === "exit" && fifoSuggestion && fifoSuggestion.suggestions?.length > 0 && (
+        <div className="rounded-xl border border-amber-200 bg-gradient-to-r from-amber-50 to-orange-50 p-4 shadow-sm space-y-3">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <span className="text-xl">⏳</span>
+              <h4 className="text-sm font-bold text-amber-900">
+                Trazabilidad FIFO: Prioridad de Despacho por Antigüedad
+              </h4>
+              <span className="text-xs px-2 py-0.5 rounded-full bg-amber-200 text-amber-900 font-semibold">
+                Lote más antiguo primero
+              </span>
+            </div>
+            {loadingFifo && <span className="text-xs text-amber-700 animate-pulse">Calculando...</span>}
+          </div>
+
+          <div className="grid gap-2 sm:grid-cols-2 md:grid-cols-3">
+            {fifoSuggestion.suggestions.map((sug: any, idx: number) => (
+              <div
+                key={sug.locationId}
+                className="flex flex-col justify-between rounded-lg bg-white p-3 border border-amber-100 shadow-xs hover:border-amber-300 transition"
+              >
+                <div>
+                  <div className="flex items-center justify-between">
+                    <span className="font-mono font-bold text-sm text-gray-900">{sug.locationCode}</span>
+                    <span className="text-xs font-bold text-amber-700 bg-amber-50 px-1.5 py-0.5 rounded">
+                      Tomar {sug.suggestedQuantity} u
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-gray-500 mt-1">
+                    Stock en posición: {sug.availableQuantity} u
+                  </p>
+                  <p className="text-[10px] text-gray-600 mt-1 italic">
+                    Ingresado: {new Date(sug.entryDate).toLocaleDateString()}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setForm({ ...form, locationId: sug.locationId, quantity: sug.suggestedQuantity });
+                  }}
+                  className="mt-2 text-xs font-semibold text-amber-700 hover:text-amber-900 bg-amber-50 py-1.5 rounded text-center border border-amber-200"
+                >
+                  {form.locationId === sug.locationId ? "✓ Ubicación seleccionada" : "⚡ Despachar desde aquí"}
                 </button>
               </div>
             ))}

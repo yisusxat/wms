@@ -1,4 +1,4 @@
-﻿import { Body, Controller, Get, Param, Post, UseGuards } from "@nestjs/common";
+import { Body, Controller, Get, Param, Post, UseGuards } from "@nestjs/common";
 import { AuthGuard } from "../auth/auth.guard";
 import { RolesGuard } from "../auth/roles.guard";
 import { OperationsService } from "./operations.service";
@@ -26,5 +26,13 @@ export class OperationsController {
   @Get("labels/product/:productId")
   getProductLabel(@Param("productId") productId: string) {
     return this.operations.getProductLabel(productId);
+  }
+
+  @Get("fifo/suggest/:productId/:quantity")
+  suggestFifo(
+    @Param("productId") productId: string,
+    @Param("quantity") quantity: string
+  ) {
+    return this.operations.suggestDispatchFifo(productId, parseInt(quantity, 10) || 1);
   }
 }

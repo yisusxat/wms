@@ -13,6 +13,7 @@ import { AuditLogsModal } from './components/AuditLogsModal';
 import { LegalModal } from './components/LegalModal';
 import KPIPanel from './components/KPIPanel';
 import ReportsPanel from './components/ReportsPanel';
+import { TwoFactorModal } from './components/TwoFactorModal';
 
 type Summary = {
   products: number;
@@ -65,6 +66,7 @@ export default function HomePage() {
   const [forgotOpen, setForgotOpen] = useState(false);
   const [auditOpen, setAuditOpen] = useState(false);
   const [legalOpen, setLegalOpen] = useState(false);
+  const [twoFactorOpen, setTwoFactorOpen] = useState(false);
 
   useEffect(() => {
     let active = true;
@@ -318,6 +320,13 @@ export default function HomePage() {
               </button>
             )}
             <button
+              onClick={() => setTwoFactorOpen(true)}
+              className="flex items-center gap-1.5 rounded-lg border border-purple-200 bg-purple-50 px-3 py-2 text-sm font-medium text-purple-900 transition hover:bg-purple-100 shadow-xs"
+              title="Configurar 2FA"
+            >
+              🔐 2FA / TOTP
+            </button>
+            <button
               onClick={() => setSupportOpen(true)}
               className="flex items-center gap-1.5 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-sm font-medium text-amber-900 transition hover:bg-amber-100 shadow-xs"
               title="Reportar problema técnico"
@@ -360,6 +369,7 @@ export default function HomePage() {
       <SupportModal isOpen={supportOpen} onClose={() => setSupportOpen(false)} user={user} profile={profile} />
       <AuditLogsModal isOpen={auditOpen} onClose={() => setAuditOpen(false)} token={token} />
       <LegalModal isOpen={legalOpen} onClose={() => setLegalOpen(false)} token={token} onAnonymized={signOut} />
+      <TwoFactorModal isOpen={twoFactorOpen} onClose={() => setTwoFactorOpen(false)} userEmail={user?.email} />
     </div>
   );
 }

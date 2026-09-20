@@ -1,4 +1,4 @@
-﻿import { Injectable, NotFoundException } from "@nestjs/common";
+import { Injectable, NotFoundException } from "@nestjs/common";
 import { PrismaService } from "../prisma/prisma.service";
 
 export interface SlottingSuggestion {
@@ -323,5 +323,50 @@ ${subtitle ? `^FO50,120^A0N,22,22^FD${subtitle}^FS` : ""}
       prod.name,
       `SKU: ${prod.sku} · Unidad: ${prod.unit} · Cat: ${prod.category ?? "General"}`
     );
+  }
+
+  // ─────────────────────────────────────────────────────────────
+  // 4. TRAZABILIDAD FIFO / FEFO (SUGERENCIA DE DESPACHO)
+  // ─────────────────────────────────────────────────────────────
+  async suggestDispatchFifo(productId: string, quantity: number) {
+    const inventories = await this.prisma.inventory.findMany({
+      where: {
+        productId,
+        quantity: { gt: 0 },
+      },
+      include: {
+        location: true,
+      },
+      orderBy: {
+        createdAt: "asc", // FIFO estricto por antigüedad de entrada
+      },
+    });
+
+    let remaining = quantity;
+    const suggestions = [];
+
+    for (const inv of inventories) {
+      if (remaining <= 0) break;
+      const takeQty = Math.min(inv.quantity, remaining);
+      remaining -= takeQty;
+
+      suggestions.push({
+        locationId: inv.locationId,
+        locationCode: inv.location.code,
+        availableQuantity: inv.quantity,
+        suggestedQuantity: takeQty,
+        entryDate: inv.createdAt,
+        rule: "FIFO (First-In, First-Out - Lote más antiguo primero)",
+      });
+    }
+
+    return {
+      productId,
+      requestedQuantity: quantity,
+      allocatedQuantity: quantity - remaining,
+      missingQuantity: remaining,
+      canFulfill: remaining === 0,
+      suggestions,
+    };
   }
 }
