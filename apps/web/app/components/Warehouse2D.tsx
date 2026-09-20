@@ -344,17 +344,17 @@ export function Warehouse2D({ token, onError }: { token: string; onError: (value
 
               {/* Level Headers */}
               <div className="mb-1.5 flex justify-between px-1 text-[10px] font-black text-slate-600">
-                {(levelFilter === 'all' || levelFilter === '1') && <span className="w-8 text-center">N1</span>}
-                <span className="flex-1 text-center text-[9px] text-slate-400">PASILLO A</span>
-                {(levelFilter === 'all' || levelFilter === '2') && <span className="w-8 text-center">N2</span>}
+                {(levelFilter === 'all' || levelFilter === '2') && <span className="w-8 text-center text-blue-900 font-black">N2</span>}
+                <span className="flex-1 text-center text-[9px] text-slate-400">PARED ◀ | ▶ PASILLO A</span>
+                {(levelFilter === 'all' || levelFilter === '1') && <span className="w-8 text-center text-slate-700">N1</span>}
               </div>
 
               {/* 22 Rows of Squares with Vertical Strip */}
               <div className="flex gap-2 items-stretch">
-                {/* Level 1 Column */}
-                {(levelFilter === 'all' || levelFilter === '1') && (
+                {/* Level 2 Column (Contra la pared) */}
+                {(levelFilter === 'all' || levelFilter === '2') && (
                   <div className="flex flex-col gap-1.5">
-                    {wallPositions.map((pos) => renderSquare('A', 'P', 1, pos))}
+                    {wallPositions.map((pos) => renderSquare('A', 'P', 2, pos))}
                   </div>
                 )}
 
@@ -368,10 +368,10 @@ export function Warehouse2D({ token, onError }: { token: string; onError: (value
                   </span>
                 </div>
 
-                {/* Level 2 Column */}
-                {(levelFilter === 'all' || levelFilter === '2') && (
+                {/* Level 1 Column (Frente a Pasillo A) */}
+                {(levelFilter === 'all' || levelFilter === '1') && (
                   <div className="flex flex-col gap-1.5">
-                    {wallPositions.map((pos) => renderSquare('A', 'P', 2, pos))}
+                    {wallPositions.map((pos) => renderSquare('A', 'P', 1, pos))}
                   </div>
                 )}
               </div>
@@ -437,11 +437,11 @@ export function Warehouse2D({ token, onError }: { token: string; onError: (value
 
                   {/* --- Frente Pasillo B (B-C) --- */}
                   <div className="flex gap-2 items-stretch pl-1">
-                    {/* Level 1 */}
-                    {(levelFilter === 'all' || levelFilter === '1') && (
+                    {/* Level 2 (Detrás / Centro del rack) */}
+                    {(levelFilter === 'all' || levelFilter === '2') && (
                       <div className="flex flex-col gap-1.5">
-                        <div className="text-center text-[10px] font-black text-slate-600 mb-0.5">N1</div>
-                        {centralPositions.map((pos) => renderSquare('B', 'C', 1, pos))}
+                        <div className="text-center text-[10px] font-black text-blue-900 mb-0.5">N2</div>
+                        {centralPositions.map((pos) => renderSquare('B', 'C', 2, pos))}
                       </div>
                     )}
 
@@ -455,11 +455,11 @@ export function Warehouse2D({ token, onError }: { token: string; onError: (value
                       </span>
                     </div>
 
-                    {/* Level 2 */}
-                    {(levelFilter === 'all' || levelFilter === '2') && (
+                    {/* Level 1 (Frente a Pasillo B) */}
+                    {(levelFilter === 'all' || levelFilter === '1') && (
                       <div className="flex flex-col gap-1.5">
-                        <div className="text-center text-[10px] font-black text-slate-600 mb-0.5">N2</div>
-                        {centralPositions.map((pos) => renderSquare('B', 'C', 2, pos))}
+                        <div className="text-center text-[10px] font-black text-slate-700 mb-0.5">N1</div>
+                        {centralPositions.map((pos) => renderSquare('B', 'C', 1, pos))}
                       </div>
                     )}
                   </div>
@@ -504,9 +504,9 @@ export function Warehouse2D({ token, onError }: { token: string; onError: (value
 
               {/* Level Headers */}
               <div className="mb-1.5 flex justify-between px-1 text-[10px] font-black text-slate-600">
-                {(levelFilter === 'all' || levelFilter === '1') && <span className="w-8 text-center">N1</span>}
-                <span className="flex-1 text-center text-[9px] text-slate-400">PASILLO B</span>
-                {(levelFilter === 'all' || levelFilter === '2') && <span className="w-8 text-center">N2</span>}
+                {(levelFilter === 'all' || levelFilter === '1') && <span className="w-8 text-center text-slate-700">N1</span>}
+                <span className="flex-1 text-center text-[9px] text-slate-400">PASILLO B ◀ | ▶ PARED</span>
+                {(levelFilter === 'all' || levelFilter === '2') && <span className="w-8 text-center text-blue-900 font-black">N2</span>}
               </div>
 
               {/* 22 Rows of Squares with Vertical Strip */}
@@ -578,7 +578,9 @@ export function Warehouse2D({ token, onError }: { token: string; onError: (value
             </p>
             <p className="flex justify-between">
               <span className="text-slate-400">Nivel:</span>
-              <span className="font-bold text-white">Nivel {tooltip.location.level}</span>
+              <span className="font-bold text-white">
+                Nivel {tooltip.location.level} ({tooltip.location.level === 1 ? 'Frente pasillo' : 'Pared / Fondo'})
+              </span>
             </p>
             <p className="flex justify-between">
               <span className="text-slate-400">Posición:</span>
@@ -695,7 +697,7 @@ export function Warehouse2D({ token, onError }: { token: string; onError: (value
               <div>
                 <p className="text-slate-400">Nivel de Estantería:</p>
                 <p className="font-bold text-slate-800">
-                  Nivel {selected.level} {selected.level === 1 ? '(Piso / Nivel suelo)' : '(Nivel superior)'}
+                  Nivel {selected.level} {selected.level === 1 ? '(Frente al pasillo / Acceso inmediato)' : '(Contra la pared / Detrás del Nivel 1)'}
                 </p>
               </div>
               <div>
