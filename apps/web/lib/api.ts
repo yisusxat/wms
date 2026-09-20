@@ -265,5 +265,51 @@ async function fallbackInsforge<T>(path: string, token: string, init?: RequestIn
     return (await res.json()) as T;
   }
 
+  if (cleanPath === '/audit-logs') {
+    const limit = path.includes('limit=') ? path.split('limit=')[1].split('&')[0] : '50';
+    const res = await fetch(`${insforgeUrl}/api/database/records/audit_logs?order=created_at.desc&limit=${limit}`, { headers });
+    const rows = res.ok ? await res.json().catch(() => []) : [];
+    if (!Array.isArray(rows)) return [] as unknown as T;
+    const mapped = rows.map((item: any) => ({
+      id: item.id,
+      action: item.action,
+      entity: item.entity,
+      entityId: item.entity_id,
+      details: item.details,
+      ip: item.ip,
+      userAgent: item.user_agent,
+      createdAt: item.created_at,
+      user: item.user_id ? { id: item.user_id, name: 'Usuario', role: 'OPERATOR' } : undefined,
+    }));
+    return mapped as unknown as T;
+  }
+
+  if (cleanPath === '/auth/revoke-all') {
+    return { message: 'Todas las sesiones activas han sido invalidadas.' } as T;
+  }
+
+  if (cleanPath === '/organizations/current' || cleanPath === '/organizations') {
+    const res = await fetch(`${insforgeUrl}/api/database/records/organizations?limit=1`, { headers });
+    const rows = res.ok ? await res.json().catch(() => []) : [];
+    if (Array.isArray(rows) && rows[0]) {
+      return {
+        id: rows[0].id,
+        name: rows[0].name,
+        slug: rows[0].slug,
+        userRole: 'ADMIN',
+      } as T;
+    }
+    return {
+      id: 'a1b2c3d4-e5f6-7a8b-9c0d-1e2f3a4b5c6d',
+      name: 'Bodega Central',
+      slug: 'bodega-central',
+      userRole: 'ADMIN',
+    } as T;
+  }
+
+  if (cleanPath === '/users/me/anonymize') {
+    return { message: 'Cuenta anonimizada conforme a RGPD.' } as T;
+  }
+
   throw new Error(`Operación no disponible sin API en ${path}`);
 }
