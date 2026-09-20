@@ -312,6 +312,9 @@ export function Warehouse2D({ token, onError }: { token: string; onError: (value
       </div>
 
       {/* 3. Official Warehouse 2D Layout Plan */}
+      <div className="md:hidden flex items-center justify-between px-2 py-1 text-xs text-slate-500">
+        <span>↔ Desliza horizontalmente para explorar los pasillos</span>
+      </div>
       <div className="relative overflow-x-auto rounded-3xl border-4 border-slate-800 bg-slate-100/90 p-6 shadow-2xl">
         <div className="min-w-[880px] max-w-[1060px] mx-auto">
           {/* Header Bar */}
@@ -600,7 +603,7 @@ export function Warehouse2D({ token, onError }: { token: string; onError: (value
       {/* 5. Rich Availability & Position Inspection Modal / Drawer */}
       {selected && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4 animate-fadeIn">
-          <div className="w-full max-w-lg rounded-3xl bg-white p-6 shadow-2xl border border-slate-200">
+          <div className="w-full max-w-lg max-h-[90vh] overflow-y-auto rounded-3xl bg-white p-6 shadow-2xl border border-slate-200">
             {/* Modal Header */}
             <div className="flex items-start justify-between border-b border-slate-100 pb-4">
               <div>

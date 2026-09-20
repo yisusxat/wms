@@ -50,7 +50,7 @@ export function ForgotPasswordModal({ isOpen, onClose, apiBaseUrl = 'http://loca
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 p-4 backdrop-blur-xs">
-      <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl border border-slate-100">
+      <div className="w-full max-w-md max-h-[90vh] overflow-y-auto rounded-2xl bg-white p-6 shadow-xl border border-slate-100">
         <div className="flex items-start justify-between border-b border-slate-100 pb-3">
           <div>
             <h3 className="text-lg font-bold text-slate-900">Restablecer Contraseña</h3>

@@ -54,6 +54,7 @@ export default function HomePage() {
   const [loading, setLoading] = useState(true);
 
   // Modals state
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [supportOpen, setSupportOpen] = useState(false);
   const [forgotOpen, setForgotOpen] = useState(false);
   const [auditOpen, setAuditOpen] = useState(false);
@@ -210,19 +211,58 @@ export default function HomePage() {
     : baseTabs;
 
   return (
-    <main className="min-h-screen lg:flex bg-slate-50">
-      <aside className="bg-[#1E3A8A] p-6 text-white lg:h-screen lg:w-64 lg:sticky lg:top-0 flex flex-col justify-between shrink-0 overflow-y-auto z-30">
+    <div className="min-h-screen lg:flex bg-slate-50">
+      {/* Mobile Top Navigation Bar */}
+      <div className="lg:hidden sticky top-0 z-40 flex items-center justify-between bg-[#1E3A8A] px-4 py-3 text-white shadow-md">
+        <div className="flex items-center gap-2">
+          <span className="rounded bg-white/20 px-2 py-0.5 text-xs font-bold tracking-wider">WMS</span>
+          <span className="text-sm font-semibold tracking-wide text-blue-100">Logística</span>
+        </div>
+        <button
+          onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+          className="flex items-center gap-1.5 rounded-lg bg-white/10 px-3 py-1.5 text-xs font-medium text-white hover:bg-white/20 transition"
+          aria-label="Abrir menú"
+        >
+          {mobileMenuOpen ? '✕ Cerrar' : '☰ Menú'}
+        </button>
+      </div>
+
+      {/* Mobile Backdrop Overlay */}
+      {mobileMenuOpen && (
+        <div
+          onClick={() => setMobileMenuOpen(false)}
+          className="lg:hidden fixed inset-0 z-40 bg-slate-900/60 backdrop-blur-xs transition-opacity"
+        />
+      )}
+
+      {/* Responsive Sidebar (Mobile Drawer + Desktop Sticky) */}
+      <aside
+        className={`fixed inset-y-0 left-0 z-50 w-72 bg-[#1E3A8A] p-6 text-white flex flex-col justify-between overflow-y-auto transform transition-transform duration-300 ease-in-out lg:static lg:h-screen lg:w-64 lg:sticky lg:top-0 lg:translate-x-0 shrink-0 ${
+          mobileMenuOpen ? 'translate-x-0 shadow-2xl' : '-translate-x-full'
+        }`}
+      >
         <div>
-          <div className="flex items-center gap-2">
-            <span className="rounded bg-white/20 px-2 py-0.5 text-xs font-bold tracking-wider">WMS</span>
-            <span className="text-sm font-semibold uppercase tracking-widest text-blue-100">Logística</span>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <span className="rounded bg-white/20 px-2 py-0.5 text-xs font-bold tracking-wider">WMS</span>
+              <span className="text-sm font-semibold uppercase tracking-widest text-blue-100">Logística</span>
+            </div>
+            <button
+              onClick={() => setMobileMenuOpen(false)}
+              className="lg:hidden rounded-lg p-1 text-blue-200 hover:bg-white/10 hover:text-white"
+            >
+              ✕
+            </button>
           </div>
           <p className="mt-2 text-xs text-blue-200">Operaciones de bodega</p>
           <nav className="mt-8 space-y-1.5">
             {visibleTabs.map(item => (
               <button
                 key={item.id}
-                onClick={() => setTab(item.id)}
+                onClick={() => {
+                  setTab(item.id);
+                  setMobileMenuOpen(false);
+                }}
                 className={"block w-full rounded-lg px-3 py-2 text-left text-sm transition " + (tab === item.id ? "bg-white/20 font-semibold text-white shadow-xs" : "text-blue-100 hover:bg-white/10")}
               >
                 {item.label}
@@ -237,7 +277,10 @@ export default function HomePage() {
             <p className="text-[11px] capitalize text-blue-300">Rol: {profile?.role ?? 'Usuario'}</p>
           </div>
           <button
-            onClick={() => setLegalOpen(true)}
+            onClick={() => {
+              setLegalOpen(true);
+              setMobileMenuOpen(false);
+            }}
             className="text-[11px] text-blue-300 hover:text-white flex items-center gap-1 transition"
           >
             ⚖️ Términos, SLA y Privacidad
@@ -245,7 +288,7 @@ export default function HomePage() {
         </div>
       </aside>
 
-      <section className="flex-1 p-6 lg:p-10">
+      <section className="flex-1 p-4 sm:p-6 lg:p-10 min-w-0">
         <header className="flex flex-wrap items-center justify-between gap-4 border-b border-slate-200 pb-5">
           <div>
             <div className="flex items-center gap-2">
@@ -254,7 +297,7 @@ export default function HomePage() {
               </span>
               <span className="text-xs text-slate-400">· Multi-Tenant</span>
             </div>
-            <h1 className="mt-1 text-3xl font-bold text-gray-900">{visibleTabs.find(item => item.id === tab)?.label}</h1>
+            <h1 className="mt-1 text-2xl sm:text-3xl font-bold text-gray-900">{visibleTabs.find(item => item.id === tab)?.label}</h1>
           </div>
 
           <div className="flex flex-wrap items-center gap-2 sm:gap-3">
@@ -308,7 +351,7 @@ export default function HomePage() {
       <SupportModal isOpen={supportOpen} onClose={() => setSupportOpen(false)} user={user} profile={profile} />
       <AuditLogsModal isOpen={auditOpen} onClose={() => setAuditOpen(false)} token={token} />
       <LegalModal isOpen={legalOpen} onClose={() => setLegalOpen(false)} token={token} onAnonymized={signOut} />
-    </main>
+    </div>
   );
 }
 

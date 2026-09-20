@@ -106,20 +106,20 @@ export function TeamPanel({ token, onError }: { token: string; onError: (msg: st
   return (
     <section className="space-y-5">
       {/* Header with Search and Invite Button */}
-      <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl bg-white p-5 shadow-sm">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 rounded-2xl bg-white p-5 shadow-sm">
         <div>
           <h2 className="text-xl font-bold text-slate-800">Gestión de Equipo y Accesos</h2>
           <p className="text-xs text-slate-500">
             Administra los operadores, supervisores y administradores de la bodega
           </p>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-3">
           <input
             type="text"
             placeholder="Buscar miembro..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="rounded-xl border border-slate-200 bg-slate-50 px-3.5 py-2 text-xs font-medium focus:bg-white focus:border-blue-600 focus:outline-none"
+            className="flex-1 sm:flex-initial rounded-xl border border-slate-200 bg-slate-50 px-3.5 py-2 text-xs font-medium focus:bg-white focus:border-blue-600 focus:outline-none"
           />
           <button
             onClick={() => setShowModal(true)}
@@ -132,8 +132,8 @@ export function TeamPanel({ token, onError }: { token: string; onError: (msg: st
       </div>
 
       {/* Team Table */}
-      <div className="overflow-hidden rounded-2xl bg-white shadow-sm border border-slate-100">
-        <table className="w-full text-left text-xs">
+      <div className="overflow-x-auto rounded-2xl bg-white shadow-sm border border-slate-100">
+        <table className="w-full min-w-[600px] text-left text-xs">
           <thead className="border-b border-slate-100 bg-slate-50/70 text-slate-500 font-bold uppercase tracking-wider">
             <tr>
               <th className="p-4">Miembro</th>

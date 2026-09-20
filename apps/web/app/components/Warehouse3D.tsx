@@ -151,7 +151,7 @@ export function Warehouse3D({ token, onError }: { token: string; onError: (value
         <span className="inline-flex items-center gap-2"><i className="h-3 w-3 rounded-full bg-amber-500" />Mantención</span>
       </div>
 
-      <div className="relative h-[620px] overflow-hidden rounded-xl bg-slate-100 shadow-sm">
+      <div className="relative h-[420px] sm:h-[520px] lg:h-[620px] overflow-hidden rounded-xl bg-slate-100 shadow-sm">
         <Canvas camera={{ position: [15, 11, 19], fov: 48 }}>
           <color attach="background" args={['#F1F5F9']} />
           <ambientLight intensity={1.6} />

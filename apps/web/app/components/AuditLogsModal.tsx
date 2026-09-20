@@ -64,13 +64,13 @@ export function AuditLogsModal({ isOpen, onClose, token }: Props) {
 
         {error && <p className="mt-4 rounded-lg bg-red-50 p-2.5 text-xs text-red-700">{error}</p>}
 
-        <div className="flex-1 overflow-y-auto mt-4">
+        <div className="flex-1 overflow-auto mt-4">
           {loading ? (
             <p className="text-center py-10 text-sm text-slate-500">Cargando bitácora de auditoría...</p>
           ) : logs.length === 0 ? (
             <p className="text-center py-10 text-sm text-slate-500">No hay registros de auditoría recientes</p>
           ) : (
-            <table className="w-full text-left text-xs border-collapse">
+            <table className="w-full min-w-[640px] text-left text-xs border-collapse">
               <thead>
                 <tr className="border-b border-slate-200 text-slate-500 uppercase tracking-wider text-[10px]">
                   <th className="py-2.5 px-3">Fecha y Hora</th>
