@@ -2,6 +2,8 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { apiFetch, getWarehouseSeedLocations, Location, Page } from '../../lib/api';
+import { Entry2DModal } from './Entry2DModal';
+import { Exit2DModal } from './Exit2DModal';
 
 const STATUS_CONFIG: Record<
   string,
@@ -39,6 +41,14 @@ const STATUS_CONFIG: Record<
     badgeBg: '#FEF3C7',
     badgeText: '#92400E',
   },
+  TRANSIT: {
+    bg: '#0EA5E9',
+    text: '#FFFFFF',
+    border: '#0284C7',
+    label: 'En Tránsito',
+    badgeBg: '#E0F2FE',
+    badgeText: '#0369A1',
+  },
 };
 
 type TooltipInfo = {
@@ -56,9 +66,10 @@ export function Warehouse2D({ token, onError }: { token: string; onError: (value
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [orderAsc, setOrderAsc] = useState(true);
+  const [entryModalOpen, setEntryModalOpen] = useState(false);
+  const [exitModalOpen, setExitModalOpen] = useState(false);
 
-  // Fetch live updates from API / InsForge
-  useEffect(() => {
+  const refreshLocations = () => {
     apiFetch<Page<Location>>('/locations?pageSize=500', token)
       .then((page) => {
         if (page.items && page.items.length > 0) {
@@ -72,6 +83,11 @@ export function Warehouse2D({ token, onError }: { token: string; onError: (value
       .catch((err: Error) => {
         console.warn('Live location fetch notice:', err.message);
       });
+  };
+
+  // Fetch live updates from API / InsForge
+  useEffect(() => {
+    refreshLocations();
   }, [token, onError]);
 
   // Index locations by "Aisle-RackCode-Level-Position"
@@ -93,7 +109,7 @@ export function Warehouse2D({ token, onError }: { token: string; onError: (value
         acc[loc.status] = (acc[loc.status] ?? 0) + 1;
         return acc;
       },
-      { AVAILABLE: 0, OCCUPIED: 0, BLOCKED: 0, MAINTENANCE: 0 } as Record<string, number>
+      { AVAILABLE: 0, OCCUPIED: 0, BLOCKED: 0, MAINTENANCE: 0, TRANSIT: 0 } as Record<string, number>
     );
   }, [locations]);
 
@@ -307,6 +323,24 @@ export function Warehouse2D({ token, onError }: { token: string; onError: (value
             className="rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs font-bold text-slate-700 hover:bg-slate-50 shadow-sm"
           >
             {orderAsc ? 'Orden: Entrada (01) → Fondo' : 'Orden: Fondo (01) → Entrada'}
+          </button>
+
+          <button
+            onClick={() => setEntryModalOpen(true)}
+            className="flex items-center gap-1.5 rounded-xl bg-emerald-600 px-3.5 py-1.5 text-xs font-bold text-white hover:bg-emerald-700 shadow-sm transition hover:scale-105 active:scale-95"
+            title="Registrar o apartar entrada de mercancía"
+          >
+            <span>📥</span>
+            <span>Entrada de Mercancía</span>
+          </button>
+
+          <button
+            onClick={() => setExitModalOpen(true)}
+            className="flex items-center gap-1.5 rounded-xl bg-orange-600 px-3.5 py-1.5 text-xs font-bold text-white hover:bg-orange-700 shadow-sm transition hover:scale-105 active:scale-95"
+            title="Seleccionar productos y generar reporte de salida"
+          >
+            <span>📤</span>
+            <span>Salida de Producto</span>
           </button>
         </div>
       </div>
@@ -760,6 +794,38 @@ export function Warehouse2D({ token, onError }: { token: string; onError: (value
           </div>
         </div>
       )}
+
+      {/* 4. Entry 2D Merchandise Modal */}
+      <Entry2DModal
+        isOpen={entryModalOpen}
+        onClose={() => setEntryModalOpen(false)}
+        token={token}
+        locations={locations}
+        onSuccess={(assigned, mode) => {
+          if (mode === 'TRANSIT') {
+            // Asignar estado temporal en tránsito en memoria para el plano
+            const assignedCodes = new Set(assigned.map((a) => a.code));
+            setLocations((current) =>
+              current.map((loc) =>
+                assignedCodes.has(loc.code) ? { ...loc, status: 'TRANSIT' } : loc
+              )
+            );
+          } else {
+            // Confirmado directamente en la base de datos
+            refreshLocations();
+          }
+        }}
+      />
+
+      {/* 5. Exit 2D Merchandise Modal */}
+      <Exit2DModal
+        isOpen={exitModalOpen}
+        onClose={() => setExitModalOpen(false)}
+        token={token}
+        onSuccess={() => {
+          refreshLocations();
+        }}
+      />
     </section>
   );
 }
