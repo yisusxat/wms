@@ -44,7 +44,7 @@ export type LocationRack = {
 export type Location = { id: string; code: string; status: string; level: number; position: number; rack?: LocationRack };
 export type InventoryItem = { id: string; quantity: number; reservedQuantity: number; product: Product; location: Location };
 export type Movement = { id: string; type: string; quantity: number; createdAt: string; product: Product; sourceLocation?: Location; destinationLocation?: Location; reason?: string };
-export type CurrentUser = { id: string; email?: string; name?: string; role: 'ADMIN' | 'SUPERVISOR' | 'OPERATOR' | 'VIEWER' };
+export type CurrentUser = { id: string; email?: string; name?: string; role: 'ADMIN' | 'SUPERVISOR' | 'OPERATOR' | 'VIEWER'; organizationId?: string };
 
 export async function apiFetch<T>(path: string, token: string, init?: RequestInit): Promise<T> {
   const isClient = typeof window !== 'undefined';

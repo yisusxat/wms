@@ -1,4 +1,4 @@
-import { Controller, Get, UseGuards } from '@nestjs/common';
+import { Controller, Get, Query, UseGuards } from '@nestjs/common';
 import { AuthGuard } from '../auth/auth.guard';
 import { RolesGuard } from '../auth/roles.guard';
 import { DashboardService } from './dashboard.service';
@@ -11,5 +11,10 @@ export class DashboardController {
   @Get('summary')
   summary() {
     return this.dashboard.summary();
+  }
+
+  @Get('kpis')
+  kpis(@Query('organizationId') organizationId?: string) {
+    return this.dashboard.getKpis(organizationId);
   }
 }

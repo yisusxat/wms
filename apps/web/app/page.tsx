@@ -11,6 +11,8 @@ import { SupportModal } from './components/SupportModal';
 import { ForgotPasswordModal } from './components/ForgotPasswordModal';
 import { AuditLogsModal } from './components/AuditLogsModal';
 import { LegalModal } from './components/LegalModal';
+import KPIPanel from './components/KPIPanel';
+import ReportsPanel from './components/ReportsPanel';
 
 type Summary = {
   products: number;
@@ -24,6 +26,8 @@ type Summary = {
 
 type Tab =
   | 'dashboard'
+  | 'kpis'
+  | 'reports'
   | 'products'
   | 'locations'
   | 'inventory'
@@ -32,14 +36,16 @@ type Tab =
   | 'warehouse2d'
   | 'team';
 
-const baseTabs: { id: Tab; label: string }[] = [
-  { id: 'dashboard', label: 'Dashboard' },
-  { id: 'products', label: 'Productos' },
-  { id: 'locations', label: 'Ubicaciones' },
-  { id: 'inventory', label: 'Inventario' },
-  { id: 'movements', label: 'Movimientos' },
-  { id: 'warehouse3d', label: 'Vista 3D' },
-  { id: 'warehouse2d', label: 'Vista 2D' },
+const baseTabs: { id: Tab; label: string; icon?: string }[] = [
+  { id: 'dashboard', label: 'Dashboard', icon: '🏠' },
+  { id: 'kpis', label: 'Centro de Mando', icon: '🎯' },
+  { id: 'reports', label: 'Reportes', icon: '📑' },
+  { id: 'products', label: 'Productos', icon: '📦' },
+  { id: 'locations', label: 'Ubicaciones', icon: '📍' },
+  { id: 'inventory', label: 'Inventario', icon: '🗂️' },
+  { id: 'movements', label: 'Movimientos', icon: '🔄' },
+  { id: 'warehouse3d', label: 'Vista 3D', icon: '🧊' },
+  { id: 'warehouse2d', label: 'Vista 2D', icon: '🗺️' },
 ];
 
 export default function HomePage() {
@@ -207,7 +213,7 @@ export default function HomePage() {
   }
 
   const visibleTabs = profile?.role === 'ADMIN'
-    ? [...baseTabs, { id: 'team' as Tab, label: 'Equipo' }]
+    ? [...baseTabs, { id: 'team' as Tab, label: 'Equipo', icon: '👥' }]
     : baseTabs;
 
   return (
@@ -255,7 +261,7 @@ export default function HomePage() {
             </button>
           </div>
           <p className="mt-2 text-xs text-blue-200">Operaciones de bodega</p>
-          <nav className="mt-8 space-y-1.5">
+          <nav className="mt-8 space-y-1">
             {visibleTabs.map(item => (
               <button
                 key={item.id}
@@ -263,8 +269,9 @@ export default function HomePage() {
                   setTab(item.id);
                   setMobileMenuOpen(false);
                 }}
-                className={"block w-full rounded-lg px-3 py-2 text-left text-sm transition " + (tab === item.id ? "bg-white/20 font-semibold text-white shadow-xs" : "text-blue-100 hover:bg-white/10")}
+                className={"flex items-center gap-2.5 w-full rounded-lg px-3 py-2.5 text-left text-sm transition " + (tab === item.id ? "bg-white/20 font-semibold text-white shadow-xs" : "text-blue-100 hover:bg-white/10")}
               >
+                {item.icon && <span className="text-base">{item.icon}</span>}
                 {item.label}
               </button>
             ))}
@@ -337,6 +344,8 @@ export default function HomePage() {
 
         <div className="mt-8">
           {tab === 'dashboard' && <Dashboard summary={summary} onNavigate={setTab} role={profile?.role} />}
+          {tab === 'kpis' && <KPIPanel token={token} organizationId={profile?.organizationId} />}
+          {tab === 'reports' && <ReportsPanel token={token} organizationId={profile?.organizationId} />}
           {tab === 'products' && <Products token={token} role={profile?.role} onError={setError} />}
           {tab === 'locations' && <Locations token={token} onError={setError} />}
           {tab === 'inventory' && <Inventory token={token} onError={setError} />}

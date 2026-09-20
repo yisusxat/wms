@@ -16,6 +16,7 @@ import { HttpLoggerMiddleware } from './common/logger.middleware';
 import { EmailModule } from './email/email.module';
 import { AuditModule } from './audit/audit.module';
 import { OrganizationsModule } from './organizations/organizations.module';
+import { ReportsModule } from './reports/reports.module';
 
 @Module({
   imports: [
@@ -31,6 +32,7 @@ import { OrganizationsModule } from './organizations/organizations.module';
     LocationsModule,
     InventoryModule,
     DashboardModule,
+    ReportsModule,
     WarehousesModule,
     UsersModule,
   ],
