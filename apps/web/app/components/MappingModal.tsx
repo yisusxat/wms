@@ -2,8 +2,11 @@
 import { useState, useEffect, useMemo, Component, ErrorInfo, ReactNode } from "react";
 import { apiFetch, Location, Product, InventoryItem } from "../../lib/api";
 
-// Simple Component Error Boundary to prevent any Next.js page crash
-class ModalErrorBoundary extends Component<{ children: ReactNode; onClose: () => void }, { hasError: boolean; error: string }> {
+// Error boundary to protect the UI
+class ModalErrorBoundary extends Component<
+  { children: ReactNode; onClose: () => void },
+  { hasError: boolean; error: string }
+> {
   constructor(props: { children: ReactNode; onClose: () => void }) {
     super(props);
     this.state = { hasError: false, error: "" };
@@ -106,6 +109,12 @@ function MappingModalInner({
   const [search, setSearch] = useState("");
   const [filterTab, setFilterTab] = useState<"ALL" | "WITH_STOCK" | "PENDING" | "DISCREPANCY" | "MATCHED">("ALL");
   const [editingCode, setEditingCode] = useState<string | null>(null);
+  const [selectedLocationCode, setSelectedLocationCode] = useState<string | null>(null);
+
+  // View switch: 2D Layout Plan vs Table List
+  const [viewMode, setViewMode] = useState<"LAYOUT_2D" | "TABLE">("LAYOUT_2D");
+  const [levelFilter, setLevelFilter] = useState<"all" | "1" | "2">("all");
+  const [orderAsc, setOrderAsc] = useState(true);
 
   // Modal Step: AUDIT -> PRE_REPORT -> REPORT
   const [step, setStep] = useState<"AUDIT" | "PRE_REPORT" | "REPORT">("AUDIT");
@@ -131,7 +140,7 @@ function MappingModalInner({
     notes: "",
   });
 
-  // State for manually adding empty location to audit
+  // State for manually adding position to audit
   const [showAddEmpty, setShowAddEmpty] = useState(false);
   const [addEmptyLocationId, setAddEmptyLocationId] = useState("");
   const [addEmptyProductId, setAddEmptyProductId] = useState("");
@@ -147,8 +156,10 @@ function MappingModalInner({
     setShowAddEmpty(false);
     if (initialLocationCode) {
       setSearch(initialLocationCode);
+      setSelectedLocationCode(initialLocationCode);
     } else {
       setSearch("");
+      setSelectedLocationCode("A-P-01-01");
     }
 
     Promise.all([
@@ -199,10 +210,38 @@ function MappingModalInner({
         });
 
         setItems(auditList);
+        if (!initialLocationCode && auditList.length > 0) {
+          setSelectedLocationCode(auditList[0].locationCode);
+        }
       })
       .catch((err) => console.warn("Error cargando inventario de mapeo:", err))
       .finally(() => setLoading(false));
   }, [isOpen, token, initialLocationCode, locations]);
+
+  // Index items by locationCode for instant O(1) 2D square lookups
+  const auditMap = useMemo(() => {
+    const map = new Map<string, AuditItem>();
+    for (const item of items) {
+      map.set(item.locationCode, item);
+    }
+    return map;
+  }, [items]);
+
+  // Ordered list of all location codes for navigation
+  const allLocationCodes = useMemo(() => {
+    return items.map((i) => i.locationCode);
+  }, [items]);
+
+  // Wall and Central positions (order ascending or descending)
+  const wallPositions = useMemo(() => {
+    const arr = Array.from({ length: 22 }, (_, i) => 22 - i);
+    return orderAsc ? arr : [...arr].reverse();
+  }, [orderAsc]);
+
+  const centralPositions = useMemo(() => {
+    const arr = Array.from({ length: 15 }, (_, i) => 15 - i);
+    return orderAsc ? arr : [...arr].reverse();
+  }, [orderAsc]);
 
   // Stats calculation
   const stats = useMemo(() => {
@@ -220,18 +259,16 @@ function MappingModalInner({
     return { total, withStock, matched, discrepancies, pending, audited, ira };
   }, [items]);
 
-  // Filtered items for display
+  // Filtered items for display in table view
   const filteredItems = useMemo(() => {
     if (!Array.isArray(items)) return [];
     return items.filter((item) => {
       if (!item) return false;
-      // Filter tab
       if (filterTab === "WITH_STOCK" && item.systemQuantity === 0) return false;
       if (filterTab === "PENDING" && item.status !== "PENDING") return false;
       if (filterTab === "DISCREPANCY" && item.status !== "DISCREPANCY") return false;
       if (filterTab === "MATCHED" && item.status !== "MATCHED") return false;
 
-      // Text search
       if (!search || !search.trim()) return true;
       const q = search.toLowerCase().trim();
       const loc = (item.locationCode || "").toLowerCase();
@@ -244,8 +281,18 @@ function MappingModalInner({
     });
   }, [items, filterTab, search]);
 
+  // The active item selected on the 2D layout map
+  const activeSelectedItem = useMemo(() => {
+    if (!selectedLocationCode) return items[0] || null;
+    return auditMap.get(selectedLocationCode) || items.find((i) => i.locationCode === selectedLocationCode) || null;
+  }, [selectedLocationCode, auditMap, items]);
+
+  // Safe collections
+  const safeLocations = Array.isArray(locations) ? locations : [];
+  const safeProducts = Array.isArray(products) ? products : [];
+
   // Quick Action: Mark as Matched (Physical matches system)
-  const handleMarkMatched = (locationCode: string) => {
+  const handleMarkMatched = (locationCode: string, autoAdvance = true) => {
     setItems((curr) =>
       curr.map((item) =>
         item.locationCode === locationCode
@@ -264,13 +311,18 @@ function MappingModalInner({
       )
     );
     if (editingCode === locationCode) setEditingCode(null);
+
+    // Auto advance to next position in layout
+    if (autoAdvance) {
+      const idx = allLocationCodes.indexOf(locationCode);
+      if (idx >= 0 && idx < allLocationCodes.length - 1) {
+        setSelectedLocationCode(allLocationCodes[idx + 1]);
+      }
+    }
   };
 
   // Open Edit Form for an item
   const handleOpenEdit = (item: AuditItem) => {
-    const safeProducts = Array.isArray(products) ? products : [];
-    const safeLocations = Array.isArray(locations) ? locations : [];
-
     setEditingCode(item.locationCode);
     setEditForm({
       physicalQuantity: item.physicalQuantity,
@@ -285,8 +337,6 @@ function MappingModalInner({
 
   // Save Edit Form
   const handleSaveEdit = (locationCode: string) => {
-    const safeProducts = Array.isArray(products) ? products : [];
-    const safeLocations = Array.isArray(locations) ? locations : [];
     const selectedProd = safeProducts.find((p) => p.id === editForm.physicalProductId);
     const selectedLoc = safeLocations.find((l) => l.id === editForm.reassignedLocationId);
 
@@ -329,16 +379,12 @@ function MappingModalInner({
       return;
     }
 
-    const safeLocations = Array.isArray(locations) ? locations : [];
-    const safeProducts = Array.isArray(products) ? products : [];
     const loc = safeLocations.find((l) => l.id === addEmptyLocationId);
     const prod = safeProducts.find((p) => p.id === addEmptyProductId);
     if (!loc || !prod) return;
 
-    // Check if already in items
     const existingIndex = items.findIndex((i) => i.locationCode === loc.code || i.locationId === loc.id);
     if (existingIndex >= 0) {
-      // Update existing item
       setItems((curr) =>
         curr.map((item, idx) =>
           idx === existingIndex
@@ -356,7 +402,7 @@ function MappingModalInner({
             : item
         )
       );
-      setEditingCode(loc.code);
+      setSelectedLocationCode(loc.code);
       setShowAddEmpty(false);
       return;
     }
@@ -381,11 +427,22 @@ function MappingModalInner({
     };
 
     setItems((curr) => [newItem, ...curr]);
+    setSelectedLocationCode(loc.code);
     setShowAddEmpty(false);
     setAddEmptyLocationId("");
   };
 
-  // Step 2: Confirm and execute all modifications
+  // Navigate to Next / Previous position in physical order
+  const handleNavigatePosition = (delta: number) => {
+    if (!selectedLocationCode || allLocationCodes.length === 0) return;
+    const currentIndex = allLocationCodes.indexOf(selectedLocationCode);
+    if (currentIndex < 0) return;
+    const nextIndex = Math.max(0, Math.min(allLocationCodes.length - 1, currentIndex + delta));
+    setSelectedLocationCode(allLocationCodes[nextIndex]);
+    setEditingCode(null);
+  };
+
+  // Confirm and execute all modifications
   const handleConfirmModifications = async () => {
     const discrepancies = items.filter((i) => i.status === "DISCREPANCY");
     setSubmitting(true);
@@ -396,7 +453,6 @@ function MappingModalInner({
       const executedLogs = [];
 
       for (const disc of discrepancies) {
-        // 1. Reassignment to another location
         if (disc.reassignedLocationId && disc.systemProductId) {
           await apiFetch("/movements/transfer", token, {
             method: "POST",
@@ -416,9 +472,7 @@ function MappingModalInner({
             detail: `Reasignado a ${disc.reassignedLocationCode} (${disc.physicalQuantity} u)`,
             reason: disc.reason,
           });
-        }
-        // 2. Quantity adjustment (Shrinkage or Surplus)
-        else if (disc.systemProductId && disc.physicalQuantity !== disc.systemQuantity) {
+        } else if (disc.systemProductId && disc.physicalQuantity !== disc.systemQuantity) {
           const delta = disc.physicalQuantity - disc.systemQuantity;
           await apiFetch("/movements/adjustment", token, {
             method: "POST",
@@ -437,9 +491,7 @@ function MappingModalInner({
             detail: `Stock ajustado: ${disc.systemQuantity} ➔ ${disc.physicalQuantity} (Delta: ${delta > 0 ? `+${delta}` : delta} u)`,
             reason: disc.reason,
           });
-        }
-        // 3. Product found in empty location or product mismatch
-        else if (disc.physicalProductId && (!disc.systemProductId || disc.physicalProductId !== disc.systemProductId)) {
+        } else if (disc.physicalProductId && (!disc.systemProductId || disc.physicalProductId !== disc.systemProductId)) {
           await apiFetch("/movements/entry", token, {
             method: "POST",
             body: JSON.stringify({
@@ -460,7 +512,6 @@ function MappingModalInner({
         }
       }
 
-      // Record in audit log
       await apiFetch("/audit-logs", token, {
         method: "POST",
         body: JSON.stringify({
@@ -477,7 +528,6 @@ function MappingModalInner({
         }),
       }).catch(() => {});
 
-      // Build official report
       setGeneratedReport({
         folio,
         timestamp: now.toLocaleString(),
@@ -499,29 +549,89 @@ function MappingModalInner({
     }
   };
 
-  const safeLocations = Array.isArray(locations) ? locations : [];
-  const safeProducts = Array.isArray(products) ? products : [];
+  // Helper to render an individual interactive 2D position square on the map
+  const renderSquare = (aisle: string, rack: string, level: number, position: number) => {
+    const code = `${aisle}-${rack}-${String(level).padStart(2, "0")}-${String(position).padStart(2, "0")}`;
+    const item = auditMap.get(code);
+    const isSelected = selectedLocationCode === code;
+    const isMatched = item?.status === "MATCHED";
+    const isDiscrepancy = item?.status === "DISCREPANCY";
+    const hasStock = (item?.systemQuantity || 0) > 0;
 
+    let bg = "#64748B";
+    let border = "#475569";
+    let badge = "";
+
+    if (isMatched) {
+      bg = "#10B981"; // Emerald green
+      border = "#047857";
+      badge = "✓";
+    } else if (isDiscrepancy) {
+      bg = "#F59E0B"; // Amber orange
+      border = "#B45309";
+      badge = "!";
+    } else {
+      // Pending
+      if (hasStock) {
+        bg = "#3B82F6"; // Blue indicates has stock
+        border = "#1D4ED8";
+      } else {
+        bg = "#94A3B8"; // Slate indicates empty
+        border = "#64748B";
+      }
+    }
+
+    return (
+      <button
+        key={code}
+        type="button"
+        onClick={() => {
+          setSelectedLocationCode(code);
+          if (editingCode && editingCode !== code) {
+            setEditingCode(null);
+          }
+        }}
+        title={`${code} · ${item?.systemProductName || 'Vacío'} · ${
+          isMatched ? "Verificado OK" : isDiscrepancy ? "Discrepancia" : "Pendiente"
+        }`}
+        style={{ backgroundColor: bg, borderColor: isSelected ? "#312E81" : border }}
+        className={`relative flex h-8 w-8 items-center justify-center rounded-md text-[11px] font-extrabold text-white shadow-sm transition-all duration-150 cursor-pointer focus:outline-none ${
+          isSelected
+            ? "z-30 scale-125 ring-4 ring-indigo-600 shadow-xl"
+            : "hover:z-20 hover:scale-125 hover:shadow-lg hover:ring-2 hover:ring-white border"
+        }`}
+      >
+        <span>{String(position).padStart(2, "0")}</span>
+        {badge && (
+          <span className="absolute -top-1.5 -right-1.5 flex h-4 w-4 items-center justify-center rounded-full bg-white text-[10px] font-black text-slate-900 shadow">
+            {badge}
+          </span>
+        )}
+      </button>
+    );
+  };
+
+  // Safe early exit placed AFTER all hooks
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 p-4 backdrop-blur-sm animate-fadeIn">
-      <div className="w-full max-w-4xl max-h-[92vh] flex flex-col rounded-3xl bg-white shadow-2xl border border-slate-200 overflow-hidden">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/70 p-2 sm:p-4 backdrop-blur-sm animate-fadeIn">
+      <div className="w-full max-w-6xl max-h-[96vh] flex flex-col rounded-3xl bg-white shadow-2xl border border-slate-200 overflow-hidden">
         {/* ================= HEADER ================= */}
-        <div className="flex items-center justify-between border-b px-6 py-4 bg-indigo-50 text-indigo-950">
+        <div className="flex items-center justify-between border-b px-6 py-3.5 bg-indigo-50 text-indigo-950">
           <div className="flex items-center gap-3">
             <span className="flex h-10 w-10 items-center justify-center rounded-2xl bg-indigo-600 text-white shadow-md text-xl">
               🔍
             </span>
             <div>
               <div className="flex items-center gap-2">
-                <h3 className="font-bold text-base text-slate-900">Mapeo y Auditoría de Almacén</h3>
-                <span className="rounded-full bg-indigo-200 px-2 py-0.5 text-[10px] font-black uppercase text-indigo-800">
-                  Conteo Cíclico & Conciliación
+                <h3 className="font-black text-base text-slate-900">Mapeo y Auditoría de Almacén</h3>
+                <span className="rounded-full bg-indigo-200 px-2.5 py-0.5 text-[10px] font-black uppercase text-indigo-800">
+                  Plano 2D Interactivo
                 </span>
               </div>
               <p className="text-xs text-indigo-700">
-                {step === "AUDIT" && "Verifica y compara la posición y cantidad física real contra el sistema"}
+                {step === "AUDIT" && "Recorre los pasillos y casilleros en orden físico para verificar inventario en tiempo real"}
                 {step === "PRE_REPORT" && "Pre-Reporte de modificaciones y ajustes detectados antes de sincronizar"}
                 {step === "REPORT" && "Reporte oficial de auditoría y modificaciones de almacén generado"}
               </p>
@@ -529,501 +639,723 @@ function MappingModalInner({
           </div>
           <button
             onClick={onClose}
-            className="rounded-xl p-1.5 text-indigo-800 hover:bg-indigo-100 transition"
+            className="rounded-xl p-1.5 text-indigo-800 hover:bg-indigo-100 transition text-base font-bold"
             title="Cerrar modal"
           >
             ✕
           </button>
         </div>
 
-        {/* ================= KPI STATS BAR ================= */}
+        {/* ================= KPI & PROGRESS BAR ================= */}
         {step === "AUDIT" && (
-          <div className="grid grid-cols-2 sm:grid-cols-6 gap-2 border-b border-slate-100 bg-slate-50/80 px-6 py-3 text-xs">
-            <div className="rounded-xl border border-slate-200 bg-white p-2 text-center">
-              <span className="text-[10px] uppercase font-bold text-slate-400">Total Posiciones</span>
-              <p className="text-base font-black text-slate-800">{stats.total}</p>
-            </div>
-            <div className="rounded-xl border border-blue-200 bg-blue-50/60 p-2 text-center">
-              <span className="text-[10px] uppercase font-bold text-blue-700">Con Stock</span>
-              <p className="text-base font-black text-blue-800">{stats.withStock}</p>
-            </div>
-            <div className="rounded-xl border border-emerald-200 bg-emerald-50/60 p-2 text-center">
-              <span className="text-[10px] uppercase font-bold text-emerald-700">✅ Coinciden (OK)</span>
-              <p className="text-base font-black text-emerald-800">{stats.matched}</p>
-            </div>
-            <div className="rounded-xl border border-amber-200 bg-amber-50/60 p-2 text-center">
-              <span className="text-[10px] uppercase font-bold text-amber-700">⚠️ Discrepancias</span>
-              <p className="text-base font-black text-amber-800">{stats.discrepancies}</p>
-            </div>
-            <div className="rounded-xl border border-slate-200 bg-white p-2 text-center">
-              <span className="text-[10px] uppercase font-bold text-slate-400">⏳ Pendientes</span>
-              <p className="text-base font-black text-slate-600">{stats.pending}</p>
-            </div>
-            <div className="col-span-2 sm:col-span-1 rounded-xl border border-indigo-200 bg-indigo-50/80 p-2 text-center">
-              <span className="text-[10px] uppercase font-bold text-indigo-700">Exactitud IRA</span>
-              <p className="text-base font-black text-indigo-900">{stats.ira}%</p>
+          <div className="border-b border-slate-100 bg-slate-50/90 px-6 py-2.5 text-xs">
+            <div className="grid grid-cols-2 sm:grid-cols-6 gap-2">
+              <div className="rounded-xl border border-slate-200 bg-white p-2 text-center shadow-xs">
+                <span className="text-[10px] uppercase font-bold text-slate-400">Total Posiciones</span>
+                <p className="text-sm font-black text-slate-800">{stats.total}</p>
+              </div>
+              <div className="rounded-xl border border-blue-200 bg-blue-50/60 p-2 text-center shadow-xs">
+                <span className="text-[10px] uppercase font-bold text-blue-700">Con Stock</span>
+                <p className="text-sm font-black text-blue-800">{stats.withStock}</p>
+              </div>
+              <div className="rounded-xl border border-emerald-200 bg-emerald-50/60 p-2 text-center shadow-xs">
+                <span className="text-[10px] uppercase font-bold text-emerald-700">✅ Coinciden (OK)</span>
+                <p className="text-sm font-black text-emerald-800">{stats.matched}</p>
+              </div>
+              <div className="rounded-xl border border-amber-200 bg-amber-50/60 p-2 text-center shadow-xs">
+                <span className="text-[10px] uppercase font-bold text-amber-700">⚠️ Discrepancias</span>
+                <p className="text-sm font-black text-amber-800">{stats.discrepancies}</p>
+              </div>
+              <div className="rounded-xl border border-slate-200 bg-white p-2 text-center shadow-xs">
+                <span className="text-[10px] uppercase font-bold text-slate-400">⏳ Pendientes</span>
+                <p className="text-sm font-black text-slate-600">{stats.pending}</p>
+              </div>
+              <div className="col-span-2 sm:col-span-1 rounded-xl border border-indigo-200 bg-indigo-50/80 p-2 text-center shadow-xs">
+                <span className="text-[10px] uppercase font-bold text-indigo-700">Exactitud IRA</span>
+                <p className="text-sm font-black text-indigo-900">{stats.ira}%</p>
+              </div>
             </div>
           </div>
         )}
 
-        {/* ================= STEP 1: AUDIT & COMPARISON ================= */}
+        {/* ================= STEP 1: AUDIT (2D LAYOUT PLAN & DOCKED INSPECTOR) ================= */}
         {step === "AUDIT" && (
-          <div className="flex-1 overflow-y-auto p-6 space-y-4">
-            {/* Search & Filter Controls */}
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <div className="relative flex-1 min-w-[240px]">
-                <input
-                  type="text"
-                  placeholder="Buscar por posición (ej: A-C-01-05), SKU o producto..."
-                  value={search}
-                  onChange={(e) => setSearch(e.target.value)}
-                  className="w-full rounded-xl border border-slate-200 bg-slate-50 pl-9 pr-8 py-2 text-xs font-medium focus:bg-white focus:border-indigo-600 focus:outline-none focus:ring-2 focus:ring-indigo-100"
-                />
-                <span className="absolute left-3 top-2.5 text-xs text-slate-400">🔍</span>
-                {search && (
+          <div className="flex-1 overflow-hidden flex flex-col">
+            {/* Top Toolbar: View Switch, Levels, Search, Legend */}
+            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 bg-white px-6 py-2.5 text-xs">
+              {/* View Switcher */}
+              <div className="inline-flex rounded-xl border border-slate-200 bg-slate-50 p-1 font-bold">
+                <button
+                  onClick={() => setViewMode("LAYOUT_2D")}
+                  className={`px-3 py-1 rounded-lg transition flex items-center gap-1.5 ${
+                    viewMode === "LAYOUT_2D" ? "bg-indigo-600 text-white shadow-sm" : "text-slate-600 hover:text-slate-900"
+                  }`}
+                >
+                  <span>🗺️</span>
+                  <span>Plano 2D Oficial</span>
+                </button>
+                <button
+                  onClick={() => setViewMode("TABLE")}
+                  className={`px-3 py-1 rounded-lg transition flex items-center gap-1.5 ${
+                    viewMode === "TABLE" ? "bg-indigo-600 text-white shadow-sm" : "text-slate-600 hover:text-slate-900"
+                  }`}
+                >
+                  <span>📋</span>
+                  <span>Vista Lista ({items.length})</span>
+                </button>
+              </div>
+
+              {/* Levels Filter (When in 2D view) */}
+              {viewMode === "LAYOUT_2D" && (
+                <div className="flex items-center gap-2">
+                  <span className="text-[10px] font-bold uppercase text-slate-400">Niveles:</span>
+                  <div className="inline-flex rounded-lg border border-slate-200 bg-slate-50 p-0.5">
+                    <button
+                      onClick={() => setLevelFilter("all")}
+                      className={`px-2.5 py-1 text-[11px] font-bold rounded ${
+                        levelFilter === "all" ? "bg-slate-800 text-white" : "text-slate-600"
+                      }`}
+                    >
+                      N1 + N2
+                    </button>
+                    <button
+                      onClick={() => setLevelFilter("1")}
+                      className={`px-2.5 py-1 text-[11px] font-bold rounded ${
+                        levelFilter === "1" ? "bg-slate-800 text-white" : "text-slate-600"
+                      }`}
+                    >
+                      Nivel 1
+                    </button>
+                    <button
+                      onClick={() => setLevelFilter("2")}
+                      className={`px-2.5 py-1 text-[11px] font-bold rounded ${
+                        levelFilter === "2" ? "bg-slate-800 text-white" : "text-slate-600"
+                      }`}
+                    >
+                      Nivel 2
+                    </button>
+                  </div>
+
                   <button
-                    onClick={() => setSearch("")}
-                    className="absolute right-2.5 top-2 text-xs font-bold text-slate-400 hover:text-slate-600"
+                    onClick={() => setOrderAsc(!orderAsc)}
+                    className="rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-[11px] font-bold text-slate-700 hover:bg-slate-50"
                   >
-                    ✕
+                    {orderAsc ? "Orden: Entrada (01) → Fondo" : "Orden: Fondo (01) → Entrada"}
                   </button>
-                )}
-              </div>
+                </div>
+              )}
 
-              {/* Status Tabs */}
-              <div className="inline-flex rounded-xl border border-slate-200 bg-slate-50 p-1 text-xs overflow-x-auto max-w-full">
-                <button
-                  onClick={() => setFilterTab("ALL")}
-                  className={`px-2.5 py-1 rounded-lg font-bold transition whitespace-nowrap ${
-                    filterTab === "ALL" ? "bg-white text-slate-900 shadow-sm" : "text-slate-600 hover:text-slate-900"
-                  }`}
-                >
-                  Todas ({stats.total})
-                </button>
-                <button
-                  onClick={() => setFilterTab("WITH_STOCK")}
-                  className={`px-2.5 py-1 rounded-lg font-bold transition whitespace-nowrap ${
-                    filterTab === "WITH_STOCK" ? "bg-white text-blue-900 shadow-sm" : "text-blue-700 hover:text-blue-900"
-                  }`}
-                >
-                  Con Stock ({stats.withStock})
-                </button>
-                <button
-                  onClick={() => setFilterTab("PENDING")}
-                  className={`px-2.5 py-1 rounded-lg font-bold transition whitespace-nowrap ${
-                    filterTab === "PENDING"
-                      ? "bg-white text-slate-900 shadow-sm"
-                      : "text-slate-600 hover:text-slate-900"
-                  }`}
-                >
-                  Pendientes ({stats.pending})
-                </button>
-                <button
-                  onClick={() => setFilterTab("DISCREPANCY")}
-                  className={`px-2.5 py-1 rounded-lg font-bold transition whitespace-nowrap ${
-                    filterTab === "DISCREPANCY"
-                      ? "bg-amber-600 text-white shadow-sm"
-                      : "text-amber-700 hover:text-amber-900"
-                  }`}
-                >
-                  Discrepancias ({stats.discrepancies})
-                </button>
-                <button
-                  onClick={() => setFilterTab("MATCHED")}
-                  className={`px-2.5 py-1 rounded-lg font-bold transition whitespace-nowrap ${
-                    filterTab === "MATCHED"
-                      ? "bg-emerald-600 text-white shadow-sm"
-                      : "text-emerald-700 hover:text-emerald-900"
-                  }`}
-                >
-                  OK ({stats.matched})
-                </button>
+              {/* 2D Plan Color Legend */}
+              <div className="flex items-center gap-3 text-[11px] font-medium text-slate-600">
+                <span className="flex items-center gap-1">
+                  <span className="h-2.5 w-2.5 rounded bg-blue-500" /> Stock Sistema
+                </span>
+                <span className="flex items-center gap-1">
+                  <span className="h-2.5 w-2.5 rounded bg-slate-400" /> Vacía Sistema
+                </span>
+                <span className="flex items-center gap-1">
+                  <span className="h-2.5 w-2.5 rounded bg-emerald-500" /> Verificado OK
+                </span>
+                <span className="flex items-center gap-1">
+                  <span className="h-2.5 w-2.5 rounded bg-amber-500" /> Discrepancia
+                </span>
               </div>
-
-              {/* Add unassigned location button */}
-              <button
-                onClick={() => setShowAddEmpty(!showAddEmpty)}
-                className="rounded-xl border border-indigo-200 bg-indigo-50 px-3 py-1.5 text-xs font-bold text-indigo-700 hover:bg-indigo-100 transition shadow-sm"
-              >
-                {showAddEmpty ? "✕ Cancelar Registro" : "➕ Auditar Posición"}
-              </button>
             </div>
 
-            {/* Sub-panel: Add Stock to Empty Rack Position */}
-            {showAddEmpty && (
-              <div className="rounded-2xl border-2 border-dashed border-indigo-300 bg-indigo-50/50 p-4 space-y-3 animate-fadeIn">
-                <div className="flex items-center gap-2">
-                  <span className="text-base">📦</span>
-                  <h4 className="text-xs font-black text-indigo-950 uppercase tracking-wide">
-                    Registrar Hallazgo Físico en Rack
-                  </h4>
-                </div>
-                <div className="grid sm:grid-cols-3 gap-3 text-xs">
-                  <div>
-                    <label className="font-bold text-slate-700">Ubicación en rack:</label>
-                    <select
-                      value={addEmptyLocationId}
-                      onChange={(e) => setAddEmptyLocationId(e.target.value)}
-                      className="mt-1 w-full rounded-xl border border-slate-300 bg-white p-2 font-mono font-medium focus:border-indigo-600 focus:outline-none"
-                    >
-                      <option value="">-- Selecciona Posición --</option>
-                      {safeLocations.map((l) => (
-                        <option key={l.id || l.code} value={l.id || l.code}>
-                          {l.code} ({l.rack?.name ?? "Rack"} - N{l.level})
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                  <div>
-                    <label className="font-bold text-slate-700">Producto Físico Encontrado:</label>
-                    <select
-                      value={addEmptyProductId}
-                      onChange={(e) => setAddEmptyProductId(e.target.value)}
-                      className="mt-1 w-full rounded-xl border border-slate-300 bg-white p-2 font-medium focus:border-indigo-600 focus:outline-none"
-                    >
-                      <option value="">-- Selecciona Producto --</option>
-                      {safeProducts.map((p) => (
-                        <option key={p.id} value={p.id}>
-                          [{p.sku}] {p.name}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                  <div>
-                    <label className="font-bold text-slate-700">Cantidad Encontrada:</label>
-                    <div className="mt-1 flex items-center gap-2">
-                      <input
-                        type="number"
-                        min={1}
-                        value={addEmptyQuantity}
-                        onChange={(e) => setAddEmptyQuantity(Math.max(1, Number(e.target.value)))}
-                        className="w-full rounded-xl border border-slate-300 bg-white p-2 font-bold focus:border-indigo-600 focus:outline-none"
-                      />
-                      <button
-                        onClick={handleAddEmptyLocation}
-                        className="whitespace-nowrap rounded-xl bg-indigo-600 px-4 py-2 font-bold text-white hover:bg-indigo-700 transition"
-                      >
-                        Agregar
-                      </button>
+            {/* Content Area */}
+            <div className="flex-1 overflow-hidden flex flex-col md:flex-row">
+              {/* ================= VIEW 1: OFFICIAL 2D LAYOUT PLAN ================= */}
+              {viewMode === "LAYOUT_2D" && (
+                <div className="flex-1 overflow-y-auto overflow-x-auto p-4 bg-slate-100/70 border-r border-slate-200">
+                  <div className="min-w-[760px] max-w-[880px] mx-auto space-y-3">
+                    {/* 2D Grid Header */}
+                    <div className="flex items-center justify-between text-xs text-slate-500 border-b pb-1.5 font-bold">
+                      <span>Bodega Principal · Haz clic en cualquier casillero para auditarlo en orden</span>
+                      <span>Posición activa: <strong className="font-mono text-indigo-700">{selectedLocationCode || "Ninguna"}</strong></span>
+                    </div>
+
+                    {/* 5-Column Grid */}
+                    <div className="grid grid-cols-[auto_1fr_auto_1fr_auto] gap-3 items-start">
+                      {/* ================= COLUMN 1: RACK PARED PASILLO A (22 POSICIONES) ================= */}
+                      <div className="rounded-2xl border-2 border-slate-800 bg-white p-2.5 shadow-md">
+                        <div className="mb-2 text-center border-b border-slate-100 pb-1.5">
+                          <span className="rounded-full bg-blue-900 px-2 py-0.5 text-[9px] font-black uppercase text-white">
+                            Rack Pared
+                          </span>
+                          <p className="text-[11px] font-black text-slate-800 mt-0.5">Pasillo A (A-P)</p>
+                        </div>
+                        <div className="mb-1 flex justify-between px-1 text-[9px] font-black text-slate-600">
+                          {(levelFilter === "all" || levelFilter === "2") && <span className="w-8 text-center text-blue-900">N2</span>}
+                          <span className="flex-1 text-center text-[8px] text-slate-400">PARED ◀ | ▶ A</span>
+                          {(levelFilter === "all" || levelFilter === "1") && <span className="w-8 text-center text-slate-700">N1</span>}
+                        </div>
+                        <div className="flex gap-1.5 items-stretch">
+                          {(levelFilter === "all" || levelFilter === "2") && (
+                            <div className="flex flex-col gap-1">
+                              {wallPositions.map((pos) => renderSquare("A", "P", 2, pos))}
+                            </div>
+                          )}
+                          <div className="flex w-5 flex-col items-center justify-center rounded bg-slate-100 py-2 border border-slate-200">
+                            <span style={{ writingMode: "vertical-rl" }} className="rotate-180 select-none text-[9px] font-black text-slate-600 uppercase">
+                              Nivel 2
+                            </span>
+                          </div>
+                          {(levelFilter === "all" || levelFilter === "1") && (
+                            <div className="flex flex-col gap-1">
+                              {wallPositions.map((pos) => renderSquare("A", "P", 1, pos))}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* ================= COLUMN 2: PASILLO A ================= */}
+                      <div className="flex h-full min-h-[700px] flex-col items-center justify-center rounded-2xl border-2 border-dashed border-slate-300 bg-amber-50/20 px-2">
+                        <div className="flex flex-col items-center gap-6 select-none opacity-70">
+                          <span className="text-xl text-slate-400 font-black">▲</span>
+                          <div style={{ writingMode: "vertical-rl" }} className="rotate-180 text-2xl font-black tracking-widest text-slate-500 uppercase">
+                            P a s i l l o &nbsp; A
+                          </div>
+                          <span className="text-xl text-slate-400 font-black">▼</span>
+                        </div>
+                      </div>
+
+                      {/* ================= COLUMN 3: RACK CENTRAL ISLA (15 POSICIONES) ================= */}
+                      <div className="flex flex-col items-center">
+                        <div className="rounded-2xl border-2 border-slate-800 bg-white p-2.5 shadow-md">
+                          <div className="mb-2 text-center border-b border-slate-100 pb-1.5">
+                            <span className="rounded-full bg-emerald-800 px-2 py-0.5 text-[9px] font-black uppercase text-white">
+                              Rack Central Isla
+                            </span>
+                            <p className="text-[11px] font-black text-slate-800 mt-0.5">Frente A y B (15 Pos)</p>
+                          </div>
+                          <div className="flex gap-2 items-stretch">
+                            {/* Frente Pasillo A */}
+                            <div className="flex gap-1.5 items-stretch border-r-2 border-slate-300 pr-2">
+                              {(levelFilter === "all" || levelFilter === "1") && (
+                                <div className="flex flex-col gap-1">
+                                  <div className="text-center text-[9px] font-black text-slate-600">N1</div>
+                                  {centralPositions.map((pos) => renderSquare("A", "C", 1, pos))}
+                                </div>
+                              )}
+                              <div className="flex w-5 flex-col items-center justify-center rounded bg-blue-50 py-2 border border-blue-200">
+                                <span style={{ writingMode: "vertical-rl" }} className="rotate-180 select-none text-[9px] font-black text-blue-900 uppercase">
+                                  N2-A
+                                </span>
+                              </div>
+                              {(levelFilter === "all" || levelFilter === "2") && (
+                                <div className="flex flex-col gap-1">
+                                  <div className="text-center text-[9px] font-black text-slate-600">N2</div>
+                                  {centralPositions.map((pos) => renderSquare("A", "C", 2, pos))}
+                                </div>
+                              )}
+                            </div>
+
+                            {/* Frente Pasillo B */}
+                            <div className="flex gap-1.5 items-stretch pl-1">
+                              {(levelFilter === "all" || levelFilter === "2") && (
+                                <div className="flex flex-col gap-1">
+                                  <div className="text-center text-[9px] font-black text-blue-900">N2</div>
+                                  {centralPositions.map((pos) => renderSquare("B", "C", 2, pos))}
+                                </div>
+                              )}
+                              <div className="flex w-5 flex-col items-center justify-center rounded bg-indigo-50 py-2 border border-indigo-200">
+                                <span style={{ writingMode: "vertical-rl" }} className="rotate-180 select-none text-[9px] font-black text-indigo-900 uppercase">
+                                  N2-B
+                                </span>
+                              </div>
+                              {(levelFilter === "all" || levelFilter === "1") && (
+                                <div className="flex flex-col gap-1">
+                                  <div className="text-center text-[9px] font-black text-slate-700">N1</div>
+                                  {centralPositions.map((pos) => renderSquare("B", "C", 1, pos))}
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                        <div className="mt-4 w-full rounded-xl border border-dashed border-slate-300 bg-slate-50 p-3 text-center text-[10px] text-slate-400 font-bold">
+                          Zona Libre / Traspaletas
+                        </div>
+                      </div>
+
+                      {/* ================= COLUMN 4: PASILLO B ================= */}
+                      <div className="flex h-full min-h-[700px] flex-col items-center justify-center rounded-2xl border-2 border-dashed border-slate-300 bg-amber-50/20 px-2">
+                        <div className="flex flex-col items-center gap-6 select-none opacity-70">
+                          <span className="text-xl text-slate-400 font-black">▲</span>
+                          <div style={{ writingMode: "vertical-rl" }} className="rotate-180 text-2xl font-black tracking-widest text-slate-500 uppercase">
+                            P a s i l l o &nbsp; B
+                          </div>
+                          <span className="text-xl text-slate-400 font-black">▼</span>
+                        </div>
+                      </div>
+
+                      {/* ================= COLUMN 5: RACK PARED PASILLO B (22 POSICIONES) ================= */}
+                      <div className="rounded-2xl border-2 border-slate-800 bg-white p-2.5 shadow-md">
+                        <div className="mb-2 text-center border-b border-slate-100 pb-1.5">
+                          <span className="rounded-full bg-indigo-900 px-2 py-0.5 text-[9px] font-black uppercase text-white">
+                            Rack Pared
+                          </span>
+                          <p className="text-[11px] font-black text-slate-800 mt-0.5">Pasillo B (B-P)</p>
+                        </div>
+                        <div className="mb-1 flex justify-between px-1 text-[9px] font-black text-slate-600">
+                          {(levelFilter === "all" || levelFilter === "1") && <span className="w-8 text-center text-slate-700">N1</span>}
+                          <span className="flex-1 text-center text-[8px] text-slate-400">B ◀ | ▶ PARED</span>
+                          {(levelFilter === "all" || levelFilter === "2") && <span className="w-8 text-center text-blue-900">N2</span>}
+                        </div>
+                        <div className="flex gap-1.5 items-stretch">
+                          {(levelFilter === "all" || levelFilter === "1") && (
+                            <div className="flex flex-col gap-1">
+                              {wallPositions.map((pos) => renderSquare("B", "P", 1, pos))}
+                            </div>
+                          )}
+                          <div className="flex w-5 flex-col items-center justify-center rounded bg-slate-100 py-2 border border-slate-200">
+                            <span style={{ writingMode: "vertical-rl" }} className="rotate-180 select-none text-[9px] font-black text-slate-600 uppercase">
+                              Nivel 2
+                            </span>
+                          </div>
+                          {(levelFilter === "all" || levelFilter === "2") && (
+                            <div className="flex flex-col gap-1">
+                              {wallPositions.map((pos) => renderSquare("B", "P", 2, pos))}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Entrada / Salida Gate */}
+                    <div className="pt-2 flex justify-center">
+                      <div className="w-full max-w-sm rounded-xl border-2 border-slate-800 bg-gradient-to-r from-amber-400 via-amber-300 to-amber-400 p-2 text-center shadow-md">
+                        <span className="text-xs font-black uppercase tracking-widest text-slate-900">
+                          🚪 Entrada / Salida Principal
+                        </span>
+                      </div>
                     </div>
                   </div>
                 </div>
-              </div>
-            )}
+              )}
 
-            {/* Audit List of Positions */}
-            {loading ? (
-              <p className="py-12 text-center text-xs text-slate-400">Cargando posiciones del almacén...</p>
-            ) : filteredItems.length === 0 ? (
-              <div className="rounded-2xl border border-slate-200 bg-slate-50 p-8 text-center">
-                <p className="text-sm font-bold text-slate-600">No se encontraron posiciones con ese criterio.</p>
-                <p className="text-xs text-slate-400 mt-1">Prueba cambiando los filtros o el término de búsqueda.</p>
-              </div>
-            ) : (
-              <div className="space-y-3">
-                {filteredItems.map((item) => {
-                  const isEditing = editingCode === item.locationCode;
-
-                  return (
-                    <div
-                      key={item.locationCode}
-                      className={`rounded-2xl border-2 transition-all p-4 ${
-                        item.status === "MATCHED"
-                          ? "border-emerald-200 bg-emerald-50/20"
-                          : item.status === "DISCREPANCY"
-                          ? "border-amber-300 bg-amber-50/30"
-                          : "border-slate-200 bg-white hover:border-slate-300"
-                      }`}
+              {/* ================= VIEW 2: TABLE LIST VIEW ================= */}
+              {viewMode === "TABLE" && (
+                <div className="flex-1 overflow-y-auto p-4 space-y-3 bg-white border-r border-slate-200">
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="text"
+                      placeholder="Buscar por código, SKU o producto..."
+                      value={search}
+                      onChange={(e) => setSearch(e.target.value)}
+                      className="flex-1 rounded-xl border border-slate-200 bg-slate-50 p-2 text-xs"
+                    />
+                    <button
+                      onClick={() => setShowAddEmpty(!showAddEmpty)}
+                      className="rounded-xl border border-indigo-200 bg-indigo-50 px-3 py-2 text-xs font-bold text-indigo-700"
                     >
-                      {/* Row Header */}
-                      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 pb-3">
-                        <div className="flex items-center gap-2.5">
-                          <span className="rounded-xl bg-slate-900 px-3 py-1 font-mono text-xs font-black text-white shadow-sm">
+                      {showAddEmpty ? "✕ Cancelar" : "➕ Registrar"}
+                    </button>
+                  </div>
+
+                  {/* Add empty form */}
+                  {showAddEmpty && (
+                    <div className="rounded-xl border border-indigo-200 bg-indigo-50/50 p-3 text-xs space-y-2">
+                      <div className="grid sm:grid-cols-3 gap-2">
+                        <select
+                          value={addEmptyLocationId}
+                          onChange={(e) => setAddEmptyLocationId(e.target.value)}
+                          className="rounded-lg border p-1.5 bg-white text-xs font-mono"
+                        >
+                          <option value="">-- Posición --</option>
+                          {safeLocations.map((l) => (
+                            <option key={l.id || l.code} value={l.id || l.code}>
+                              {l.code}
+                            </option>
+                          ))}
+                        </select>
+                        <select
+                          value={addEmptyProductId}
+                          onChange={(e) => setAddEmptyProductId(e.target.value)}
+                          className="rounded-lg border p-1.5 bg-white text-xs"
+                        >
+                          <option value="">-- Producto --</option>
+                          {safeProducts.map((p) => (
+                            <option key={p.id} value={p.id}>
+                              [{p.sku}] {p.name}
+                            </option>
+                          ))}
+                        </select>
+                        <div className="flex gap-2">
+                          <input
+                            type="number"
+                            min={1}
+                            value={addEmptyQuantity}
+                            onChange={(e) => setAddEmptyQuantity(Math.max(1, Number(e.target.value)))}
+                            className="w-16 rounded-lg border p-1.5 bg-white text-xs font-bold"
+                          />
+                          <button
+                            onClick={handleAddEmptyLocation}
+                            className="flex-1 rounded-lg bg-indigo-600 font-bold text-white text-xs"
+                          >
+                            Agregar
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* List items */}
+                  <div className="space-y-2">
+                    {filteredItems.map((item) => (
+                      <div
+                        key={item.locationCode}
+                        onClick={() => setSelectedLocationCode(item.locationCode)}
+                        className={`rounded-xl border p-2.5 transition cursor-pointer flex items-center justify-between text-xs ${
+                          selectedLocationCode === item.locationCode
+                            ? "border-indigo-600 ring-2 ring-indigo-100 bg-indigo-50/30"
+                            : item.status === "MATCHED"
+                            ? "border-emerald-200 bg-emerald-50/20"
+                            : item.status === "DISCREPANCY"
+                            ? "border-amber-200 bg-amber-50/20"
+                            : "border-slate-200 bg-white hover:bg-slate-50"
+                        }`}
+                      >
+                        <div className="flex items-center gap-2">
+                          <span className="font-mono font-bold bg-slate-900 text-white px-2 py-0.5 rounded text-[11px]">
                             {item.locationCode}
                           </span>
                           <div>
-                            <span className="text-xs font-bold text-slate-800">
-                              {item.systemProductName}
+                            <p className="font-bold text-slate-800">{item.systemProductName}</p>
+                            <p className="text-[10px] text-slate-400">SKU: {item.systemProductSku}</p>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-3">
+                          <span className="font-bold text-slate-700">{item.systemQuantity} u</span>
+                          {item.status === "MATCHED" && (
+                            <span className="bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded font-black text-[10px]">
+                              OK
                             </span>
-                            {item.systemProductSku && (
-                              <span className="ml-2 font-mono text-[11px] text-slate-400">
-                                SKU: {item.systemProductSku}
+                          )}
+                          {item.status === "DISCREPANCY" && (
+                            <span className="bg-amber-100 text-amber-800 px-2 py-0.5 rounded font-black text-[10px]">
+                              Modificado ({item.physicalQuantity} u)
+                            </span>
+                          )}
+                          {item.status === "PENDING" && (
+                            <span className="bg-slate-100 text-slate-500 px-2 py-0.5 rounded text-[10px]">
+                              Pendiente
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* ================= DOCKED INSPECTOR & AUDIT PANEL (RIGHT SIDE) ================= */}
+              <div className="w-full md:w-80 lg:w-96 flex flex-col bg-white overflow-y-auto p-4 space-y-4">
+                {activeSelectedItem ? (
+                  <div className="space-y-4 animate-fadeIn text-xs">
+                    {/* Position Title & Navigation */}
+                    <div className="flex items-center justify-between border-b pb-3">
+                      <div>
+                        <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                          Posición Seleccionada
+                        </span>
+                        <h4 className="text-base font-black text-indigo-950 font-mono">
+                          {activeSelectedItem.locationCode}
+                        </h4>
+                      </div>
+
+                      {/* Navigation buttons */}
+                      <div className="flex items-center gap-1.5">
+                        <button
+                          onClick={() => handleNavigatePosition(-1)}
+                          className="rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-1 text-xs font-bold text-slate-600 hover:bg-slate-100"
+                          title="Casillero anterior"
+                        >
+                          ◀
+                        </button>
+                        <button
+                          onClick={() => handleNavigatePosition(1)}
+                          className="rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-1 text-xs font-bold text-slate-600 hover:bg-slate-100"
+                          title="Casillero siguiente"
+                        >
+                          ▶
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Status Badge */}
+                    <div className="flex items-center justify-between">
+                      <span className="text-[11px] font-bold text-slate-500">Estado de Mapeo:</span>
+                      {activeSelectedItem.status === "MATCHED" && (
+                        <span className="rounded-full bg-emerald-100 px-3 py-0.5 text-xs font-black text-emerald-800">
+                          ✅ Coincide Físicamente (OK)
+                        </span>
+                      )}
+                      {activeSelectedItem.status === "DISCREPANCY" && (
+                        <span className="rounded-full bg-amber-100 px-3 py-0.5 text-xs font-black text-amber-800">
+                          ⚠️ Discrepancia Registrada
+                        </span>
+                      )}
+                      {activeSelectedItem.status === "PENDING" && (
+                        <span className="rounded-full bg-slate-100 px-3 py-0.5 text-xs font-bold text-slate-500">
+                          ⏳ Pendiente de Auditoría
+                        </span>
+                      )}
+                    </div>
+
+                    {/* System Registered Info Box */}
+                    <div className="rounded-2xl border border-slate-200 bg-slate-50/70 p-3.5 space-y-2">
+                      <span className="text-[10px] uppercase font-bold text-slate-400">
+                        Información Registrada en Sistema:
+                      </span>
+                      <div>
+                        <p className="font-bold text-slate-900 text-sm">{activeSelectedItem.systemProductName}</p>
+                        <p className="font-mono text-slate-500 text-[11px]">SKU: {activeSelectedItem.systemProductSku}</p>
+                      </div>
+                      <div className="flex items-baseline justify-between border-t border-slate-200 pt-2">
+                        <span className="text-slate-500 font-medium">Stock en Sistema:</span>
+                        <span className="text-sm font-black text-slate-900">
+                          {activeSelectedItem.systemQuantity} {activeSelectedItem.systemProductUnit}
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Discrepancy details if modified */}
+                    {activeSelectedItem.status === "DISCREPANCY" && editingCode !== activeSelectedItem.locationCode && (
+                      <div className="rounded-2xl border border-amber-300 bg-amber-50/50 p-3 space-y-2">
+                        <div className="flex items-center justify-between font-bold text-amber-900">
+                          <span>⚠️ Modificaciones a Aplicar:</span>
+                        </div>
+                        <div className="space-y-1 text-[11px]">
+                          <p>
+                            <span className="text-slate-500">Stock Real:</span>{" "}
+                            <strong className="text-amber-950 font-black">
+                              {activeSelectedItem.physicalQuantity} {activeSelectedItem.physicalProductUnit}
+                            </strong>{" "}
+                            ({activeSelectedItem.physicalQuantity - activeSelectedItem.systemQuantity > 0
+                              ? `+${activeSelectedItem.physicalQuantity - activeSelectedItem.systemQuantity}`
+                              : activeSelectedItem.physicalQuantity - activeSelectedItem.systemQuantity}{" "}
+                            u)
+                          </p>
+                          {activeSelectedItem.physicalProductSku !== activeSelectedItem.systemProductSku && (
+                            <p>
+                              <span className="text-slate-500">Nuevo Producto:</span>{" "}
+                              <strong>{activeSelectedItem.physicalProductName} [{activeSelectedItem.physicalProductSku}]</strong>
+                            </p>
+                          )}
+                          {activeSelectedItem.reassignedLocationCode && (
+                            <p>
+                              <span className="text-slate-500">Reasignar a:</span>{" "}
+                              <strong className="text-indigo-700 font-mono">➔ {activeSelectedItem.reassignedLocationCode}</strong>
+                            </p>
+                          )}
+                          <p className="text-slate-600 italic">Causa: {activeSelectedItem.reason}</p>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Normal Actions (When not in edit mode) */}
+                    {editingCode !== activeSelectedItem.locationCode ? (
+                      <div className="space-y-2 pt-2">
+                        <button
+                          onClick={() => handleMarkMatched(activeSelectedItem.locationCode, true)}
+                          className="w-full rounded-2xl bg-emerald-600 py-3 text-xs font-black text-white shadow-md hover:bg-emerald-700 transition hover:scale-102 active:scale-98 flex items-center justify-center gap-2"
+                        >
+                          <span>✅</span>
+                          <span>Coincide Físicamente (OK)</span>
+                        </button>
+
+                        <button
+                          onClick={() => handleOpenEdit(activeSelectedItem)}
+                          className="w-full rounded-2xl border-2 border-indigo-200 bg-indigo-50/80 py-2.5 text-xs font-bold text-indigo-900 hover:bg-indigo-100 transition flex items-center justify-center gap-2"
+                        >
+                          <span>✏️</span>
+                          <span>
+                            {activeSelectedItem.status === "DISCREPANCY"
+                              ? "Editar Modificación"
+                              : "Reportar Discrepancia / Modificar"}
+                          </span>
+                        </button>
+
+                        <div className="flex items-center justify-between text-[11px] text-slate-400 pt-1">
+                          <span>Siguiente posición en rack:</span>
+                          <button
+                            onClick={() => handleNavigatePosition(1)}
+                            className="font-bold text-indigo-600 hover:underline"
+                          >
+                            Avanzar ➔
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      /* Inline Discrepancy Edit Form */
+                      <div className="rounded-2xl border-2 border-indigo-300 bg-white p-3.5 space-y-3 shadow-sm animate-fadeIn">
+                        <div className="flex items-center justify-between border-b pb-1.5">
+                          <span className="font-black text-indigo-950 uppercase tracking-wider text-[11px]">
+                            Editar Posición {activeSelectedItem.locationCode}
+                          </span>
+                          <button
+                            onClick={() => setEditingCode(null)}
+                            className="text-slate-400 hover:text-slate-600 font-bold"
+                          >
+                            ✕
+                          </button>
+                        </div>
+
+                        {/* 1. Cantidad Real */}
+                        <div>
+                          <label className="block font-bold text-slate-700 text-[11px]">
+                            1. Cantidad Física Real Encontrada:
+                          </label>
+                          <div className="mt-1 flex items-center gap-2">
+                            <input
+                              type="number"
+                              min={0}
+                              value={editForm.physicalQuantity}
+                              onChange={(e) =>
+                                setEditForm({
+                                  ...editForm,
+                                  physicalQuantity: Math.max(0, Number(e.target.value)),
+                                })
+                              }
+                              className="w-24 rounded-xl border border-slate-300 p-2 font-black text-sm focus:border-indigo-600 focus:outline-none"
+                            />
+                            <span className="font-bold text-slate-500">
+                              {activeSelectedItem.systemProductUnit}
+                            </span>
+                            {editForm.physicalQuantity !== activeSelectedItem.systemQuantity && (
+                              <span
+                                className={`rounded px-1.5 py-0.5 font-bold text-[10px] ${
+                                  editForm.physicalQuantity - activeSelectedItem.systemQuantity > 0
+                                    ? "bg-emerald-100 text-emerald-800"
+                                    : "bg-red-100 text-red-800"
+                                }`}
+                              >
+                                {editForm.physicalQuantity - activeSelectedItem.systemQuantity > 0
+                                  ? `+${editForm.physicalQuantity - activeSelectedItem.systemQuantity}`
+                                  : editForm.physicalQuantity - activeSelectedItem.systemQuantity}{" "}
+                                u
                               </span>
                             )}
                           </div>
                         </div>
 
-                        {/* Status Badge */}
-                        <div className="flex items-center gap-2">
-                          {item.status === "MATCHED" && (
-                            <span className="rounded-full bg-emerald-100 px-2.5 py-0.5 text-[11px] font-black text-emerald-800">
-                              ✅ Coincide Físicamente (OK)
-                            </span>
-                          )}
-                          {item.status === "DISCREPANCY" && (
-                            <span className="rounded-full bg-amber-100 px-2.5 py-0.5 text-[11px] font-black text-amber-800">
-                              ⚠️ Modificación Registrada
-                            </span>
-                          )}
-                          {item.status === "PENDING" && (
-                            <span className="rounded-full bg-slate-100 px-2.5 py-0.5 text-[11px] font-bold text-slate-500">
-                              ⏳ Pendiente
-                            </span>
-                          )}
-                        </div>
-                      </div>
-
-                      {/* Content / System vs Physical display */}
-                      {!isEditing && (
-                        <div className="mt-3 flex flex-wrap items-center justify-between gap-4 text-xs">
-                          {/* Left: Comparison figures */}
-                          <div className="flex items-center gap-6">
-                            <div>
-                              <span className="text-[10px] uppercase font-bold text-slate-400">Sistema:</span>
-                              <p className="font-bold text-slate-700">
-                                {item.systemQuantity} {item.systemProductUnit}
-                              </p>
-                            </div>
-
-                            {item.status === "DISCREPANCY" ? (
-                              <>
-                                <span className="text-amber-500 font-black">➔</span>
-                                <div>
-                                  <span className="text-[10px] uppercase font-bold text-amber-700">
-                                    Físico Encontrado:
-                                  </span>
-                                  <p className="font-black text-amber-900">
-                                    {item.physicalQuantity} {item.physicalProductUnit}
-                                    <span className="ml-1 text-[11px] font-bold">
-                                      ({item.physicalQuantity - item.systemQuantity > 0
-                                        ? `+${item.physicalQuantity - item.systemQuantity}`
-                                        : item.physicalQuantity - item.systemQuantity}{" "}
-                                      u)
-                                    </span>
-                                  </p>
-                                </div>
-                                {item.reassignedLocationCode && (
-                                  <div>
-                                    <span className="text-[10px] uppercase font-bold text-indigo-600">
-                                      Nueva Asignación:
-                                    </span>
-                                    <p className="font-mono font-bold text-indigo-900">
-                                      {item.reassignedLocationCode}
-                                    </p>
-                                  </div>
-                                )}
-                              </>
-                            ) : (
-                              <div>
-                                <span className="text-[10px] uppercase font-bold text-slate-400">Físico:</span>
-                                <p className="font-bold text-slate-700">
-                                  {item.status === "MATCHED"
-                                    ? `${item.physicalQuantity} ${item.systemProductUnit} (Verificado)`
-                                    : "Sin auditar"}
-                                </p>
-                              </div>
-                            )}
-                          </div>
-
-                          {/* Right: Action Buttons */}
-                          <div className="flex items-center gap-2">
-                            {item.status === "PENDING" && (
-                              <button
-                                onClick={() => handleMarkMatched(item.locationCode)}
-                                className="rounded-xl bg-emerald-600 px-3.5 py-1.5 text-xs font-bold text-white hover:bg-emerald-700 shadow-sm transition hover:scale-105 active:scale-95"
-                              >
-                                ✅ Coincide Físicamente
-                              </button>
-                            )}
-
-                            <button
-                              onClick={() => handleOpenEdit(item)}
-                              className={`rounded-xl px-3 py-1.5 text-xs font-bold transition ${
-                                item.status === "DISCREPANCY"
-                                  ? "border border-amber-300 bg-amber-100 text-amber-900 hover:bg-amber-200"
-                                  : "border border-slate-200 bg-slate-50 text-slate-700 hover:bg-slate-100"
-                              }`}
-                            >
-                              {item.status === "DISCREPANCY"
-                                ? "✏️ Editar Discrepancia"
-                                : item.status === "MATCHED"
-                                ? "Reabrir / Modificar"
-                                : "✏️ Reportar Discrepancia"}
-                            </button>
-                          </div>
-                        </div>
-                      )}
-
-                      {/* Inline Discrepancy Editor Form */}
-                      {isEditing && (
-                        <div className="mt-4 rounded-2xl border-2 border-indigo-200 bg-white p-4 space-y-4 shadow-sm animate-fadeIn text-xs">
-                          <div className="flex items-center justify-between border-b pb-2">
-                            <span className="font-black text-indigo-950 uppercase tracking-wide">
-                              Modificación y Corrección de Mapeo: {item.locationCode}
-                            </span>
-                            <span className="text-[11px] text-slate-400">
-                              Sistema indica: <strong>{item.systemQuantity} u</strong> de{" "}
-                              <strong>{item.systemProductSku}</strong>
-                            </span>
-                          </div>
-
-                          {/* Form Grid */}
-                          <div className="grid sm:grid-cols-2 gap-4">
-                            {/* 1. Cantidad Física Real */}
-                            <div className="rounded-xl border border-slate-200 bg-slate-50/50 p-3">
-                              <label className="block font-bold text-slate-800">
-                                1. Cantidad Física Real Encontrada:
-                              </label>
-                              <div className="mt-1 flex items-center gap-2">
-                                <input
-                                  type="number"
-                                  min={0}
-                                  value={editForm.physicalQuantity}
-                                  onChange={(e) =>
-                                    setEditForm({
-                                      ...editForm,
-                                      physicalQuantity: Math.max(0, Number(e.target.value)),
-                                    })
-                                  }
-                                  className="w-28 rounded-xl border border-slate-300 bg-white p-2 font-bold text-sm focus:border-indigo-600 focus:outline-none"
-                                />
-                                <span className="text-xs font-bold text-slate-500">
-                                  {item.systemProductUnit}
-                                </span>
-                                {editForm.physicalQuantity !== item.systemQuantity && (
-                                  <span
-                                    className={`rounded-lg px-2 py-1 font-bold text-[11px] ${
-                                      editForm.physicalQuantity - item.systemQuantity > 0
-                                        ? "bg-emerald-100 text-emerald-800"
-                                        : "bg-red-100 text-red-800"
-                                    }`}
-                                  >
-                                    Diferencia:{" "}
-                                    {editForm.physicalQuantity - item.systemQuantity > 0
-                                      ? `+${editForm.physicalQuantity - item.systemQuantity}`
-                                      : editForm.physicalQuantity - item.systemQuantity}{" "}
-                                    u
-                                  </span>
-                                )}
-                              </div>
-                            </div>
-
-                            {/* 2. Causa / Motivo */}
-                            <div className="rounded-xl border border-slate-200 bg-slate-50/50 p-3">
-                              <label className="block font-bold text-slate-800">
-                                2. Motivo de la Discrepancia:
-                              </label>
-                              <select
-                                value={editForm.reason}
-                                onChange={(e) => setEditForm({ ...editForm, reason: e.target.value })}
-                                className="mt-1 w-full rounded-xl border border-slate-300 bg-white p-2 font-medium focus:border-indigo-600 focus:outline-none"
-                              >
-                                {COMMON_REASONS.map((r) => (
-                                  <option key={r} value={r}>
-                                    {r}
-                                  </option>
-                                ))}
-                              </select>
-                            </div>
-
-                            {/* 3. Cambio de Producto (Producto Físico Diferente) */}
-                            <div className="rounded-xl border border-slate-200 bg-slate-50/50 p-3">
-                              <div className="flex items-center justify-between mb-1">
-                                <label className="font-bold text-slate-800">
-                                  3. ¿El producto físico es diferente al del sistema?
-                                </label>
-                                <input
-                                  type="checkbox"
-                                  checked={editForm.differentProduct}
-                                  onChange={(e) =>
-                                    setEditForm({ ...editForm, differentProduct: e.target.checked })
-                                  }
-                                  className="h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
-                                />
-                              </div>
-                              {editForm.differentProduct && (
-                                <select
-                                  value={editForm.physicalProductId}
-                                  onChange={(e) =>
-                                    setEditForm({ ...editForm, physicalProductId: e.target.value })
-                                  }
-                                  className="mt-1 w-full rounded-xl border border-slate-300 bg-white p-2 font-medium focus:border-indigo-600 focus:outline-none"
-                                >
-                                  {safeProducts.map((p) => (
-                                    <option key={p.id} value={p.id}>
-                                      [{p.sku}] {p.name}
-                                    </option>
-                                  ))}
-                                </select>
-                              )}
-                            </div>
-
-                            {/* 4. Reasignar a otra Posición */}
-                            <div className="rounded-xl border border-slate-200 bg-slate-50/50 p-3">
-                              <div className="flex items-center justify-between mb-1">
-                                <label className="font-bold text-slate-800">
-                                  4. ¿Está ubicado físicamente en otra posición?
-                                </label>
-                                <input
-                                  type="checkbox"
-                                  checked={editForm.reassignLocation}
-                                  onChange={(e) =>
-                                    setEditForm({ ...editForm, reassignLocation: e.target.checked })
-                                  }
-                                  className="h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
-                                />
-                              </div>
-                              {editForm.reassignLocation && (
-                                <select
-                                  value={editForm.reassignedLocationId}
-                                  onChange={(e) =>
-                                    setEditForm({ ...editForm, reassignedLocationId: e.target.value })
-                                  }
-                                  className="mt-1 w-full rounded-xl border border-slate-300 bg-white p-2 font-mono font-medium focus:border-indigo-600 focus:outline-none"
-                                >
-                                  {safeLocations.map((l) => (
-                                    <option key={l.id || l.code} value={l.id || l.code}>
-                                      {l.code} ({l.rack?.name ?? "Rack"} - N{l.level})
-                                    </option>
-                                  ))}
-                                </select>
-                              )}
-                            </div>
-                          </div>
-
-                          {/* Notes */}
-                          <div>
+                        {/* 2. Cambiar Producto */}
+                        <div>
+                          <div className="flex items-center justify-between mb-1">
+                            <label className="font-bold text-slate-700 text-[11px]">
+                              2. ¿Es otro producto diferente?
+                            </label>
                             <input
-                              type="text"
-                              placeholder="Observación o nota adicional del auditor (opcional)..."
-                              value={editForm.notes}
-                              onChange={(e) => setEditForm({ ...editForm, notes: e.target.value })}
-                              className="w-full rounded-xl border border-slate-200 bg-slate-50 p-2 text-xs focus:bg-white focus:border-indigo-600 focus:outline-none"
+                              type="checkbox"
+                              checked={editForm.differentProduct}
+                              onChange={(e) =>
+                                setEditForm({ ...editForm, differentProduct: e.target.checked })
+                              }
+                              className="h-4 w-4 rounded text-indigo-600"
                             />
                           </div>
-
-                          {/* Form Footer */}
-                          <div className="flex justify-end gap-2 pt-1 border-t">
-                            <button
-                              onClick={() => setEditingCode(null)}
-                              className="rounded-xl border border-slate-200 px-4 py-2 font-bold text-slate-600 hover:bg-slate-100"
+                          {editForm.differentProduct && (
+                            <select
+                              value={editForm.physicalProductId}
+                              onChange={(e) =>
+                                setEditForm({ ...editForm, physicalProductId: e.target.value })
+                              }
+                              className="w-full rounded-xl border border-slate-300 p-1.5 text-xs bg-white"
                             >
-                              Cancelar
-                            </button>
-                            <button
-                              onClick={() => handleSaveEdit(item.locationCode)}
-                              className="rounded-xl bg-indigo-600 px-5 py-2 font-bold text-white hover:bg-indigo-700 shadow-sm"
-                            >
-                              Guardar Modificación
-                            </button>
-                          </div>
+                              {safeProducts.map((p) => (
+                                <option key={p.id} value={p.id}>
+                                  [{p.sku}] {p.name}
+                                </option>
+                              ))}
+                            </select>
+                          )}
                         </div>
-                      )}
-                    </div>
-                  );
-                })}
+
+                        {/* 3. Reasignar Ubicación */}
+                        <div>
+                          <div className="flex items-center justify-between mb-1">
+                            <label className="font-bold text-slate-700 text-[11px]">
+                              3. ¿Está en otra posición física?
+                            </label>
+                            <input
+                              type="checkbox"
+                              checked={editForm.reassignLocation}
+                              onChange={(e) =>
+                                setEditForm({ ...editForm, reassignLocation: e.target.checked })
+                              }
+                              className="h-4 w-4 rounded text-indigo-600"
+                            />
+                          </div>
+                          {editForm.reassignLocation && (
+                            <select
+                              value={editForm.reassignedLocationId}
+                              onChange={(e) =>
+                                setEditForm({ ...editForm, reassignedLocationId: e.target.value })
+                              }
+                              className="w-full rounded-xl border border-slate-300 p-1.5 text-xs font-mono bg-white"
+                            >
+                              {safeLocations.map((l) => (
+                                <option key={l.id || l.code} value={l.id || l.code}>
+                                  {l.code} ({l.rack?.name ?? "Rack"} - N{l.level})
+                                </option>
+                              ))}
+                            </select>
+                          )}
+                        </div>
+
+                        {/* 4. Causa */}
+                        <div>
+                          <label className="block font-bold text-slate-700 text-[11px] mb-1">
+                            4. Motivo / Causa:
+                          </label>
+                          <select
+                            value={editForm.reason}
+                            onChange={(e) => setEditForm({ ...editForm, reason: e.target.value })}
+                            className="w-full rounded-xl border border-slate-300 p-1.5 text-xs bg-white mb-1.5"
+                          >
+                            {COMMON_REASONS.map((r) => (
+                              <option key={r} value={r}>
+                                {r}
+                              </option>
+                            ))}
+                          </select>
+                          <input
+                            type="text"
+                            placeholder="Nota adicional (opcional)..."
+                            value={editForm.notes}
+                            onChange={(e) => setEditForm({ ...editForm, notes: e.target.value })}
+                            className="w-full rounded-xl border border-slate-200 bg-slate-50 p-1.5 text-xs"
+                          />
+                        </div>
+
+                        {/* Form Buttons */}
+                        <div className="flex gap-2 pt-1">
+                          <button
+                            onClick={() => setEditingCode(null)}
+                            className="flex-1 rounded-xl border border-slate-200 py-2 font-bold text-slate-600 hover:bg-slate-50"
+                          >
+                            Cancelar
+                          </button>
+                          <button
+                            onClick={() => handleSaveEdit(activeSelectedItem.locationCode)}
+                            className="flex-1 rounded-xl bg-indigo-600 py-2 font-bold text-white hover:bg-indigo-700 shadow-sm"
+                          >
+                            Guardar
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <div className="h-full flex flex-col items-center justify-center text-center p-6 text-slate-400">
+                    <span className="text-3xl mb-2">👈</span>
+                    <p className="font-bold text-slate-600 text-xs">Selecciona un casillero en el plano 2D</p>
+                    <p className="text-[11px] mt-1">Haz clic en cualquier cuadrado para auditarlo en orden.</p>
+                  </div>
+                )}
               </div>
-            )}
+            </div>
           </div>
         )}
 
@@ -1229,7 +1561,7 @@ function MappingModalInner({
         )}
 
         {/* ================= FOOTER BUTTONS ================= */}
-        <div className="border-t border-slate-200 bg-slate-50 px-6 py-4 flex flex-wrap items-center justify-between gap-3 text-xs">
+        <div className="border-t border-slate-200 bg-slate-50 px-6 py-3.5 flex flex-wrap items-center justify-between gap-3 text-xs">
           {step === "AUDIT" && (
             <>
               <button
@@ -1244,7 +1576,7 @@ function MappingModalInner({
                 disabled={stats.audited === 0}
                 className={`rounded-xl px-5 py-2.5 font-bold shadow-md transition ${
                   stats.audited > 0
-                    ? "bg-indigo-600 text-white hover:bg-indigo-700 hover:scale-105 active:scale-95"
+                    ? "bg-indigo-600 text-white hover:bg-indigo-700 hover:scale-105 active:scale-95 cursor-pointer"
                     : "bg-slate-200 text-slate-400 cursor-not-allowed"
                 }`}
               >
@@ -1259,7 +1591,7 @@ function MappingModalInner({
                 onClick={() => setStep("AUDIT")}
                 className="rounded-xl border border-slate-200 bg-white px-4 py-2 font-bold text-slate-600 hover:bg-slate-100 transition"
               >
-                ← Volver a Auditar
+                ← Volver al Plano
               </button>
 
               <button
