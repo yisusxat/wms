@@ -857,19 +857,21 @@ export function Warehouse2D({ token, onError }: { token: string; onError: (value
       />
 
       {/* 6. Mapping & Warehouse Physical Audit Modal */}
-      <MappingModal
-        isOpen={mappingModalOpen}
-        onClose={() => {
-          setMappingModalOpen(false);
-          setMappingInitialLocation(null);
-        }}
-        token={token}
-        locations={locations}
-        initialLocationCode={mappingInitialLocation}
-        onSuccess={() => {
-          refreshLocations();
-        }}
-      />
+      {mappingModalOpen && (
+        <MappingModal
+          isOpen={mappingModalOpen}
+          onClose={() => {
+            setMappingModalOpen(false);
+            setMappingInitialLocation(null);
+          }}
+          token={token}
+          locations={locations}
+          initialLocationCode={mappingInitialLocation}
+          onSuccess={() => {
+            refreshLocations();
+          }}
+        />
+      )}
     </section>
   );
 }

@@ -204,8 +204,6 @@ function MappingModalInner({
       .finally(() => setLoading(false));
   }, [isOpen, token, initialLocationCode, locations]);
 
-  if (!isOpen) return null;
-
   // Stats calculation
   const stats = useMemo(() => {
     if (!Array.isArray(items)) {
@@ -503,6 +501,8 @@ function MappingModalInner({
 
   const safeLocations = Array.isArray(locations) ? locations : [];
   const safeProducts = Array.isArray(products) ? products : [];
+
+  if (!isOpen) return null;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 p-4 backdrop-blur-sm animate-fadeIn">
