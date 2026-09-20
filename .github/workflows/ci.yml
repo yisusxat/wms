@@ -24,6 +24,8 @@ jobs:
           --health-retries=5
     env:
       DATABASE_URL: postgresql://postgres:postgres@localhost:5432/wms_test
+      NEXT_PUBLIC_INSFORGE_URL: https://jirv3k8h.us-east.insforge.app
+      NEXT_PUBLIC_INSFORGE_ANON_KEY: anon_8c78b5a48a1c49627477ca316a70504fab071593359304c6f8484186628ad952
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4

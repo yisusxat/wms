@@ -54,23 +54,27 @@ export default function HomePage() {
   useEffect(() => {
     let active = true;
     void (async () => {
-      const { data, error: userError } = await insforge.auth.getCurrentUser();
-      if (!active) return;
-      if (userError || !data?.user) {
+      try {
+        const { data, error: userError } = await insforge.auth.getCurrentUser();
+        if (!active) return;
+        if (userError || !data?.user) {
+          setLoading(false);
+          return;
+        }
+        const { data: session, error: refreshError } = await insforge.auth.refreshSession();
+        if (!active) return;
+        if (refreshError || !session?.accessToken) {
+          setUser(null);
+          setLoading(false);
+          return;
+        }
+        insforge.setAccessToken(session.accessToken);
+        setToken(session.accessToken);
+        setUser({ email: data.user.email });
         setLoading(false);
-        return;
+      } catch {
+        if (active) setLoading(false);
       }
-      const { data: session, error: refreshError } = await insforge.auth.refreshSession();
-      if (!active) return;
-      if (refreshError || !session?.accessToken) {
-        setUser(null);
-        setLoading(false);
-        return;
-      }
-      insforge.setAccessToken(session.accessToken);
-      setToken(session.accessToken);
-      setUser({ email: data.user.email });
-      setLoading(false);
     })();
     const unsubscribe = insforge.auth.onAuthStateChange(() => {
       if (active) setLoading(false);
