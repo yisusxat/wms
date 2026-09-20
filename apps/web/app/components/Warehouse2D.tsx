@@ -802,7 +802,7 @@ export function Warehouse2D({ token, onError }: { token: string; onError: (value
               <button
                 type="button"
                 onClick={() => {
-                  const targetCode = selected.code;
+                  const targetCode = selected?.code ?? null;
                   setSelected(null);
                   setMappingInitialLocation(targetCode);
                   setMappingModalOpen(true);

@@ -1,14 +1,61 @@
 "use client";
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, Component, ErrorInfo, ReactNode } from "react";
 import { apiFetch, Location, Product, InventoryItem } from "../../lib/api";
+
+// Simple Component Error Boundary to prevent any Next.js page crash
+class ModalErrorBoundary extends Component<{ children: ReactNode; onClose: () => void }, { hasError: boolean; error: string }> {
+  constructor(props: { children: ReactNode; onClose: () => void }) {
+    super(props);
+    this.state = { hasError: false, error: "" };
+  }
+
+  static getDerivedStateFromError(error: Error) {
+    return { hasError: true, error: error.message || "Error inesperado en el componente" };
+  }
+
+  componentDidCatch(error: Error, errorInfo: ErrorInfo) {
+    console.error("MappingModal ErrorBoundary caught:", error, errorInfo);
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 p-4 backdrop-blur-sm animate-fadeIn">
+          <div className="w-full max-w-md rounded-3xl bg-white p-6 shadow-2xl border border-red-200 text-center space-y-4">
+            <span className="text-4xl">⚠️</span>
+            <h3 className="font-bold text-base text-slate-800">Aviso en Mapeo de Almacén</h3>
+            <p className="text-xs text-slate-500">
+              Ocurrió un detalle al procesar las posiciones: {this.state.error}
+            </p>
+            <div className="flex justify-center gap-2">
+              <button
+                onClick={() => this.setState({ hasError: false, error: "" })}
+                className="rounded-xl bg-indigo-600 px-4 py-2 text-xs font-bold text-white hover:bg-indigo-700"
+              >
+                Reintentar
+              </button>
+              <button
+                onClick={this.props.onClose}
+                className="rounded-xl border border-slate-200 px-4 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50"
+              >
+                Cerrar
+              </button>
+            </div>
+          </div>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
 
 export interface AuditItem {
   locationId: string;
   locationCode: string;
   systemProductId?: string;
-  systemProductName?: string;
-  systemProductSku?: string;
-  systemProductUnit?: string;
+  systemProductName: string;
+  systemProductSku: string;
+  systemProductUnit: string;
   systemQuantity: number;
 
   status: "PENDING" | "MATCHED" | "DISCREPANCY";
@@ -17,7 +64,7 @@ export interface AuditItem {
   physicalProductId?: string;
   physicalProductName?: string;
   physicalProductSku?: string;
-  physicalProductUnit?: string;
+  physicalProductUnit: string;
 
   reassignedLocationId?: string;
   reassignedLocationCode?: string;
@@ -31,7 +78,7 @@ interface Props {
   isOpen: boolean;
   onClose: () => void;
   token: string;
-  locations: Location[];
+  locations?: Location[];
   initialLocationCode?: string | null;
   onSuccess: () => void;
 }
@@ -45,11 +92,11 @@ const COMMON_REASONS = [
   "Conteo cíclico programado",
 ];
 
-export function MappingModal({
+function MappingModalInner({
   isOpen,
   onClose,
   token,
-  locations,
+  locations = [],
   initialLocationCode,
   onSuccess,
 }: Props) {
@@ -57,7 +104,7 @@ export function MappingModal({
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(false);
   const [search, setSearch] = useState("");
-  const [filterTab, setFilterTab] = useState<"ALL" | "PENDING" | "DISCREPANCY" | "MATCHED">("ALL");
+  const [filterTab, setFilterTab] = useState<"ALL" | "WITH_STOCK" | "PENDING" | "DISCREPANCY" | "MATCHED">("ALL");
   const [editingCode, setEditingCode] = useState<string | null>(null);
 
   // Modal Step: AUDIT -> PRE_REPORT -> REPORT
@@ -105,70 +152,97 @@ export function MappingModal({
     }
 
     Promise.all([
-      apiFetch<{ items: InventoryItem[] }>("/inventory?pageSize=500", token).catch(() => ({ items: [] })),
-      apiFetch<{ items: Product[] }>("/products?pageSize=200", token).catch(() => ({ items: [] })),
+      apiFetch<{ items?: InventoryItem[] }>("/inventory?pageSize=500", token).catch(() => ({ items: [] })),
+      apiFetch<{ items?: Product[] }>("/products?pageSize=200", token).catch(() => ({ items: [] })),
     ])
       .then(([invRes, prodRes]) => {
-        const prodList = prodRes.items || [];
+        const prodList = (prodRes && Array.isArray(prodRes.items) ? prodRes.items : []) as Product[];
         setProducts(prodList);
 
-        const invList = (invRes.items || []).filter((i) => i.location);
-        const auditList: AuditItem[] = invList.map((i) => ({
-          locationId: i.location.id,
-          locationCode: i.location.code,
-          systemProductId: i.product?.id,
-          systemProductName: i.product?.name ?? "Sin nombre",
-          systemProductSku: i.product?.sku ?? "N/A",
-          systemProductUnit: i.product?.unit ?? "u",
-          systemQuantity: i.quantity || 0,
-          status: "PENDING",
-          physicalQuantity: i.quantity || 0,
-          physicalProductId: i.product?.id,
-          physicalProductName: i.product?.name,
-          physicalProductSku: i.product?.sku,
-          physicalProductUnit: i.product?.unit ?? "u",
-          reason: COMMON_REASONS[0],
-          notes: "",
-        }));
+        // Map existing inventory by location code and ID
+        const invMap = new Map<string, InventoryItem>();
+        const invList = (invRes && Array.isArray(invRes.items) ? invRes.items : []) as InventoryItem[];
+        for (const item of invList) {
+          if (!item) continue;
+          if (typeof item.location === "object" && item.location) {
+            if (item.location.code) invMap.set(item.location.code, item);
+            if (item.location.id) invMap.set(item.location.id, item);
+          } else if (typeof item.location === "string") {
+            invMap.set(item.location, item);
+          }
+        }
+
+        // Build audit list based on all known warehouse locations
+        const safeLocations = Array.isArray(locations) && locations.length > 0 ? locations : [];
+        const auditList: AuditItem[] = safeLocations.map((loc) => {
+          const inv = invMap.get(loc.code) || invMap.get(loc.id);
+          const hasInv = Boolean(inv && (inv.quantity || 0) > 0);
+          const prod = inv && typeof inv.product === "object" ? inv.product : undefined;
+
+          return {
+            locationId: loc.id || loc.code,
+            locationCode: loc.code || "POS-DESCONOCIDA",
+            systemProductId: hasInv ? prod?.id : undefined,
+            systemProductName: hasInv ? prod?.name || "Producto Asignado" : "Posición Disponible (Vacía)",
+            systemProductSku: hasInv ? prod?.sku || "SKU" : "VACÍO",
+            systemProductUnit: prod?.unit || "u",
+            systemQuantity: hasInv ? inv?.quantity || 0 : 0,
+            status: "PENDING",
+            physicalQuantity: hasInv ? inv?.quantity || 0 : 0,
+            physicalProductId: hasInv ? prod?.id : undefined,
+            physicalProductName: hasInv ? prod?.name : undefined,
+            physicalProductSku: hasInv ? prod?.sku : undefined,
+            physicalProductUnit: prod?.unit || "u",
+            reason: COMMON_REASONS[0],
+            notes: "",
+          };
+        });
 
         setItems(auditList);
       })
       .catch((err) => console.warn("Error cargando inventario de mapeo:", err))
       .finally(() => setLoading(false));
-  }, [isOpen, token, initialLocationCode]);
+  }, [isOpen, token, initialLocationCode, locations]);
 
   if (!isOpen) return null;
 
   // Stats calculation
   const stats = useMemo(() => {
+    if (!Array.isArray(items)) {
+      return { total: 0, withStock: 0, matched: 0, discrepancies: 0, pending: 0, audited: 0, ira: 100 };
+    }
     const total = items.length;
+    const withStock = items.filter((i) => i.systemQuantity > 0).length;
     const matched = items.filter((i) => i.status === "MATCHED").length;
     const discrepancies = items.filter((i) => i.status === "DISCREPANCY").length;
     const pending = items.filter((i) => i.status === "PENDING").length;
     const audited = matched + discrepancies;
     const ira = audited > 0 ? Math.round((matched / audited) * 100) : 100;
 
-    return { total, matched, discrepancies, pending, audited, ira };
+    return { total, withStock, matched, discrepancies, pending, audited, ira };
   }, [items]);
 
   // Filtered items for display
   const filteredItems = useMemo(() => {
+    if (!Array.isArray(items)) return [];
     return items.filter((item) => {
+      if (!item) return false;
       // Filter tab
+      if (filterTab === "WITH_STOCK" && item.systemQuantity === 0) return false;
       if (filterTab === "PENDING" && item.status !== "PENDING") return false;
       if (filterTab === "DISCREPANCY" && item.status !== "DISCREPANCY") return false;
       if (filterTab === "MATCHED" && item.status !== "MATCHED") return false;
 
       // Text search
-      if (!search.trim()) return true;
-      const q = search.toLowerCase();
-      return (
-        item.locationCode.toLowerCase().includes(q) ||
-        (item.systemProductSku && item.systemProductSku.toLowerCase().includes(q)) ||
-        (item.systemProductName && item.systemProductName.toLowerCase().includes(q)) ||
-        (item.physicalProductSku && item.physicalProductSku.toLowerCase().includes(q)) ||
-        (item.physicalProductName && item.physicalProductName.toLowerCase().includes(q))
-      );
+      if (!search || !search.trim()) return true;
+      const q = search.toLowerCase().trim();
+      const loc = (item.locationCode || "").toLowerCase();
+      const sSku = (item.systemProductSku || "").toLowerCase();
+      const sName = (item.systemProductName || "").toLowerCase();
+      const pSku = (item.physicalProductSku || "").toLowerCase();
+      const pName = (item.physicalProductName || "").toLowerCase();
+
+      return loc.includes(q) || sSku.includes(q) || sName.includes(q) || pSku.includes(q) || pName.includes(q);
     });
   }, [items, filterTab, search]);
 
@@ -196,13 +270,16 @@ export function MappingModal({
 
   // Open Edit Form for an item
   const handleOpenEdit = (item: AuditItem) => {
+    const safeProducts = Array.isArray(products) ? products : [];
+    const safeLocations = Array.isArray(locations) ? locations : [];
+
     setEditingCode(item.locationCode);
     setEditForm({
       physicalQuantity: item.physicalQuantity,
       differentProduct: Boolean(item.physicalProductId && item.physicalProductId !== item.systemProductId),
-      physicalProductId: item.physicalProductId || (products[0]?.id ?? ""),
+      physicalProductId: item.physicalProductId || (safeProducts[0]?.id ?? ""),
       reassignLocation: Boolean(item.reassignedLocationId),
-      reassignedLocationId: item.reassignedLocationId || (locations[0]?.id ?? ""),
+      reassignedLocationId: item.reassignedLocationId || (safeLocations[0]?.id ?? ""),
       reason: item.reason || COMMON_REASONS[0],
       notes: item.notes || "",
     });
@@ -210,8 +287,10 @@ export function MappingModal({
 
   // Save Edit Form
   const handleSaveEdit = (locationCode: string) => {
-    const selectedProd = products.find((p) => p.id === editForm.physicalProductId);
-    const selectedLoc = locations.find((l) => l.id === editForm.reassignedLocationId);
+    const safeProducts = Array.isArray(products) ? products : [];
+    const safeLocations = Array.isArray(locations) ? locations : [];
+    const selectedProd = safeProducts.find((p) => p.id === editForm.physicalProductId);
+    const selectedLoc = safeLocations.find((l) => l.id === editForm.reassignedLocationId);
 
     setItems((curr) =>
       curr.map((item) => {
@@ -227,9 +306,9 @@ export function MappingModal({
           status: isDiscrepancy ? "DISCREPANCY" : "MATCHED",
           physicalQuantity: Number(editForm.physicalQuantity),
           physicalProductId: editForm.differentProduct ? editForm.physicalProductId : item.systemProductId,
-          physicalProductName: editForm.differentProduct ? selectedProd?.name : item.systemProductName,
-          physicalProductSku: editForm.differentProduct ? selectedProd?.sku : item.systemProductSku,
-          physicalProductUnit: editForm.differentProduct ? selectedProd?.unit : item.systemProductUnit,
+          physicalProductName: editForm.differentProduct ? selectedProd?.name || "Nuevo Producto" : item.systemProductName,
+          physicalProductSku: editForm.differentProduct ? selectedProd?.sku || "SKU" : item.systemProductSku,
+          physicalProductUnit: editForm.differentProduct ? selectedProd?.unit || "u" : item.systemProductUnit,
           reassignedLocationId: editForm.reassignLocation ? editForm.reassignedLocationId : undefined,
           reassignedLocationCode: editForm.reassignLocation ? selectedLoc?.code : undefined,
           reason: editForm.reason,
@@ -244,7 +323,7 @@ export function MappingModal({
   // Add empty location to audit
   const handleAddEmptyLocation = () => {
     if (!addEmptyLocationId) {
-      alert("Selecciona la ubicación vacía.");
+      alert("Selecciona la ubicación en rack.");
       return;
     }
     if (!addEmptyProductId) {
@@ -252,33 +331,52 @@ export function MappingModal({
       return;
     }
 
-    const loc = locations.find((l) => l.id === addEmptyLocationId);
-    const prod = products.find((p) => p.id === addEmptyProductId);
+    const safeLocations = Array.isArray(locations) ? locations : [];
+    const safeProducts = Array.isArray(products) ? products : [];
+    const loc = safeLocations.find((l) => l.id === addEmptyLocationId);
+    const prod = safeProducts.find((p) => p.id === addEmptyProductId);
     if (!loc || !prod) return;
 
     // Check if already in items
-    const existing = items.find((i) => i.locationId === loc.id);
-    if (existing) {
-      alert(`La ubicación ${loc.code} ya está en la lista de auditoría. Puedes editarla directamente.`);
+    const existingIndex = items.findIndex((i) => i.locationCode === loc.code || i.locationId === loc.id);
+    if (existingIndex >= 0) {
+      // Update existing item
+      setItems((curr) =>
+        curr.map((item, idx) =>
+          idx === existingIndex
+            ? {
+                ...item,
+                status: "DISCREPANCY",
+                physicalQuantity: addEmptyQuantity,
+                physicalProductId: prod.id,
+                physicalProductName: prod.name,
+                physicalProductSku: prod.sku,
+                physicalProductUnit: prod.unit || "u",
+                reason: "Producto encontrado físicamente en ubicación no registrada",
+                notes: "Actualización directa por mapeo",
+              }
+            : item
+        )
+      );
       setEditingCode(loc.code);
       setShowAddEmpty(false);
       return;
     }
 
     const newItem: AuditItem = {
-      locationId: loc.id,
-      locationCode: loc.code,
+      locationId: loc.id || loc.code,
+      locationCode: loc.code || "N/A",
       systemProductId: undefined,
       systemProductName: "Posición Vacía en Sistema",
       systemProductSku: "VACÍO",
-      systemProductUnit: prod.unit,
+      systemProductUnit: prod.unit || "u",
       systemQuantity: 0,
       status: "DISCREPANCY",
       physicalQuantity: addEmptyQuantity,
       physicalProductId: prod.id,
       physicalProductName: prod.name,
       physicalProductSku: prod.sku,
-      physicalProductUnit: prod.unit,
+      physicalProductUnit: prod.unit || "u",
       reason: "Producto encontrado físicamente en ubicación no registrada",
       notes: "Alta directa por mapeo de almacén",
       isCustomAdded: true,
@@ -403,6 +501,9 @@ export function MappingModal({
     }
   };
 
+  const safeLocations = Array.isArray(locations) ? locations : [];
+  const safeProducts = Array.isArray(products) ? products : [];
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 p-4 backdrop-blur-sm animate-fadeIn">
       <div className="w-full max-w-4xl max-h-[92vh] flex flex-col rounded-3xl bg-white shadow-2xl border border-slate-200 overflow-hidden">
@@ -437,10 +538,14 @@ export function MappingModal({
 
         {/* ================= KPI STATS BAR ================= */}
         {step === "AUDIT" && (
-          <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 border-b border-slate-100 bg-slate-50/80 px-6 py-3 text-xs">
+          <div className="grid grid-cols-2 sm:grid-cols-6 gap-2 border-b border-slate-100 bg-slate-50/80 px-6 py-3 text-xs">
             <div className="rounded-xl border border-slate-200 bg-white p-2 text-center">
-              <span className="text-[10px] uppercase font-bold text-slate-400">Total a Auditar</span>
+              <span className="text-[10px] uppercase font-bold text-slate-400">Total Posiciones</span>
               <p className="text-base font-black text-slate-800">{stats.total}</p>
+            </div>
+            <div className="rounded-xl border border-blue-200 bg-blue-50/60 p-2 text-center">
+              <span className="text-[10px] uppercase font-bold text-blue-700">Con Stock</span>
+              <p className="text-base font-black text-blue-800">{stats.withStock}</p>
             </div>
             <div className="rounded-xl border border-emerald-200 bg-emerald-50/60 p-2 text-center">
               <span className="text-[10px] uppercase font-bold text-emerald-700">✅ Coinciden (OK)</span>
@@ -486,18 +591,26 @@ export function MappingModal({
               </div>
 
               {/* Status Tabs */}
-              <div className="inline-flex rounded-xl border border-slate-200 bg-slate-50 p-1 text-xs">
+              <div className="inline-flex rounded-xl border border-slate-200 bg-slate-50 p-1 text-xs overflow-x-auto max-w-full">
                 <button
                   onClick={() => setFilterTab("ALL")}
-                  className={`px-3 py-1 rounded-lg font-bold transition ${
+                  className={`px-2.5 py-1 rounded-lg font-bold transition whitespace-nowrap ${
                     filterTab === "ALL" ? "bg-white text-slate-900 shadow-sm" : "text-slate-600 hover:text-slate-900"
                   }`}
                 >
                   Todas ({stats.total})
                 </button>
                 <button
+                  onClick={() => setFilterTab("WITH_STOCK")}
+                  className={`px-2.5 py-1 rounded-lg font-bold transition whitespace-nowrap ${
+                    filterTab === "WITH_STOCK" ? "bg-white text-blue-900 shadow-sm" : "text-blue-700 hover:text-blue-900"
+                  }`}
+                >
+                  Con Stock ({stats.withStock})
+                </button>
+                <button
                   onClick={() => setFilterTab("PENDING")}
-                  className={`px-3 py-1 rounded-lg font-bold transition ${
+                  className={`px-2.5 py-1 rounded-lg font-bold transition whitespace-nowrap ${
                     filterTab === "PENDING"
                       ? "bg-white text-slate-900 shadow-sm"
                       : "text-slate-600 hover:text-slate-900"
@@ -507,7 +620,7 @@ export function MappingModal({
                 </button>
                 <button
                   onClick={() => setFilterTab("DISCREPANCY")}
-                  className={`px-3 py-1 rounded-lg font-bold transition ${
+                  className={`px-2.5 py-1 rounded-lg font-bold transition whitespace-nowrap ${
                     filterTab === "DISCREPANCY"
                       ? "bg-amber-600 text-white shadow-sm"
                       : "text-amber-700 hover:text-amber-900"
@@ -517,7 +630,7 @@ export function MappingModal({
                 </button>
                 <button
                   onClick={() => setFilterTab("MATCHED")}
-                  className={`px-3 py-1 rounded-lg font-bold transition ${
+                  className={`px-2.5 py-1 rounded-lg font-bold transition whitespace-nowrap ${
                     filterTab === "MATCHED"
                       ? "bg-emerald-600 text-white shadow-sm"
                       : "text-emerald-700 hover:text-emerald-900"
@@ -532,7 +645,7 @@ export function MappingModal({
                 onClick={() => setShowAddEmpty(!showAddEmpty)}
                 className="rounded-xl border border-indigo-200 bg-indigo-50 px-3 py-1.5 text-xs font-bold text-indigo-700 hover:bg-indigo-100 transition shadow-sm"
               >
-                {showAddEmpty ? "✕ Cancelar Registro" : "➕ Auditar Posición Vacía"}
+                {showAddEmpty ? "✕ Cancelar Registro" : "➕ Auditar Posición"}
               </button>
             </div>
 
@@ -542,20 +655,20 @@ export function MappingModal({
                 <div className="flex items-center gap-2">
                   <span className="text-base">📦</span>
                   <h4 className="text-xs font-black text-indigo-950 uppercase tracking-wide">
-                    Registrar Hallazgo Físico en Posición Vacía
+                    Registrar Hallazgo Físico en Rack
                   </h4>
                 </div>
                 <div className="grid sm:grid-cols-3 gap-3 text-xs">
                   <div>
-                    <label className="font-bold text-slate-700">Ubicación física en rack:</label>
+                    <label className="font-bold text-slate-700">Ubicación en rack:</label>
                     <select
                       value={addEmptyLocationId}
                       onChange={(e) => setAddEmptyLocationId(e.target.value)}
                       className="mt-1 w-full rounded-xl border border-slate-300 bg-white p-2 font-mono font-medium focus:border-indigo-600 focus:outline-none"
                     >
                       <option value="">-- Selecciona Posición --</option>
-                      {locations.map((l) => (
-                        <option key={l.id} value={l.id}>
+                      {safeLocations.map((l) => (
+                        <option key={l.id || l.code} value={l.id || l.code}>
                           {l.code} ({l.rack?.name ?? "Rack"} - N{l.level})
                         </option>
                       ))}
@@ -569,7 +682,7 @@ export function MappingModal({
                       className="mt-1 w-full rounded-xl border border-slate-300 bg-white p-2 font-medium focus:border-indigo-600 focus:outline-none"
                     >
                       <option value="">-- Selecciona Producto --</option>
-                      {products.map((p) => (
+                      {safeProducts.map((p) => (
                         <option key={p.id} value={p.id}>
                           [{p.sku}] {p.name}
                         </option>
@@ -600,11 +713,11 @@ export function MappingModal({
 
             {/* Audit List of Positions */}
             {loading ? (
-              <p className="py-12 text-center text-xs text-slate-400">Cargando inventario para mapeo...</p>
+              <p className="py-12 text-center text-xs text-slate-400">Cargando posiciones del almacén...</p>
             ) : filteredItems.length === 0 ? (
               <div className="rounded-2xl border border-slate-200 bg-slate-50 p-8 text-center">
                 <p className="text-sm font-bold text-slate-600">No se encontraron posiciones con ese criterio.</p>
-                <p className="text-xs text-slate-400 mt-1">Prueba limpiando los filtros o el buscador.</p>
+                <p className="text-xs text-slate-400 mt-1">Prueba cambiando los filtros o el término de búsqueda.</p>
               </div>
             ) : (
               <div className="space-y-3">
@@ -836,7 +949,7 @@ export function MappingModal({
                                   }
                                   className="mt-1 w-full rounded-xl border border-slate-300 bg-white p-2 font-medium focus:border-indigo-600 focus:outline-none"
                                 >
-                                  {products.map((p) => (
+                                  {safeProducts.map((p) => (
                                     <option key={p.id} value={p.id}>
                                       [{p.sku}] {p.name}
                                     </option>
@@ -868,8 +981,8 @@ export function MappingModal({
                                   }
                                   className="mt-1 w-full rounded-xl border border-slate-300 bg-white p-2 font-mono font-medium focus:border-indigo-600 focus:outline-none"
                                 >
-                                  {locations.map((l) => (
-                                    <option key={l.id} value={l.id}>
+                                  {safeLocations.map((l) => (
+                                    <option key={l.id || l.code} value={l.id || l.code}>
                                       {l.code} ({l.rack?.name ?? "Rack"} - N{l.level})
                                     </option>
                                   ))}
@@ -1056,7 +1169,7 @@ export function MappingModal({
                 <h4 className="font-bold text-slate-800 mb-2 uppercase text-[11px]">
                   Detalle de Modificaciones Aplicadas al Sistema:
                 </h4>
-                {generatedReport.discrepancies.length === 0 ? (
+                {(generatedReport?.discrepancies || []).length === 0 ? (
                   <p className="text-slate-500 italic">No hubo discrepancias; inventario 100% conciliado.</p>
                 ) : (
                   <div className="overflow-x-auto rounded-xl border border-slate-200">
@@ -1073,7 +1186,7 @@ export function MappingModal({
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-100 font-medium">
-                        {generatedReport.discrepancies.map((d: AuditItem) => {
+                        {(generatedReport?.discrepancies || []).map((d: AuditItem) => {
                           const delta = d.physicalQuantity - d.systemQuantity;
                           return (
                             <tr key={d.locationCode} className="hover:bg-slate-50">
@@ -1162,7 +1275,9 @@ export function MappingModal({
           {step === "REPORT" && (
             <>
               <button
-                onClick={() => window.print()}
+                onClick={() => {
+                  if (typeof window !== "undefined") window.print();
+                }}
                 className="rounded-xl border border-indigo-200 bg-indigo-50 px-4 py-2 font-bold text-indigo-700 hover:bg-indigo-100 transition flex items-center gap-1.5 shadow-sm"
               >
                 <span>🖨️</span>
@@ -1180,5 +1295,13 @@ export function MappingModal({
         </div>
       </div>
     </div>
+  );
+}
+
+export function MappingModal(props: Props) {
+  return (
+    <ModalErrorBoundary onClose={props.onClose}>
+      <MappingModalInner {...props} />
+    </ModalErrorBoundary>
   );
 }
