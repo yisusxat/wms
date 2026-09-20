@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { apiFetch, getWarehouseSeedLocations, Location, Page } from '../../lib/api';
 import { Entry2DModal } from './Entry2DModal';
 import { Exit2DModal } from './Exit2DModal';
+import { MappingModal } from './MappingModal';
 
 const STATUS_CONFIG: Record<
   string,
@@ -68,6 +69,8 @@ export function Warehouse2D({ token, onError }: { token: string; onError: (value
   const [orderAsc, setOrderAsc] = useState(true);
   const [entryModalOpen, setEntryModalOpen] = useState(false);
   const [exitModalOpen, setExitModalOpen] = useState(false);
+  const [mappingModalOpen, setMappingModalOpen] = useState(false);
+  const [mappingInitialLocation, setMappingInitialLocation] = useState<string | null>(null);
 
   const refreshLocations = () => {
     apiFetch<Page<Location>>('/locations?pageSize=500', token)
@@ -341,6 +344,18 @@ export function Warehouse2D({ token, onError }: { token: string; onError: (value
           >
             <span>📤</span>
             <span>Salida de Producto</span>
+          </button>
+
+          <button
+            onClick={() => {
+              setMappingInitialLocation(null);
+              setMappingModalOpen(true);
+            }}
+            className="flex items-center gap-1.5 rounded-xl bg-indigo-600 px-3.5 py-1.5 text-xs font-bold text-white hover:bg-indigo-700 shadow-sm transition hover:scale-105 active:scale-95"
+            title="Verificar y conciliar inventario físico vs sistema"
+          >
+            <span>🔍</span>
+            <span>Mapeo Almacén</span>
           </button>
         </div>
       </div>
@@ -783,7 +798,21 @@ export function Warehouse2D({ token, onError }: { token: string; onError: (value
             </div>
 
             {/* Modal Footer */}
-            <div className="mt-6 flex justify-end">
+            <div className="mt-6 flex items-center justify-between">
+              <button
+                type="button"
+                onClick={() => {
+                  const targetCode = selected.code;
+                  setSelected(null);
+                  setMappingInitialLocation(targetCode);
+                  setMappingModalOpen(true);
+                }}
+                className="flex items-center gap-1.5 rounded-xl border border-indigo-200 bg-indigo-50 px-4 py-2 text-xs font-bold text-indigo-700 hover:bg-indigo-100 transition shadow-sm"
+              >
+                <span>🔍</span>
+                <span>Auditar Posición en Mapeo</span>
+              </button>
+
               <button
                 onClick={() => setSelected(null)}
                 className="rounded-xl bg-slate-900 px-5 py-2.5 text-xs font-bold text-white shadow hover:bg-slate-800 transition"
@@ -822,6 +851,21 @@ export function Warehouse2D({ token, onError }: { token: string; onError: (value
         isOpen={exitModalOpen}
         onClose={() => setExitModalOpen(false)}
         token={token}
+        onSuccess={() => {
+          refreshLocations();
+        }}
+      />
+
+      {/* 6. Mapping & Warehouse Physical Audit Modal */}
+      <MappingModal
+        isOpen={mappingModalOpen}
+        onClose={() => {
+          setMappingModalOpen(false);
+          setMappingInitialLocation(null);
+        }}
+        token={token}
+        locations={locations}
+        initialLocationCode={mappingInitialLocation}
         onSuccess={() => {
           refreshLocations();
         }}
