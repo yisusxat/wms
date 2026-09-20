@@ -42,6 +42,18 @@ export function SupportModal({ isOpen, onClose, user, profile }: SupportModalPro
 
     console.log('Technical report generated:', report);
 
+    // 1. Dispatch email notification via Next.js backend API
+    try {
+      await fetch('/api/support', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(report),
+      });
+    } catch (err) {
+      console.warn('Could not post report to /api/support:', err);
+    }
+
+    // 2. Capture message in Sentry for monitoring & error tracking
     if (process.env.NEXT_PUBLIC_SENTRY_DSN) {
       try {
         Sentry.captureMessage(`[Soporte ${category}] ${subject}`, {
@@ -53,8 +65,6 @@ export function SupportModal({ isOpen, onClose, user, profile }: SupportModalPro
         console.warn('Could not forward report to Sentry:', err);
       }
     }
-
-    await new Promise((resolve) => setTimeout(resolve, 600));
 
     setLoading(false);
     setSent(true);
