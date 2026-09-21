@@ -15,6 +15,7 @@ import { LegalModal } from './components/LegalModal';
 import KPIPanel from './components/KPIPanel';
 import ReportsPanel from './components/ReportsPanel';
 import { TwoFactorModal } from './components/TwoFactorModal';
+import { ProductsPanel } from './components/ProductsPanel';
 
 type Summary = {
   products: number;
@@ -359,7 +360,7 @@ export default function HomePage() {
           {tab === 'dashboard' && <Dashboard summary={summary} onNavigate={setTab} role={profile?.role} />}
           {tab === 'kpis' && <KPIPanel token={token} organizationId={profile?.organizationId} />}
           {tab === 'reports' && <ReportsPanel token={token} organizationId={profile?.organizationId} />}
-          {tab === 'products' && <Products token={token} role={profile?.role} onError={setError} />}
+          {tab === 'products' && <ProductsPanel token={token} role={profile?.role} onError={setError} />}
           {tab === 'locations' && <Locations token={token} onError={setError} />}
           {tab === 'inventory' && <Inventory token={token} onError={setError} />}
           {tab === 'movements' && <MovementsPanel token={token} role={profile?.role} onError={setError} />}
@@ -541,58 +542,6 @@ function Dashboard({
   );
 }
 
-function Products({ token, role, onError }: { token: string; role?: CurrentUser['role']; onError: (value: string) => void }) {
-  const [data, setData] = useState<Page<Product> | null>(null);
-  const [search, setSearch] = useState('');
-  const [page, setPage] = useState(1);
-  const [form, setForm] = useState({ sku: '', name: '', unit: 'unidad' });
-  const canManage = role === 'ADMIN' || role === 'SUPERVISOR';
-  const load = () => apiFetch<Page<Product>>('/products?search=' + encodeURIComponent(search) + '&page=' + page + '&pageSize=20', token).then(setData).catch((e: Error) => onError(e.message));
-
-  useEffect(() => {
-    void load();
-  }, [page]);
-
-  async function submit(e: FormEvent) {
-    e.preventDefault();
-    try {
-      await apiFetch('/products', token, { method: 'POST', body: JSON.stringify(form) });
-      setForm({ sku: '', name: '', unit: 'unidad' });
-      await load();
-    } catch (e) {
-      onError((e as Error).message);
-    }
-  }
-
-  return (
-    <section className="space-y-5">
-      {canManage ? (
-        <form onSubmit={submit} className="grid gap-3 rounded-xl bg-white p-5 shadow-sm border border-slate-100 md:grid-cols-4">
-          <input required placeholder="SKU" className="rounded-lg border p-3" value={form.sku} onChange={e => setForm({ ...form, sku: e.target.value })} />
-          <input required placeholder="Nombre" className="rounded-lg border p-3" value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} />
-          <input required placeholder="Unidad" className="rounded-lg border p-3" value={form.unit} onChange={e => setForm({ ...form, unit: e.target.value })} />
-          <button className="rounded-lg bg-brand px-4 py-3 font-semibold text-white transition hover:bg-blue-800">Crear producto</button>
-        </form>
-      ) : (
-        <p className="rounded-lg bg-amber-50 p-3 text-sm text-amber-800">Tu rol puede consultar productos, pero no crear ni modificar registros.</p>
-      )}
-      <div className="rounded-xl bg-white p-5 shadow-sm border border-slate-100">
-        <div className="mb-4 flex gap-2">
-          <input
-            placeholder="Buscar por SKU o nombre"
-            className="w-full rounded-lg border p-3"
-            value={search}
-            onChange={e => setSearch(e.target.value)}
-            onKeyDown={e => e.key === 'Enter' && (setPage(1), void load())}
-          />
-          <button onClick={() => { setPage(1); void load(); }} className="rounded-lg border px-4 font-medium hover:bg-slate-50">Buscar</button>
-        </div>
-        <Table headers={['SKU', 'Nombre', 'Unidad', 'Estado']} rows={(data?.items ?? []).map(item => [item.sku, item.name, item.unit, item.active ? 'Activo' : 'Inactivo'])} />
-        <Pager page={page} pageSize={data?.pageSize ?? 20} total={data?.total ?? 0} onChange={setPage} />
-      </div>
-    </section>
-  );
-}
 
 function Locations({ token, onError }: { token: string; onError: (value: string) => void }) {
   const [data, setData] = useState<Page<Location> | null>(null);

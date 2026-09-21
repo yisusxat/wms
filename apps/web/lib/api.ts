@@ -256,12 +256,28 @@ async function fallbackInsforge<T>(path: string, token: string, init?: RequestIn
   }
 
   if (cleanPath === '/products') {
+    if ((init?.method === 'PUT' || init?.method === 'PATCH') && init.body) {
+      const parsed = JSON.parse(init.body as string);
+      const query = parsed.id ? `id=eq.${parsed.id}` : (parsed.sku ? `sku=eq.${parsed.sku}` : '');
+      const res = await fetch(`${insforgeUrl}/api/database/records/products?${query}`, {
+        method: 'PATCH',
+        headers,
+        body: JSON.stringify(parsed),
+      });
+      if (!res.ok) {
+        const errPayload = await res.json().catch(() => null);
+        throw new Error(errPayload?.message ?? 'Error al actualizar producto');
+      }
+      return (await res.json()) as T;
+    }
+
     if (init?.method === 'POST' && init.body) {
       const parsed = JSON.parse(init.body as string);
+      const bodyArray = Array.isArray(parsed) ? parsed : [parsed];
       const res = await fetch(`${insforgeUrl}/api/database/records/products`, {
         method: 'POST',
         headers,
-        body: JSON.stringify([parsed]),
+        body: JSON.stringify(bodyArray),
       });
       if (!res.ok) {
         const errPayload = await res.json().catch(() => null);
@@ -272,8 +288,28 @@ async function fallbackInsforge<T>(path: string, token: string, init?: RequestIn
 
     const res = await fetch(`${insforgeUrl}/api/database/records/products?order=name.asc`, { headers });
     const items = res.ok ? await res.json().catch(() => []) : [];
-    const list = Array.isArray(items) ? items : [];
-    return { items: list, total: list.length, page: 1, pageSize: 20 } as T;
+    let list = Array.isArray(items) ? items : [];
+
+    // Parse query params for search, category, or pagination
+    const queryParams = new URLSearchParams(path.includes('?') ? path.split('?')[1] : '');
+    const search = queryParams.get('search')?.toLowerCase().trim();
+    if (search) {
+      list = list.filter((p: any) =>
+        (p.name && String(p.name).toLowerCase().includes(search)) ||
+        (p.sku && String(p.sku).toLowerCase().includes(search)) ||
+        (p.category && String(p.category).toLowerCase().includes(search))
+      );
+    }
+    const pageSize = parseInt(queryParams.get('pageSize') || '20', 10);
+    const page = parseInt(queryParams.get('page') || '1', 10);
+    const total = list.length;
+
+    if (pageSize >= 100) {
+      return { items: list, total, page: 1, pageSize: total } as T;
+    }
+    const startIndex = (page - 1) * pageSize;
+    const paginated = list.slice(startIndex, startIndex + pageSize);
+    return { items: paginated, total, page, pageSize } as T;
   }
 
   if (cleanPath === '/inventory') {
