@@ -122,7 +122,7 @@ export async function exportProductsToFile(
   // If not provided, fetch all products from API
   if (!list || list.length === 0) {
     try {
-      const res = await apiFetch<{ items?: Product[] }>('/products?pageSize=1000', token);
+      const res = await apiFetch<{ items?: Product[] }>('/products?pageSize=100', token);
       list = res.items ?? [];
     } catch {
       list = [];
@@ -363,7 +363,7 @@ export function ProductImportModal({
     try {
       // 1. Fetch current existing products to know who to update vs insert
       const existingRes = await apiFetch<{ items?: Product[] }>(
-        '/products?pageSize=1000',
+        '/products?pageSize=100',
         token
       ).catch(() => ({ items: [] }));
       const existingMap = new Map<string, Product>();

@@ -42,7 +42,7 @@ export function ProductsPanel({ token, role, onError }: ProductsPanelProps) {
     barcode: '',
   });
 
-  const canManage = role === 'ADMIN' || role === 'SUPERVISOR';
+  const canManage = role !== 'VIEWER';
 
   // Load paginated products with search query
   const load = async () => {
@@ -55,7 +55,7 @@ export function ProductsPanel({ token, role, onError }: ProductsPanelProps) {
       setData(res);
 
       // Also refresh all products list for category pill calculation and export
-      const allRes = await apiFetch<{ items?: Product[] }>('/products?pageSize=1000', token);
+      const allRes = await apiFetch<{ items?: Product[] }>('/products?pageSize=100', token).catch(() => ({ items: [] }));
       if (allRes && Array.isArray(allRes.items)) {
         setAllProducts(allRes.items);
       }
@@ -189,16 +189,15 @@ export function ProductsPanel({ token, role, onError }: ProductsPanelProps) {
 
         {/* Global Action Buttons */}
         <div className="flex flex-wrap items-center gap-2.5">
-          {canManage && (
-            <button
-              type="button"
-              onClick={() => setImportModalOpen(true)}
-              className="rounded-xl border border-indigo-400/40 bg-indigo-500/20 px-4 py-2.5 text-xs font-bold text-indigo-200 hover:bg-indigo-500/30 hover:border-indigo-400/60 shadow-sm transition flex items-center gap-2 cursor-pointer"
-            >
-              <span>📥</span>
-              <span>Importar (Excel / CSV / JSON)</span>
-            </button>
-          )}
+          <button
+            type="button"
+            onClick={() => setImportModalOpen(true)}
+            className="rounded-xl bg-emerald-600 hover:bg-emerald-500 px-4 py-2.5 text-xs font-bold text-white shadow-md transition flex items-center gap-2 cursor-pointer active:scale-95"
+            title="Importar productos masivamente desde Excel, CSV o JSON"
+          >
+            <span className="text-sm">📥</span>
+            <span>Importar (Excel / CSV / JSON)</span>
+          </button>
 
           <ProductExportMenu
             token={token}
@@ -206,15 +205,13 @@ export function ProductsPanel({ token, role, onError }: ProductsPanelProps) {
             currentSearch={search}
           />
 
-          {canManage && (
-            <button
-              type="button"
-              onClick={() => setShowAddForm(!showAddForm)}
-              className="rounded-xl bg-blue-600 px-4 py-2.5 text-xs font-bold text-white hover:bg-blue-500 shadow-md transition flex items-center gap-2 cursor-pointer"
-            >
-              <span>{showAddForm ? '✕ Cerrar' : '➕ Nuevo Producto'}</span>
-            </button>
-          )}
+          <button
+            type="button"
+            onClick={() => setShowAddForm(!showAddForm)}
+            className="rounded-xl bg-blue-600 px-4 py-2.5 text-xs font-bold text-white hover:bg-blue-500 shadow-md transition flex items-center gap-2 cursor-pointer active:scale-95"
+          >
+            <span>{showAddForm ? '✕ Cerrar' : '➕ Nuevo Producto'}</span>
+          </button>
         </div>
       </div>
 
@@ -435,22 +432,29 @@ export function ProductsPanel({ token, role, onError }: ProductsPanelProps) {
                     <div className="space-y-2">
                       <span className="text-3xl">📭</span>
                       <p className="font-bold text-slate-700">No se encontraron productos</p>
-                      <p className="text-xs">
+                      <p className="text-xs text-slate-500 max-w-sm mx-auto">
                         {search
-                          ? `No hay coincidencias para "${search}".`
-                          : 'Aún no hay productos registrados en el catálogo.'}
+                          ? `No se encontraron coincidencias para "${search}". Prueba ajustando tu búsqueda o limpiando los filtros.`
+                          : 'Aún no hay productos registrados en el catálogo de tu bodega.'}
                       </p>
-                      {canManage && (
-                        <div className="pt-2 flex justify-center gap-2">
-                          <button
-                            type="button"
-                            onClick={() => setImportModalOpen(true)}
-                            className="rounded-xl bg-indigo-50 border border-indigo-200 px-3 py-1.5 font-bold text-indigo-700 hover:bg-indigo-100"
-                          >
-                            📥 Importar desde Excel / CSV
-                          </button>
-                        </div>
-                      )}
+                      <div className="pt-3 flex flex-wrap justify-center items-center gap-2.5">
+                        <button
+                          type="button"
+                          onClick={() => setImportModalOpen(true)}
+                          className="rounded-xl bg-emerald-600 hover:bg-emerald-500 px-4 py-2 text-xs font-bold text-white shadow-sm transition flex items-center gap-1.5 cursor-pointer active:scale-95"
+                        >
+                          <span>📥</span>
+                          <span>Importar Productos (Excel / CSV / JSON)</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setShowAddForm(true)}
+                          className="rounded-xl bg-blue-50 border border-blue-200 px-3.5 py-2 text-xs font-bold text-blue-700 hover:bg-blue-100 transition flex items-center gap-1.5 cursor-pointer active:scale-95"
+                        >
+                          <span>➕</span>
+                          <span>Registrar Nuevo Producto</span>
+                        </button>
+                      </div>
                     </div>
                   </td>
                 </tr>
