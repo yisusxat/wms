@@ -26,6 +26,13 @@ export function TeamPanel({ token, onError }: { token: string; onError: (msg: st
   const [showModal, setShowModal] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [editingMember, setEditingMember] = useState<TeamMember | null>(null);
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!toastMessage) return;
+    const t = setTimeout(() => setToastMessage(null), 4000);
+    return () => clearTimeout(t);
+  }, [toastMessage]);
 
   // New user form state
   const [form, setForm] = useState({
@@ -61,6 +68,7 @@ export function TeamPanel({ token, onError }: { token: string; onError: (msg: st
       });
       setShowModal(false);
       setForm({ name: '', email: '', password: '', role: 'OPERATOR' });
+      setToastMessage('Nuevo miembro registrado exitosamente');
       await loadTeam();
     } catch (err: any) {
       onError(err?.message ?? 'Error al registrar miembro del equipo');
@@ -78,6 +86,7 @@ export function TeamPanel({ token, onError }: { token: string; onError: (msg: st
       setMembers((prev) =>
         prev.map((m) => (m.id === userId ? { ...m, role: newRole } : m))
       );
+      setToastMessage(`Rol actualizado a ${ROLE_LABELS[newRole]?.label ?? newRole}`);
     } catch (err: any) {
       onError(err?.message ?? 'No fue posible actualizar el rol');
     }
@@ -93,6 +102,11 @@ export function TeamPanel({ token, onError }: { token: string; onError: (msg: st
       setMembers((prev) =>
         prev.map((m) => (m.id === userId ? { ...m, active: nextActive } : m))
       );
+      setToastMessage(
+        nextActive
+          ? 'Cuenta de usuario reactivada correctamente'
+          : 'Acceso de usuario suspendido'
+      );
     } catch (err: any) {
       onError(err?.message ?? 'No fue posible cambiar el estado del usuario');
     }
@@ -101,18 +115,31 @@ export function TeamPanel({ token, onError }: { token: string; onError: (msg: st
   const handleSavePermissions = async (
     userId: string,
     permissions: UserPermissions,
-    newRole: CurrentUser['role']
+    newRole: CurrentUser['role'],
+    newActive?: boolean
   ) => {
     try {
+      const body: any = { permissions, role: newRole };
+      if (typeof newActive === 'boolean') {
+        body.active = newActive;
+      }
       await apiFetch(`/users/${userId}`, token, {
         method: 'PATCH',
-        body: JSON.stringify({ permissions, role: newRole }),
+        body: JSON.stringify(body),
       });
       setMembers((prev) =>
         prev.map((m) =>
-          m.id === userId ? { ...m, permissions, role: newRole } : m
+          m.id === userId
+            ? {
+                ...m,
+                permissions,
+                role: newRole,
+                active: typeof newActive === 'boolean' ? newActive : m.active,
+              }
+            : m
         )
       );
+      setToastMessage('Permisos y configuración de acceso guardados con éxito ✨');
     } catch (err: any) {
       onError(err?.message ?? 'No fue posible guardar los permisos');
       throw err;
@@ -225,13 +252,22 @@ export function TeamPanel({ token, onError }: { token: string; onError: (msg: st
                       <div className="flex items-center gap-2">
                         <button
                           onClick={() => setEditingMember(member)}
-                          className="flex items-center gap-1 rounded-lg bg-blue-50 border border-blue-200 px-3 py-1.5 text-[11px] font-bold text-blue-700 hover:bg-blue-100 transition shadow-2xs"
+                          className="flex items-center gap-1.5 rounded-xl bg-blue-50 border border-blue-200 px-3 py-1.5 text-[11px] font-bold text-blue-700 hover:bg-blue-100 transition shadow-2xs"
                         >
-                          ⚙️ Permisos
+                          <span>⚙️</span>
+                          <span>Permisos</span>
+                          {member.permissions && typeof member.permissions === 'object' && (
+                            <span
+                              className="ml-0.5 rounded-md bg-blue-200/80 px-1.5 py-0.2 text-[10px] text-blue-900 font-extrabold"
+                              title="Permisos personalizados asignados"
+                            >
+                              {Object.values(member.permissions).filter(Boolean).length}
+                            </span>
+                          )}
                         </button>
                         <button
                           onClick={() => handleToggleStatus(member.id, member.active)}
-                          className={`rounded-lg px-2.5 py-1.5 text-[11px] font-bold border transition ${
+                          className={`rounded-xl px-2.5 py-1.5 text-[11px] font-bold border transition shadow-2xs ${
                             member.active
                               ? 'border-rose-200 text-rose-700 hover:bg-rose-50'
                               : 'border-emerald-200 text-emerald-700 hover:bg-emerald-50'
@@ -346,6 +382,20 @@ export function TeamPanel({ token, onError }: { token: string; onError: (msg: st
         onSave={handleSavePermissions}
         onToggleStatus={handleToggleStatus}
       />
+
+      {/* Floating Toast Feedback */}
+      {toastMessage && (
+        <div className="fixed bottom-6 right-6 z-50 flex items-center gap-2.5 rounded-2xl bg-slate-900/95 px-4 py-3 text-xs font-bold text-white shadow-2xl border border-slate-700 backdrop-blur-sm animate-fadeIn">
+          <span className="text-emerald-400 text-sm">✓</span>
+          <span>{toastMessage}</span>
+          <button
+            onClick={() => setToastMessage(null)}
+            className="ml-3 text-slate-400 hover:text-white p-1 rounded-lg"
+          >
+            ✕
+          </button>
+        </div>
+      )}
     </section>
   );
 }
