@@ -219,9 +219,53 @@ export default function HomePage() {
     );
   }
 
-  const visibleTabs = profile?.role === 'ADMIN'
-    ? [...baseTabs, { id: 'team' as Tab, label: 'Equipo', icon: '👥' }]
-    : baseTabs;
+  const userPerms = profile?.permissions as any;
+
+  const isTabVisible = (tabId: Tab): boolean => {
+    if (profile?.role === 'ADMIN') return true;
+    if (!userPerms || typeof userPerms !== 'object' || Object.keys(userPerms).length === 0) return true;
+
+    switch (tabId) {
+      case 'dashboard':
+        return userPerms.canViewDashboard ?? true;
+      case 'kpis':
+        return userPerms.canViewKpis ?? false;
+      case 'reports':
+        return userPerms.canViewReports ?? false;
+      case 'products':
+        return userPerms.canViewProducts ?? true;
+      case 'locations':
+        return userPerms.canViewLocations ?? true;
+      case 'inventory':
+        return userPerms.canViewInventory ?? true;
+      case 'movements':
+        return userPerms.canViewMovements ?? true;
+      case 'warehouse3d':
+        return userPerms.canView3D ?? true;
+      case 'warehouse2d':
+        return userPerms.canView2D ?? true;
+      case 'mapping':
+        return userPerms.canViewMapping ?? true;
+      case 'team':
+        return userPerms.canManageTeam ?? false;
+      default:
+        return true;
+    }
+  };
+
+  const visibleTabs = [
+    ...baseTabs,
+    ...(profile?.role === 'ADMIN' || userPerms?.canManageTeam
+      ? [{ id: 'team' as Tab, label: 'Equipo', icon: '👥' }]
+      : []),
+  ].filter((t) => isTabVisible(t.id));
+
+  // Fallback to first available tab if current tab is restricted
+  useEffect(() => {
+    if (visibleTabs.length > 0 && !visibleTabs.some((t) => t.id === tab)) {
+      setTab(visibleTabs[0].id);
+    }
+  }, [visibleTabs, tab]);
 
   return (
     <div className="min-h-screen lg:flex bg-slate-50">
@@ -387,7 +431,9 @@ export default function HomePage() {
               onNavigate={(nextTab) => setTab(nextTab as Tab)}
             />
           )}
-          {tab === 'team' && profile?.role === 'ADMIN' && <TeamPanel token={token} onError={setError} />}
+          {tab === 'team' && (profile?.role === 'ADMIN' || userPerms?.canManageTeam) && (
+            <TeamPanel token={token} onError={setError} />
+          )}
         </div>
       </section>
 

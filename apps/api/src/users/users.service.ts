@@ -178,6 +178,43 @@ export class UsersService {
     return updated;
   }
 
+  async updateProfile(
+    id: string,
+    data: { role?: any; active?: boolean; permissions?: any },
+    adminUserId?: string
+  ) {
+    const updateData: any = {};
+    if (data.role) updateData.role = data.role;
+    if (typeof data.active === 'boolean') updateData.active = data.active;
+    if (data.permissions) updateData.permissions = data.permissions;
+
+    const updated = await this.prisma.user.update({
+      where: { id },
+      data: updateData,
+    });
+
+    if (data.role) {
+      await this.prisma.membership.updateMany({
+        where: { userId: id },
+        data: { role: data.role },
+      });
+    }
+
+    await this.audit.log({
+      userId: adminUserId,
+      action: 'PERMISSIONS_UPDATED',
+      entity: 'user',
+      entityId: id,
+      details: {
+        role: data.role,
+        active: data.active,
+        permissionsCount: data.permissions ? Object.keys(data.permissions).length : 0,
+      },
+    });
+
+    return updated;
+  }
+
   async anonymizeUser(userId: string) {
     const anonEmail = `anonymized_${userId.slice(0, 8)}@deleted.local`;
     await this.prisma.$executeRawUnsafe(

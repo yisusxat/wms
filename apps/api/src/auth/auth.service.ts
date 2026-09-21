@@ -63,8 +63,9 @@ export class AuthService {
     return {
       id: user.id,
       email: user.email,
-      name: user.profile?.name,
+      name: user.profile?.name ?? profile?.name,
       role: (profile?.role ?? 'VIEWER') as WmsRole,
+      permissions: (profile as any)?.permissions ?? {},
     };
   }
 

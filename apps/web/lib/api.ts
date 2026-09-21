@@ -44,7 +44,15 @@ export type LocationRack = {
 export type Location = { id: string; code: string; status: string; level: number; position: number; rack?: LocationRack };
 export type InventoryItem = { id: string; quantity: number; reservedQuantity: number; product: Product; location: Location };
 export type Movement = { id: string; type: string; quantity: number; createdAt: string; product: Product; sourceLocation?: Location; destinationLocation?: Location; reason?: string };
-export type CurrentUser = { id: string; email?: string; name?: string; role: 'ADMIN' | 'SUPERVISOR' | 'OPERATOR' | 'VIEWER'; organizationId?: string };
+export type CurrentUser = {
+  id: string;
+  email?: string;
+  name?: string;
+  role: 'ADMIN' | 'SUPERVISOR' | 'OPERATOR' | 'VIEWER';
+  organizationId?: string;
+  permissions?: any;
+  active?: boolean;
+};
 
 export async function apiFetch<T>(path: string, token: string, init?: RequestInit): Promise<T> {
   const isClient = typeof window !== 'undefined';
@@ -94,6 +102,7 @@ async function fallbackInsforge<T>(path: string, token: string, init?: RequestIn
 
     let name = 'Usuario';
     let role: CurrentUser['role'] = 'ADMIN';
+    let permissions = null;
 
     if (userId) {
       const res = await fetch(`${insforgeUrl}/api/database/records/user_profiles?id=eq.${userId}`, { headers });
@@ -102,11 +111,12 @@ async function fallbackInsforge<T>(path: string, token: string, init?: RequestIn
         if (Array.isArray(rows) && rows[0]) {
           name = rows[0].name || name;
           role = rows[0].role || role;
+          permissions = rows[0].permissions || null;
         }
       }
     }
 
-    return { id: userId, email, name, role } as T;
+    return { id: userId, email, name, role, permissions } as T;
   }
 
   if (cleanPath === '/dashboard/summary') {
@@ -429,14 +439,18 @@ async function fallbackInsforge<T>(path: string, token: string, init?: RequestIn
 
     const res = await fetch(`${insforgeUrl}/api/database/records/user_profiles?id=eq.${userId}`, {
       method: 'PATCH',
-      headers,
+      headers: {
+        ...headers,
+        Prefer: 'return=representation',
+      },
       body: JSON.stringify(patchBody),
     });
     if (!res.ok) {
       const errPayload = await res.json().catch(() => null);
       throw new Error(errPayload?.message ?? 'Error al actualizar usuario');
     }
-    return (await res.json()) as T;
+    const data = await res.json().catch(() => patchBody);
+    return (Array.isArray(data) ? data[0] : data) as T;
   }
 
   if (cleanPath === '/audit-logs') {

@@ -4,28 +4,35 @@ import { CurrentUser } from "../../lib/api";
 import { TeamMember } from "./TeamPanel";
 
 export interface UserPermissions {
-  // Qué puede ver
+  // 1. Módulos y Visualización (11)
   canViewDashboard: boolean;
   canViewKpis: boolean;
+  canViewReports: boolean;
   canViewProducts: boolean;
   canViewLocations: boolean;
   canViewInventory: boolean;
   canViewMovements: boolean;
   canView3D: boolean;
   canView2D: boolean;
+  canViewMapping: boolean;
   canViewAudit: boolean;
 
-  // Qué puede modificar / operar
+  // 2. Operaciones de Bodega (5)
   canCreateEntry: boolean;
   canCreateExit: boolean;
   canCreateTransfer: boolean;
   canCreateAdjustment: boolean;
+  canAuditMapping: boolean;
+
+  // 3. Configuración y Maestros (3)
   canManageProducts: boolean;
   canManageLocations: boolean;
+  canManageTeam: boolean;
 
-  // Qué puede descargar / exportar
-  canDownloadReports: boolean;
+  // 4. Descarga, Exportación y Herramientas (5)
   canBulkImport: boolean;
+  canExportProducts: boolean;
+  canDownloadReports: boolean;
   canScheduleReports: boolean;
   canPrintLabels: boolean;
 }
@@ -34,92 +41,116 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<CurrentUser["role"], UserPermissio
   ADMIN: {
     canViewDashboard: true,
     canViewKpis: true,
+    canViewReports: true,
     canViewProducts: true,
     canViewLocations: true,
     canViewInventory: true,
     canViewMovements: true,
     canView3D: true,
     canView2D: true,
+    canViewMapping: true,
     canViewAudit: true,
 
     canCreateEntry: true,
     canCreateExit: true,
     canCreateTransfer: true,
     canCreateAdjustment: true,
+    canAuditMapping: true,
+
     canManageProducts: true,
     canManageLocations: true,
+    canManageTeam: true,
 
-    canDownloadReports: true,
     canBulkImport: true,
+    canExportProducts: true,
+    canDownloadReports: true,
     canScheduleReports: true,
     canPrintLabels: true,
   },
   SUPERVISOR: {
     canViewDashboard: true,
     canViewKpis: true,
+    canViewReports: true,
     canViewProducts: true,
     canViewLocations: true,
     canViewInventory: true,
     canViewMovements: true,
     canView3D: true,
     canView2D: true,
+    canViewMapping: true,
     canViewAudit: true,
 
     canCreateEntry: true,
     canCreateExit: true,
     canCreateTransfer: true,
     canCreateAdjustment: true,
+    canAuditMapping: true,
+
     canManageProducts: true,
     canManageLocations: false,
+    canManageTeam: false,
 
-    canDownloadReports: true,
     canBulkImport: true,
+    canExportProducts: true,
+    canDownloadReports: true,
     canScheduleReports: true,
     canPrintLabels: true,
   },
   OPERATOR: {
     canViewDashboard: true,
     canViewKpis: false,
+    canViewReports: false,
     canViewProducts: true,
     canViewLocations: true,
     canViewInventory: true,
     canViewMovements: true,
     canView3D: true,
     canView2D: true,
+    canViewMapping: true,
     canViewAudit: false,
 
     canCreateEntry: true,
     canCreateExit: true,
     canCreateTransfer: true,
     canCreateAdjustment: false,
+    canAuditMapping: true,
+
     canManageProducts: false,
     canManageLocations: false,
+    canManageTeam: false,
 
-    canDownloadReports: false,
     canBulkImport: false,
+    canExportProducts: false,
+    canDownloadReports: false,
     canScheduleReports: false,
     canPrintLabels: true,
   },
   VIEWER: {
     canViewDashboard: true,
     canViewKpis: false,
+    canViewReports: false,
     canViewProducts: true,
     canViewLocations: true,
     canViewInventory: true,
     canViewMovements: true,
-    canView3D: true,
+    canView3D: false,
     canView2D: true,
-    canViewAudit: false,
+    canViewMapping: true,
+    canViewAudit: true,
 
     canCreateEntry: false,
     canCreateExit: false,
     canCreateTransfer: false,
     canCreateAdjustment: false,
+    canAuditMapping: false,
+
     canManageProducts: false,
     canManageLocations: false,
+    canManageTeam: false,
 
-    canDownloadReports: false,
     canBulkImport: false,
+    canExportProducts: false,
+    canDownloadReports: false,
     canScheduleReports: false,
     canPrintLabels: false,
   },
@@ -133,36 +164,45 @@ interface PermissionMeta {
 }
 
 const VIEW_PERMISSIONS: PermissionMeta[] = [
-  { key: "canViewDashboard", label: "Dashboard General", desc: "Panel resumen de actividad, alertas y accesos rápidos", icon: "📊" },
-  { key: "canViewKpis", label: "Centro de Mando (KPIs)", desc: "Métricas de rotación, ocupación y valorización", icon: "📈" },
-  { key: "canViewProducts", label: "Catálogo de SKUs", desc: "Explorar fichas técnicas, categorías y códigos de barra", icon: "📦" },
-  { key: "canViewLocations", label: "Listado de Ubicaciones", desc: "Grilla de pasillos, estanterías, niveles y celdas", icon: "📍" },
+  { key: "canViewDashboard", label: "Dashboard General", desc: "Panel resumen con métricas clave, alertas y accesos rápidos", icon: "📊" },
+  { key: "canViewKpis", label: "Centro de Mando (KPIs)", desc: "Indicadores de rotación, ocupación volumétrica y valorización", icon: "📈" },
+  { key: "canViewReports", label: "Módulo de Reportes", desc: "Historial de balances, movimientos y reportes operativos", icon: "📑" },
+  { key: "canViewProducts", label: "Catálogo de SKUs", desc: "Explorar catálogo, fichas técnicas, categorías y códigos de barra", icon: "📦" },
+  { key: "canViewLocations", label: "Listado de Ubicaciones", desc: "Grilla de pasillos, estanterías, niveles y capacidades", icon: "📍" },
   { key: "canViewInventory", label: "Stock de Inventario", desc: "Existencias físicas, lotes, vencimientos y disponibilidad", icon: "📋" },
-  { key: "canViewMovements", label: "Historial Movimientos", desc: "Kardex y trazabilidad de entradas, salidas y traslados", icon: "🔄" },
-  { key: "canView3D", label: "Mapa 3D Interactivo", desc: "Gemelo digital tridimensional con visualización de calor", icon: "🧊" },
-  { key: "canView2D", label: "Layout 2D de Pasillos", desc: "Plano esquemático oficial y auditoría de celdas", icon: "🗺️" },
-  { key: "canViewAudit", label: "Bitácora de Auditoría", desc: "Registro de seguridad de acciones realizadas por el equipo", icon: "🛡️" },
+  { key: "canViewMovements", label: "Historial Movimientos", desc: "Kardex y trazabilidad de ingresos, egresos y traslados", icon: "🔄" },
+  { key: "canView3D", label: "Mapa 3D Interactivo", desc: "Gemelo digital tridimensional interactivo con cámaras", icon: "🧊" },
+  { key: "canView2D", label: "Layout 2D de Pasillos", desc: "Plano esquemático oficial de los 5 bloques estructurales", icon: "🗺️" },
+  { key: "canViewMapping", label: "Mapeo Almacén 2D", desc: "Plano de planta 2D a ancho completo para auditoría física", icon: "🔍" },
+  { key: "canViewAudit", label: "Bitácora de Auditoría", desc: "Registro inmutable de seguridad y acciones del personal", icon: "🛡️" },
 ];
 
 const OP_PERMISSIONS: PermissionMeta[] = [
-  { key: "canCreateEntry", label: "Registrar Entradas", desc: "Recepción de mercancía y órdenes de compra", icon: "📥" },
+  { key: "canCreateEntry", label: "Registrar Entradas", desc: "Recepción de mercancía de proveedores y órdenes de ingreso", icon: "📥" },
   { key: "canCreateExit", label: "Registrar Salidas", desc: "Picking, despacho a clientes y órdenes de egreso", icon: "📤" },
   { key: "canCreateTransfer", label: "Transferencias Internas", desc: "Movimientos entre pasillos, estantes o racks", icon: "🔀" },
   { key: "canCreateAdjustment", label: "Ajustes de Inventario", desc: "Ajustes cíclicos por conteo, mermas o sobrantes", icon: "⚖️" },
-  { key: "canManageProducts", label: "Gestión de Productos", desc: "Crear, editar o descontinuar fichas de SKUs", icon: "🏷️" },
+  { key: "canAuditMapping", label: "Auditoría en Mapeo", desc: "Confirmar casilleros OK, editar discrepancias y generar reporte", icon: "🎯" },
+];
+
+const CONFIG_PERMISSIONS: PermissionMeta[] = [
+  { key: "canManageProducts", label: "Gestión de Productos", desc: "Crear nuevos SKUs, editar fichas técnicas o descontinuar", icon: "🏷️" },
   { key: "canManageLocations", label: "Gestión de Ubicaciones", desc: "Crear, reconfigurar o inhabilitar celdas y racks", icon: "🏗️" },
+  { key: "canManageTeam", label: "Gestión de Equipo", desc: "Administrar personal, asignar roles y configurar permisos", icon: "👥" },
 ];
 
 const EXPORT_PERMISSIONS: PermissionMeta[] = [
-  { key: "canDownloadReports", label: "Descargar Reportes", desc: "Exportar reportes a formatos Excel (.xlsx), CSV y JSON", icon: "📊" },
-  { key: "canBulkImport", label: "Carga Masiva de Stock", desc: "Importación masiva mediante hojas de cálculo", icon: "📁" },
-  { key: "canScheduleReports", label: "Programar Despachos", desc: "Automatización de reportes periódicos por correo", icon: "⏰" },
-  { key: "canPrintLabels", label: "Impresión de Etiquetas", desc: "Generación de códigos de barra y rótulos térmicos (ZPL)", icon: "🏷️" },
+  { key: "canBulkImport", label: "Carga Masiva de Stock", desc: "Importar productos por lotes desde Excel (.xlsx), CSV o JSON", icon: "📁" },
+  { key: "canExportProducts", label: "Exportar Catálogo", desc: "Descargar catálogo completo en formato Excel, CSV o JSON", icon: "📤" },
+  { key: "canDownloadReports", label: "Descargar Reportes", desc: "Exportar balances y movimientos a Excel, CSV y PDF", icon: "📊" },
+  { key: "canScheduleReports", label: "Programar Despachos", desc: "Automatización de balances periódicos por correo", icon: "⏰" },
+  { key: "canPrintLabels", label: "Impresión de Etiquetas", desc: "Generar códigos de barra y rótulos térmicos Zebra (ZPL)", icon: "🏷️" },
 ];
 
 const ALL_PERMISSION_KEYS: (keyof UserPermissions)[] = [
   ...VIEW_PERMISSIONS.map((p) => p.key),
   ...OP_PERMISSIONS.map((p) => p.key),
+  ...CONFIG_PERMISSIONS.map((p) => p.key),
   ...EXPORT_PERMISSIONS.map((p) => p.key),
 ];
 
@@ -241,6 +281,10 @@ export function PermissionsModal({
     return OP_PERMISSIONS.filter((p) => permissions[p.key]).length;
   }, [permissions]);
 
+  const configActiveCount = useMemo(() => {
+    return CONFIG_PERMISSIONS.filter((p) => permissions[p.key]).length;
+  }, [permissions]);
+
   const exportActiveCount = useMemo(() => {
     return EXPORT_PERMISSIONS.filter((p) => permissions[p.key]).length;
   }, [permissions]);
@@ -256,6 +300,7 @@ export function PermissionsModal({
 
   const filteredViews = useMemo(() => filterList(VIEW_PERMISSIONS), [searchQuery]);
   const filteredOps = useMemo(() => filterList(OP_PERMISSIONS), [searchQuery]);
+  const filteredConfigs = useMemo(() => filterList(CONFIG_PERMISSIONS), [searchQuery]);
   const filteredExports = useMemo(() => filterList(EXPORT_PERMISSIONS), [searchQuery]);
 
   const handleSave = async () => {
@@ -273,7 +318,7 @@ export function PermissionsModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 p-3 sm:p-5 backdrop-blur-sm animate-fadeIn">
-      <div className="w-full max-w-3xl max-h-[92vh] flex flex-col rounded-3xl bg-white shadow-2xl border border-slate-200 overflow-hidden">
+      <div className="w-full max-w-4xl max-h-[94vh] flex flex-col rounded-3xl bg-white shadow-2xl border border-slate-200 overflow-hidden">
         {/* Header */}
         <div className="flex items-center justify-between border-b px-6 py-4 bg-gradient-to-r from-slate-50 via-white to-slate-50">
           <div className="flex items-center gap-3">
@@ -344,9 +389,9 @@ export function PermissionsModal({
                 onChange={(e) => handleRoleSelect(e.target.value as any)}
                 className="w-full rounded-xl border border-slate-300 bg-slate-50 p-2.5 text-xs font-bold text-slate-800 focus:bg-white focus:ring-2 focus:ring-blue-600 focus:outline-none transition cursor-pointer"
               >
-                <option value="ADMIN">👑 Administrador (Acceso Total a Bodega)</option>
+                <option value="ADMIN">👑 Administrador (Acceso Total a la Plataforma)</option>
                 <option value="SUPERVISOR">🔍 Supervisor (Operación, Ajustes y Reportes)</option>
-                <option value="OPERATOR">📦 Operador (Entradas, Salidas y Traslados)</option>
+                <option value="OPERATOR">📦 Operador (Entradas, Salidas, Traslados y Mapeo)</option>
                 <option value="VIEWER">👁️ Visualizador (Solo Consulta / Auditoría)</option>
               </select>
               <p className="text-[11px] text-slate-500 mt-1">
@@ -409,7 +454,7 @@ export function PermissionsModal({
               <button
                 type="button"
                 onClick={handleSelectAllGlobal}
-                className="px-2.5 py-1.5 rounded-xl bg-slate-100 hover:bg-blue-50 hover:text-blue-700 text-[11px] font-bold text-slate-700 transition"
+                className="px-2.5 py-1.5 rounded-xl bg-slate-100 hover:bg-blue-50 hover:text-blue-700 text-[11px] font-bold text-slate-700 transition cursor-pointer"
                 title="Habilitar todos los permisos"
               >
                 ✓ Marcar Todos
@@ -417,7 +462,7 @@ export function PermissionsModal({
               <button
                 type="button"
                 onClick={handleDeselectAllGlobal}
-                className="px-2.5 py-1.5 rounded-xl bg-slate-100 hover:bg-rose-50 hover:text-rose-700 text-[11px] font-bold text-slate-700 transition"
+                className="px-2.5 py-1.5 rounded-xl bg-slate-100 hover:bg-rose-50 hover:text-rose-700 text-[11px] font-bold text-slate-700 transition cursor-pointer"
                 title="Desmarcar todos los permisos"
               >
                 ✕ Desmarcar Todos
@@ -427,17 +472,17 @@ export function PermissionsModal({
 
           {/* Granular Permissions Section */}
           <div className="space-y-5">
-            {/* Group 1: Visualización */}
+            {/* Group 1: Visualización y Secciones */}
             <div className="bg-white rounded-2xl border border-slate-200 shadow-2xs overflow-hidden">
               <div className="flex items-center justify-between bg-blue-50/60 border-b border-blue-100/80 px-4 py-3">
                 <div className="flex items-center gap-2">
                   <span className="text-base">👁️</span>
                   <div>
                     <h4 className="text-xs font-bold text-blue-900">
-                      1. Permisos de Visualización y Monitoreo
+                      1. Permisos de Módulos y Visualización (Secciones)
                     </h4>
                     <p className="text-[10px] text-blue-700/80">
-                      Módulos, dashboards y reportes que puede consultar en pantalla
+                      Secciones completas del menú lateral y dashboards que puede consultar en pantalla
                     </p>
                   </div>
                 </div>
@@ -453,7 +498,7 @@ export function PermissionsModal({
                         true
                       )
                     }
-                    className="text-[10px] font-bold text-blue-700 hover:text-blue-900 bg-white/80 hover:bg-white px-2 py-1 rounded-lg border border-blue-200 transition"
+                    className="text-[10px] font-bold text-blue-700 hover:text-blue-900 bg-white/80 hover:bg-white px-2 py-1 rounded-lg border border-blue-200 transition cursor-pointer"
                   >
                     ✓ Todos
                   </button>
@@ -465,7 +510,7 @@ export function PermissionsModal({
                         false
                       )
                     }
-                    className="text-[10px] font-bold text-slate-500 hover:text-rose-700 bg-white/80 hover:bg-white px-2 py-1 rounded-lg border border-slate-200 transition"
+                    className="text-[10px] font-bold text-slate-500 hover:text-rose-700 bg-white/80 hover:bg-white px-2 py-1 rounded-lg border border-slate-200 transition cursor-pointer"
                   >
                     ✕ Ninguno
                   </button>
@@ -491,17 +536,17 @@ export function PermissionsModal({
               </div>
             </div>
 
-            {/* Group 2: Operaciones y Modificación */}
+            {/* Group 2: Operaciones de Bodega */}
             <div className="bg-white rounded-2xl border border-slate-200 shadow-2xs overflow-hidden">
               <div className="flex items-center justify-between bg-purple-50/60 border-b border-purple-100/80 px-4 py-3">
                 <div className="flex items-center gap-2">
                   <span className="text-base">✏️</span>
                   <div>
                     <h4 className="text-xs font-bold text-purple-900">
-                      2. Permisos de Operación y Modificación
+                      2. Operaciones de Bodega y Movimientos
                     </h4>
                     <p className="text-[10px] text-purple-700/80">
-                      Movimientos de inventario, ajustes y configuración de catálogo
+                      Registro de entradas, salidas, traslados y auditoría física de casilleros
                     </p>
                   </div>
                 </div>
@@ -517,7 +562,7 @@ export function PermissionsModal({
                         true
                       )
                     }
-                    className="text-[10px] font-bold text-purple-700 hover:text-purple-900 bg-white/80 hover:bg-white px-2 py-1 rounded-lg border border-purple-200 transition"
+                    className="text-[10px] font-bold text-purple-700 hover:text-purple-900 bg-white/80 hover:bg-white px-2 py-1 rounded-lg border border-purple-200 transition cursor-pointer"
                   >
                     ✓ Todos
                   </button>
@@ -529,7 +574,7 @@ export function PermissionsModal({
                         false
                       )
                     }
-                    className="text-[10px] font-bold text-slate-500 hover:text-rose-700 bg-white/80 hover:bg-white px-2 py-1 rounded-lg border border-slate-200 transition"
+                    className="text-[10px] font-bold text-slate-500 hover:text-rose-700 bg-white/80 hover:bg-white px-2 py-1 rounded-lg border border-slate-200 transition cursor-pointer"
                   >
                     ✕ Ninguno
                   </button>
@@ -555,17 +600,81 @@ export function PermissionsModal({
               </div>
             </div>
 
-            {/* Group 3: Descargas y Herramientas */}
+            {/* Group 3: Configuración y Gestión de Maestros */}
+            <div className="bg-white rounded-2xl border border-slate-200 shadow-2xs overflow-hidden">
+              <div className="flex items-center justify-between bg-amber-50/60 border-b border-amber-100/80 px-4 py-3">
+                <div className="flex items-center gap-2">
+                  <span className="text-base">🛠️</span>
+                  <div>
+                    <h4 className="text-xs font-bold text-amber-900">
+                      3. Configuración, Catálogo y Gestión de Maestros
+                    </h4>
+                    <p className="text-[10px] text-amber-700/80">
+                      Creación de fichas de SKUs, reconfiguración de racks y gestión de usuarios
+                    </p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-[11px] font-bold bg-amber-100/80 text-amber-800 px-2 py-0.5 rounded-md">
+                    {configActiveCount}/{CONFIG_PERMISSIONS.length}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setGroupState(
+                        CONFIG_PERMISSIONS.map((p) => p.key),
+                        true
+                      )
+                    }
+                    className="text-[10px] font-bold text-amber-700 hover:text-amber-900 bg-white/80 hover:bg-white px-2 py-1 rounded-lg border border-amber-200 transition cursor-pointer"
+                  >
+                    ✓ Todos
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setGroupState(
+                        CONFIG_PERMISSIONS.map((p) => p.key),
+                        false
+                      )
+                    }
+                    className="text-[10px] font-bold text-slate-500 hover:text-rose-700 bg-white/80 hover:bg-white px-2 py-1 rounded-lg border border-slate-200 transition cursor-pointer"
+                  >
+                    ✕ Ninguno
+                  </button>
+                </div>
+              </div>
+
+              <div className="p-3 grid sm:grid-cols-3 gap-2 text-xs">
+                {filteredConfigs.length === 0 ? (
+                  <p className="col-span-3 text-center py-3 text-slate-400 text-xs">
+                    No hay permisos que coincidan con la búsqueda
+                  </p>
+                ) : (
+                  filteredConfigs.map((item) => (
+                    <PermissionCard
+                      key={item.key}
+                      meta={item}
+                      checked={permissions[item.key]}
+                      onToggle={() => togglePermission(item.key)}
+                      accent="amber"
+                    />
+                  ))
+                )}
+              </div>
+            </div>
+
+            {/* Group 4: Descargas, Exportaciones y Herramientas */}
             <div className="bg-white rounded-2xl border border-slate-200 shadow-2xs overflow-hidden">
               <div className="flex items-center justify-between bg-emerald-50/60 border-b border-emerald-100/80 px-4 py-3">
                 <div className="flex items-center gap-2">
                   <span className="text-base">📥</span>
                   <div>
                     <h4 className="text-xs font-bold text-emerald-900">
-                      3. Reportes, Descargas y Automatización
+                      4. Importación, Exportación y Herramientas
                     </h4>
                     <p className="text-[10px] text-emerald-700/80">
-                      Exportación de datos, importación masiva e impresión ZPL
+                      Cargas masivas (Excel/CSV/JSON), exportaciones, reportes y etiquetas térmicas
                     </p>
                   </div>
                 </div>
@@ -581,7 +690,7 @@ export function PermissionsModal({
                         true
                       )
                     }
-                    className="text-[10px] font-bold text-emerald-700 hover:text-emerald-900 bg-white/80 hover:bg-white px-2 py-1 rounded-lg border border-emerald-200 transition"
+                    className="text-[10px] font-bold text-emerald-700 hover:text-emerald-900 bg-white/80 hover:bg-white px-2 py-1 rounded-lg border border-emerald-200 transition cursor-pointer"
                   >
                     ✓ Todos
                   </button>
@@ -593,7 +702,7 @@ export function PermissionsModal({
                         false
                       )
                     }
-                    className="text-[10px] font-bold text-slate-500 hover:text-rose-700 bg-white/80 hover:bg-white px-2 py-1 rounded-lg border border-slate-200 transition"
+                    className="text-[10px] font-bold text-slate-500 hover:text-rose-700 bg-white/80 hover:bg-white px-2 py-1 rounded-lg border border-slate-200 transition cursor-pointer"
                   >
                     ✕ Ninguno
                   </button>
@@ -627,19 +736,19 @@ export function PermissionsModal({
             type="button"
             onClick={onClose}
             disabled={saving}
-            className="px-4 py-2.5 rounded-xl border border-slate-200 text-xs font-bold text-slate-600 hover:bg-slate-50 transition"
+            className="px-4 py-2.5 rounded-xl border border-slate-200 text-xs font-bold text-slate-600 hover:bg-slate-50 transition cursor-pointer"
           >
             Cancelar
           </button>
           <div className="flex items-center gap-3">
             <span className="text-[11px] text-slate-500 hidden sm:inline">
-              <strong>{totalActive}</strong> permisos activos asignados
+              <strong>{totalActive}</strong> de {ALL_PERMISSION_KEYS.length} permisos activos asignados
             </span>
             <button
               type="button"
               onClick={handleSave}
               disabled={saving}
-              className="flex items-center gap-2 rounded-xl bg-blue-600 px-5 py-2.5 text-xs font-bold text-white shadow-md hover:bg-blue-700 transition disabled:opacity-50"
+              className="flex items-center gap-2 rounded-xl bg-blue-600 px-5 py-2.5 text-xs font-bold text-white shadow-md hover:bg-blue-700 transition disabled:opacity-50 cursor-pointer active:scale-95"
             >
               {saving ? (
                 <>
@@ -668,17 +777,20 @@ function PermissionCard({
   meta: PermissionMeta;
   checked: boolean;
   onToggle: () => void;
-  accent: "blue" | "purple" | "emerald";
+  accent: "blue" | "purple" | "amber" | "emerald";
 }) {
   const accentClasses = {
     blue: checked
-      ? "border-blue-300 bg-blue-50/50 text-blue-900 ring-1 ring-blue-200"
+      ? "border-blue-300 bg-blue-50/60 text-blue-900 ring-1 ring-blue-200"
       : "border-slate-200 bg-white text-slate-700 hover:border-slate-300",
     purple: checked
-      ? "border-purple-300 bg-purple-50/50 text-purple-900 ring-1 ring-purple-200"
+      ? "border-purple-300 bg-purple-50/60 text-purple-900 ring-1 ring-purple-200"
+      : "border-slate-200 bg-white text-slate-700 hover:border-slate-300",
+    amber: checked
+      ? "border-amber-300 bg-amber-50/60 text-amber-900 ring-1 ring-amber-200"
       : "border-slate-200 bg-white text-slate-700 hover:border-slate-300",
     emerald: checked
-      ? "border-emerald-300 bg-emerald-50/50 text-emerald-900 ring-1 ring-emerald-200"
+      ? "border-emerald-300 bg-emerald-50/60 text-emerald-900 ring-1 ring-emerald-200"
       : "border-slate-200 bg-white text-slate-700 hover:border-slate-300",
   }[accent];
 
@@ -708,4 +820,5 @@ function PermissionCard({
     </div>
   );
 }
+
 

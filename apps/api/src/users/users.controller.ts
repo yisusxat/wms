@@ -48,6 +48,14 @@ export class UsersController {
     return this.users.updateStatus(id, body, adminId);
   }
 
+  @Patch(':id')
+  @UseGuards(RolesGuard)
+  @Roles('ADMIN')
+  updateUser(@Req() req: Request, @Param('id') id: string, @Body() body: any) {
+    const adminId = (req as any).user.sub;
+    return this.users.updateProfile(id, body, adminId);
+  }
+
   @Post('me/anonymize')
   anonymizeMe(@Req() req: Request) {
     const userId = (req as any).user.sub;
