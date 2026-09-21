@@ -1,6 +1,6 @@
 'use client';
 
-import { FormEvent, useEffect, useState } from 'react';
+import { FormEvent, useCallback, useEffect, useMemo, useState } from 'react';
 import { insforge } from '../lib/insforge';
 import { apiFetch, CurrentUser, InventoryItem, Location, Page, Product } from '../lib/api';
 import { MovementsPanel } from './components/MovementsPanel';
@@ -120,6 +120,60 @@ export default function HomePage() {
       .catch((e: Error) => setError(e.message));
   }, [token]);
 
+  // User permissions and tab visibility (Hooks must be called unconditionally at top level)
+  const userPerms = profile?.permissions as any;
+
+  const isTabVisible = useCallback(
+    (tabId: Tab): boolean => {
+      if (profile?.role === 'ADMIN') return true;
+      if (!userPerms || typeof userPerms !== 'object' || Object.keys(userPerms).length === 0) return true;
+
+      switch (tabId) {
+        case 'dashboard':
+          return userPerms.canViewDashboard ?? true;
+        case 'kpis':
+          return userPerms.canViewKpis ?? false;
+        case 'reports':
+          return userPerms.canViewReports ?? false;
+        case 'products':
+          return userPerms.canViewProducts ?? true;
+        case 'locations':
+          return userPerms.canViewLocations ?? true;
+        case 'inventory':
+          return userPerms.canViewInventory ?? true;
+        case 'movements':
+          return userPerms.canViewMovements ?? true;
+        case 'warehouse3d':
+          return userPerms.canView3D ?? true;
+        case 'warehouse2d':
+          return userPerms.canView2D ?? true;
+        case 'mapping':
+          return userPerms.canViewMapping ?? true;
+        case 'team':
+          return userPerms.canManageTeam ?? false;
+        default:
+          return true;
+      }
+    },
+    [profile?.role, userPerms],
+  );
+
+  const visibleTabs = useMemo(() => {
+    return [
+      ...baseTabs,
+      ...(profile?.role === 'ADMIN' || userPerms?.canManageTeam
+        ? [{ id: 'team' as Tab, label: 'Equipo', icon: '👥' }]
+        : []),
+    ].filter((t) => isTabVisible(t.id));
+  }, [profile?.role, userPerms, isTabVisible]);
+
+  // Fallback to first available tab if current tab is restricted
+  useEffect(() => {
+    if (token && visibleTabs.length > 0 && !visibleTabs.some((t) => t.id === tab)) {
+      setTab(visibleTabs[0].id);
+    }
+  }, [token, visibleTabs, tab]);
+
   async function signIn(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setError('');
@@ -219,54 +273,6 @@ export default function HomePage() {
     );
   }
 
-  const userPerms = profile?.permissions as any;
-
-  const isTabVisible = (tabId: Tab): boolean => {
-    if (profile?.role === 'ADMIN') return true;
-    if (!userPerms || typeof userPerms !== 'object' || Object.keys(userPerms).length === 0) return true;
-
-    switch (tabId) {
-      case 'dashboard':
-        return userPerms.canViewDashboard ?? true;
-      case 'kpis':
-        return userPerms.canViewKpis ?? false;
-      case 'reports':
-        return userPerms.canViewReports ?? false;
-      case 'products':
-        return userPerms.canViewProducts ?? true;
-      case 'locations':
-        return userPerms.canViewLocations ?? true;
-      case 'inventory':
-        return userPerms.canViewInventory ?? true;
-      case 'movements':
-        return userPerms.canViewMovements ?? true;
-      case 'warehouse3d':
-        return userPerms.canView3D ?? true;
-      case 'warehouse2d':
-        return userPerms.canView2D ?? true;
-      case 'mapping':
-        return userPerms.canViewMapping ?? true;
-      case 'team':
-        return userPerms.canManageTeam ?? false;
-      default:
-        return true;
-    }
-  };
-
-  const visibleTabs = [
-    ...baseTabs,
-    ...(profile?.role === 'ADMIN' || userPerms?.canManageTeam
-      ? [{ id: 'team' as Tab, label: 'Equipo', icon: '👥' }]
-      : []),
-  ].filter((t) => isTabVisible(t.id));
-
-  // Fallback to first available tab if current tab is restricted
-  useEffect(() => {
-    if (visibleTabs.length > 0 && !visibleTabs.some((t) => t.id === tab)) {
-      setTab(visibleTabs[0].id);
-    }
-  }, [visibleTabs, tab]);
-
   return (
     <div className="min-h-screen lg:flex bg-slate-50">
       {/* Mobile Top Navigation Bar */}
@@ -355,7 +361,7 @@ export default function HomePage() {
               </span>
               <span className="text-xs text-slate-400">· Multi-Tenant</span>
             </div>
-            <h1 className="mt-1 text-2xl sm:text-3xl font-bold text-gray-900">{visibleTabs.find(item => item.id === tab)?.label}</h1>
+            <h1 className="mt-1 text-2xl sm:text-3xl font-bold text-gray-900">{visibleTabs.find(item => item.id === tab)?.label ?? 'Dashboard'}</h1>
           </div>
 
           <div className="flex flex-wrap items-center gap-2 sm:gap-3">
