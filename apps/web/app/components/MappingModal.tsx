@@ -172,6 +172,10 @@ function MappingModalInner({
     notes: "",
   });
 
+  // State for product search / filtering in edit form
+  const [productSearchQuery, setProductSearchQuery] = useState("");
+  const [isProductDropdownOpen, setIsProductDropdownOpen] = useState(false);
+
   // State for manually adding position to audit
   const [showAddEmpty, setShowAddEmpty] = useState(false);
   const [addEmptyLocationId, setAddEmptyLocationId] = useState("");
@@ -205,7 +209,19 @@ function MappingModalInner({
     ])
       .then(([invRes, prodRes, locRes]) => {
         const prodList = (prodRes && Array.isArray(prodRes.items) ? prodRes.items : []) as Product[];
-        setProducts(prodList);
+        const invList = (invRes && Array.isArray(invRes.items) ? invRes.items : []) as InventoryItem[];
+
+        // Combine products from catalog and active inventory
+        const prodsMap = new Map<string, Product>();
+        for (const p of prodList) {
+          if (p && p.id) prodsMap.set(p.id, p);
+        }
+        for (const item of invList) {
+          if (item?.product && typeof item.product === "object" && item.product.id) {
+            prodsMap.set(item.product.id, item.product);
+          }
+        }
+        setProducts(Array.from(prodsMap.values()));
 
         // Merge seed locations (all 148 standard warehouse positions) with live locations from API
         const seedLocs = getWarehouseSeedLocations();
@@ -224,7 +240,6 @@ function MappingModalInner({
 
         // Map existing inventory by location code and ID
         const invMap = new Map<string, InventoryItem>();
-        const invList = (invRes && Array.isArray(invRes.items) ? invRes.items : []) as InventoryItem[];
         for (const item of invList) {
           if (!item) continue;
           if (typeof item.location === "object" && item.location) {
@@ -361,6 +376,24 @@ function MappingModalInner({
   }, [locationsList]);
   const safeProducts = Array.isArray(products) ? products : [];
 
+  // Filtered products list for real-time typing/filtering in the modal
+  const filteredProducts = useMemo(() => {
+    if (!productSearchQuery || !productSearchQuery.trim()) {
+      return safeProducts.slice(0, 40);
+    }
+    const q = productSearchQuery.toLowerCase().trim();
+    return safeProducts.filter((p) => {
+      const name = (p.name || "").toLowerCase();
+      const sku = (p.sku || "").toLowerCase();
+      const cat = (p.category || "").toLowerCase();
+      return name.includes(q) || sku.includes(q) || cat.includes(q);
+    });
+  }, [safeProducts, productSearchQuery]);
+
+  const selectedProduct = useMemo(() => {
+    return safeProducts.find((p) => p.id === editForm.physicalProductId);
+  }, [safeProducts, editForm.physicalProductId]);
+
   // Quick Action: Mark as Matched (Physical matches system)
   const handleMarkMatched = (locationCode: string, autoAdvance = true) => {
     setItems((curr) =>
@@ -394,10 +427,14 @@ function MappingModalInner({
   // Open Edit Form for an item
   const handleOpenEdit = (item: AuditItem) => {
     setEditingCode(item.locationCode);
+    const initialProdId = item.physicalProductId || item.systemProductId || (safeProducts[0]?.id ?? "");
+    const initialProd = safeProducts.find((p) => p.id === initialProdId);
+    setProductSearchQuery(initialProd ? initialProd.name : "");
+    setIsProductDropdownOpen(false);
     setEditForm({
       physicalQuantity: item.physicalQuantity,
       differentProduct: Boolean(item.physicalProductId && item.physicalProductId !== item.systemProductId),
-      physicalProductId: item.physicalProductId || (safeProducts[0]?.id ?? ""),
+      physicalProductId: initialProdId,
       reassignLocation: Boolean(item.reassignedLocationId),
       reassignedLocationId: item.reassignedLocationId || (safeLocations[0]?.id ?? ""),
       reason: item.reason || COMMON_REASONS[0],
@@ -1420,35 +1457,174 @@ function MappingModalInner({
                       </div>
                     </div>
 
-                    {/* 2. Cambiar Producto */}
-                    <div>
-                      <div className="flex items-center justify-between mb-1">
-                        <label className="font-bold text-slate-700 text-xs">
-                          2. ¿Es otro producto diferente?
+                    {/* 2. Cambiar Producto con Búsqueda en Tiempo Real */}
+                    <div className="space-y-1.5">
+                      <div className="flex items-center justify-between">
+                        <label className="font-bold text-slate-700 text-xs flex items-center gap-1.5">
+                          <span>2. ¿Es otro producto diferente?</span>
+                          {editForm.differentProduct && selectedProduct && (
+                            <span className="rounded bg-indigo-100 px-1.5 py-0.5 text-[10px] font-bold text-indigo-800 font-mono">
+                              {selectedProduct.sku}
+                            </span>
+                          )}
                         </label>
                         <input
                           type="checkbox"
                           checked={editForm.differentProduct}
-                          onChange={(e) =>
-                            setEditForm({ ...editForm, differentProduct: e.target.checked })
-                          }
-                          className="h-4 w-4 rounded text-indigo-600"
+                          onChange={(e) => {
+                            const checked = e.target.checked;
+                            setEditForm({ ...editForm, differentProduct: checked });
+                            if (checked) {
+                              setIsProductDropdownOpen(true);
+                            } else {
+                              setIsProductDropdownOpen(false);
+                            }
+                          }}
+                          className="h-4 w-4 rounded text-indigo-600 cursor-pointer"
                         />
                       </div>
+
                       {editForm.differentProduct && (
-                        <select
-                          value={editForm.physicalProductId}
-                          onChange={(e) =>
-                            setEditForm({ ...editForm, physicalProductId: e.target.value })
-                          }
-                          className="w-full rounded-xl border border-slate-300 p-2 text-xs bg-white"
-                        >
-                          {safeProducts.map((p) => (
-                            <option key={p.id} value={p.id}>
-                              [{p.sku}] {p.name}
-                            </option>
-                          ))}
-                        </select>
+                        <div className="space-y-2 rounded-2xl bg-indigo-50/50 p-3 border border-indigo-200 animate-fadeIn">
+                          <label className="block text-[11px] font-bold text-slate-600">
+                            Escribe para buscar y filtrar el producto:
+                          </label>
+
+                          {/* Campo de búsqueda interactivo */}
+                          <div className="relative flex items-center">
+                            <span className="absolute left-3 text-slate-400 text-xs pointer-events-none">
+                              🔍
+                            </span>
+                            <input
+                              type="text"
+                              value={productSearchQuery}
+                              onChange={(e) => {
+                                setProductSearchQuery(e.target.value);
+                                setIsProductDropdownOpen(true);
+                              }}
+                              onFocus={() => setIsProductDropdownOpen(true)}
+                              placeholder="Escribe el nombre o SKU del producto..."
+                              className="w-full rounded-xl border-2 border-indigo-200 bg-white py-2.5 pl-8 pr-8 text-xs font-bold text-slate-800 placeholder-slate-400 focus:border-indigo-600 focus:outline-none shadow-xs"
+                            />
+                            {productSearchQuery && (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setProductSearchQuery("");
+                                  setIsProductDropdownOpen(true);
+                                }}
+                                className="absolute right-2.5 text-slate-400 hover:text-slate-600 text-xs font-bold p-0.5 cursor-pointer"
+                                title="Limpiar búsqueda"
+                              >
+                                ✕
+                              </button>
+                            )}
+                          </div>
+
+                          {/* Lista filtrada en tiempo real */}
+                          {isProductDropdownOpen && (
+                            <div className="max-h-48 overflow-y-auto rounded-xl border border-indigo-200 bg-white p-1 shadow-lg space-y-1">
+                              <div className="flex items-center justify-between px-2 py-1 text-[10px] font-bold text-slate-400 uppercase border-b">
+                                <span>
+                                  {filteredProducts.length}{" "}
+                                  {filteredProducts.length === 1
+                                    ? "producto encontrado"
+                                    : "productos encontrados"}
+                                </span>
+                                <button
+                                  type="button"
+                                  onClick={() => setIsProductDropdownOpen(false)}
+                                  className="text-slate-400 hover:text-slate-700 text-[10px] font-bold cursor-pointer"
+                                >
+                                  Cerrar ✕
+                                </button>
+                              </div>
+
+                              {filteredProducts.length === 0 ? (
+                                <div className="p-3 text-center text-xs text-slate-400">
+                                  No hay productos que coincidan con &ldquo;{productSearchQuery}&rdquo;
+                                </div>
+                              ) : (
+                                filteredProducts.map((p) => {
+                                  const isCurrent = p.id === editForm.physicalProductId;
+                                  return (
+                                    <button
+                                      key={p.id}
+                                      type="button"
+                                      onClick={() => {
+                                        setEditForm({
+                                          ...editForm,
+                                          physicalProductId: p.id,
+                                        });
+                                        setProductSearchQuery(p.name);
+                                        setIsProductDropdownOpen(false);
+                                      }}
+                                      className={`w-full flex items-center justify-between p-2 rounded-lg text-left text-xs transition cursor-pointer ${
+                                        isCurrent
+                                          ? "bg-indigo-600 text-white font-bold"
+                                          : "hover:bg-indigo-50 text-slate-800"
+                                      }`}
+                                    >
+                                      <div className="flex-1 min-w-0 pr-2">
+                                        <div className="flex items-center gap-1.5">
+                                          <span
+                                            className={`font-mono text-[10px] font-bold px-1.5 py-0.5 rounded ${
+                                              isCurrent
+                                                ? "bg-white/20 text-white"
+                                                : "bg-slate-100 text-indigo-700"
+                                            }`}
+                                          >
+                                            {p.sku}
+                                          </span>
+                                          <span className="font-semibold truncate">{p.name}</span>
+                                        </div>
+                                        {p.category && (
+                                          <span
+                                            className={`text-[10px] truncate block mt-0.5 ${
+                                              isCurrent ? "text-indigo-100" : "text-slate-400"
+                                            }`}
+                                          >
+                                            Categoría: {p.category} · Unidad: {p.unit || "u"}
+                                          </span>
+                                        )}
+                                      </div>
+                                      {isCurrent && <span className="text-xs font-black">✓</span>}
+                                    </button>
+                                  );
+                                })
+                              )}
+                            </div>
+                          )}
+
+                          {/* Resumen del producto seleccionado */}
+                          {selectedProduct && (
+                            <div className="flex items-center justify-between rounded-xl bg-white border border-indigo-200 px-3 py-2 text-xs shadow-xs">
+                              <div className="flex-1 min-w-0 pr-2">
+                                <span className="text-[10px] font-bold uppercase text-slate-400 block">
+                                  Producto seleccionado:
+                                </span>
+                                <div className="flex items-center gap-1.5">
+                                  <span className="font-mono font-bold text-indigo-700 text-[11px]">
+                                    [{selectedProduct.sku}]
+                                  </span>
+                                  <span className="font-bold text-slate-900 truncate">
+                                    {selectedProduct.name}
+                                  </span>
+                                </div>
+                              </div>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setProductSearchQuery("");
+                                  setIsProductDropdownOpen(true);
+                                }}
+                                className="rounded-lg bg-indigo-50 px-2 py-1 text-[11px] font-bold text-indigo-700 hover:bg-indigo-100 transition cursor-pointer"
+                              >
+                                Cambiar
+                              </button>
+                            </div>
+                          )}
+                        </div>
                       )}
                     </div>
 
