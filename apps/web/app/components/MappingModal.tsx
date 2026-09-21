@@ -914,14 +914,30 @@ function MappingModalInner({
                   <button
                     type="button"
                     onClick={() => setShowProductDetails(!showProductDetails)}
-                    className={`rounded-lg px-2.5 py-1 text-[11px] font-bold transition flex items-center gap-1 border shadow-xs ${
+                    className={`rounded-xl px-3.5 py-1.5 text-xs font-black transition-all duration-200 flex items-center gap-2.5 cursor-pointer border shadow-sm ${
                       showProductDetails
-                        ? "bg-indigo-600 text-white border-indigo-700 shadow-sm"
-                        : "bg-white text-slate-700 border-slate-200 hover:bg-slate-50"
+                        ? "bg-indigo-600 text-white border-indigo-700 hover:bg-indigo-700 ring-2 ring-indigo-300 active:scale-95"
+                        : "bg-white text-indigo-950 border-indigo-200 hover:bg-indigo-50/80 hover:border-indigo-400 active:scale-95"
                     }`}
-                    title="Mostrar u ocultar los nombres de productos y cantidades en las posiciones"
+                    title="Alternar entre vista compacta y vista con productos y cantidades en el plano 2D"
                   >
-                    <span>{showProductDetails ? "👁️ Ocultar Detalles" : "👁️ Mostrar Productos y Cantidades"}</span>
+                    <span className="flex h-5 w-5 items-center justify-center rounded-lg bg-indigo-500/20 text-xs">
+                      {showProductDetails ? "👁️" : "📦"}
+                    </span>
+                    <span>
+                      {showProductDetails ? "Ocultar Productos y Cantidades" : "Mostrar Productos y Cantidades"}
+                    </span>
+                    <span
+                      className={`relative inline-flex h-4 w-7 items-center rounded-full transition-colors ${
+                        showProductDetails ? "bg-emerald-400" : "bg-slate-300"
+                      }`}
+                    >
+                      <span
+                        className={`inline-block h-3 w-3 transform rounded-full bg-white shadow-xs transition-transform ${
+                          showProductDetails ? "translate-x-3.5" : "translate-x-0.5"
+                        }`}
+                      />
+                    </span>
                   </button>
                 </div>
               )}
@@ -952,9 +968,28 @@ function MappingModalInner({
                     {/* 2D Grid Header */}
                     <div className="flex items-center justify-between text-xs text-slate-500 border-b pb-2 font-bold">
                       <span>Bodega Principal · Haz clic en cualquier casillero para abrir la auditoría y modificar</span>
-                      <span className="text-[11px] text-indigo-700 bg-indigo-50 px-2.5 py-1 rounded-lg border border-indigo-200">
-                        {showProductDetails ? "Mostrando SKUs y stock en casilleros" : "Vista compacta (Activa el botón para ver SKUs)"}
-                      </span>
+                      <button
+                        type="button"
+                        onClick={() => setShowProductDetails(!showProductDetails)}
+                        className={`px-3 py-1.5 rounded-xl font-bold text-xs transition-all duration-150 flex items-center gap-2 cursor-pointer border shadow-xs ${
+                          showProductDetails
+                            ? "bg-indigo-600 text-white border-indigo-700 hover:bg-indigo-700 ring-2 ring-indigo-200"
+                            : "bg-indigo-50 text-indigo-800 border-indigo-300 hover:bg-indigo-100 hover:border-indigo-400"
+                        }`}
+                        title="Haz clic para alternar entre vista compacta y ver nombres de productos y cantidades"
+                      >
+                        <span className="text-sm">{showProductDetails ? "📋" : "👁️"}</span>
+                        <span>
+                          {showProductDetails
+                            ? "Mostrando SKUs y Cantidades (Clic para Vista Compacta)"
+                            : "Vista compacta (Clic aquí para ver SKUs y Cantidades)"}
+                        </span>
+                        <span
+                          className={`inline-block w-2 h-2 rounded-full ${
+                            showProductDetails ? "bg-emerald-300 animate-pulse" : "bg-indigo-400"
+                          }`}
+                        />
+                      </button>
                     </div>
 
                     {/* 5-Column Grid */}
