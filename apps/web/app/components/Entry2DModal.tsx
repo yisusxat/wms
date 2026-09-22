@@ -1,6 +1,6 @@
-﻿"use client";
+"use client";
 import { useState, useEffect } from "react";
-import { apiFetch, Product, Location } from "../../lib/api";
+import { apiFetch, Product, Location, resolveLocationUuid } from "../../lib/api";
 
 interface Props {
   isOpen: boolean;
@@ -62,11 +62,12 @@ export function Entry2DModal({ isOpen, onClose, token, locations, onSuccess }: P
 
       for (const loc of suggestedLocations) {
         if (mode === "CONFIRMED") {
+          const locUuid = resolveLocationUuid(loc.id) || resolveLocationUuid(loc.code) || loc.id;
           await apiFetch("/movements/entry", token, {
             method: "POST",
             body: JSON.stringify({
               productId: selectedProductId,
-              locationId: loc.id,
+              locationId: locUuid,
               quantity: qtyPerLocation,
               reference: `ENTRADA-2D-${Date.now().toString().slice(-4)}`,
               reason: "Entrada de mercancía directa desde Plano 2D",

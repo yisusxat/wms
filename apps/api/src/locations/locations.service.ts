@@ -4,6 +4,8 @@ import { PrismaService } from '../prisma/prisma.service';
 import { paginated, pagination } from '../common/pagination';
 import { LocationsQueryDto } from './dto/locations-query.dto';
 
+import { UpdateLocationDto } from './dto/update-location.dto';
+
 @Injectable()
 export class LocationsService {
   constructor(private readonly prisma: PrismaService) {}
@@ -45,6 +47,18 @@ export class LocationsService {
       include: {
         rack: { include: { aisle: { include: { zone: { include: { warehouse: true } } } } } },
         inventory: { include: { product: true }, orderBy: { createdAt: 'asc' } },
+      },
+    });
+  }
+
+  async update(idOrCode: string, body: UpdateLocationDto) {
+    const isIdUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(idOrCode);
+    const where = isIdUuid ? { id: idOrCode } : { code: idOrCode };
+    return this.prisma.location.update({
+      where,
+      data: { status: body.status },
+      include: {
+        rack: { include: { aisle: { include: { zone: { include: { warehouse: true } } } } } },
       },
     });
   }

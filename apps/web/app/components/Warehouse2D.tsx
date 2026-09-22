@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { apiFetch, getWarehouseSeedLocations, Location, Page } from '../../lib/api';
+import { apiFetch, getWarehouseSeedLocations, Location, Page, resolveLocationUuid } from '../../lib/api';
 import { Entry2DModal } from './Entry2DModal';
 import { Exit2DModal } from './Exit2DModal';
 import { MappingModal } from './MappingModal';
@@ -126,9 +126,12 @@ export function Warehouse2D({ token, onError, onNavigate, onDataChanged }: Wareh
     const found = locationMap.get(key);
     if (found) return found;
 
+    const code = `${aisle}-${rack}-${String(level).padStart(2, '0')}-${String(position).padStart(2, '0')}`;
+    const id = resolveLocationUuid(code) || `${aisle}-${rack}-${level}-${position}`;
+
     return {
-      id: `${aisle}-${rack}-${level}-${position}`,
-      code: `${aisle}-${rack}-${String(level).padStart(2, '0')}-${String(position).padStart(2, '0')}`,
+      id,
+      code,
       status: 'AVAILABLE',
       level,
       position,
@@ -152,12 +155,15 @@ export function Warehouse2D({ token, onError, onNavigate, onDataChanged }: Wareh
       setSelected({ ...selected, status: newStatus });
     }
 
+    const locId = resolveLocationUuid(loc.id) || resolveLocationUuid(loc.code) || loc.id;
+
     // Persist to backend / database
-    apiFetch(`/locations/${loc.id}`, token, {
+    apiFetch(`/locations/${locId}`, token, {
       method: 'PATCH',
       body: JSON.stringify({ status: newStatus }),
     })
       .then(() => {
+        refreshLocations();
         onDataChanged?.();
       })
       .catch((err: any) => {

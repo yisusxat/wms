@@ -1,6 +1,6 @@
 "use client";
 import { useState, useEffect, useMemo, Component, ErrorInfo, ReactNode } from "react";
-import { apiFetch, Location, Product, InventoryItem, getWarehouseSeedLocations } from "../../lib/api";
+import { apiFetch, Location, Product, InventoryItem, getWarehouseSeedLocations, resolveLocationUuid } from "../../lib/api";
 
 // Error boundary to protect the UI
 class ModalErrorBoundary extends Component<
@@ -257,7 +257,7 @@ function MappingModalInner({
           const prod = inv && typeof inv.product === "object" ? inv.product : undefined;
 
           return {
-            locationId: loc.id || loc.code,
+            locationId: resolveLocationUuid(loc.id) || resolveLocationUuid(loc.code) || loc.id,
             locationCode: loc.code || "POS-DESCONOCIDA",
             systemProductId: hasInv ? prod?.id : undefined,
             systemProductName: hasInv ? prod?.name || "Producto Asignado" : "Posición Disponible (Vacía)",
@@ -514,8 +514,10 @@ function MappingModalInner({
       return;
     }
 
+    const locId = resolveLocationUuid(loc.id) || resolveLocationUuid(loc.code) || loc.id;
+
     const newItem: AuditItem = {
-      locationId: loc.id || loc.code,
+      locationId: locId,
       locationCode: loc.code || "N/A",
       systemProductId: undefined,
       systemProductName: "Posición Vacía en Sistema",
@@ -560,62 +562,97 @@ function MappingModalInner({
       const executedLogs = [];
 
       for (const disc of discrepancies) {
-        if (disc.reassignedLocationId && disc.systemProductId) {
-          await apiFetch("/movements/transfer", token, {
-            method: "POST",
-            body: JSON.stringify({
-              productId: disc.systemProductId,
-              sourceLocationId: disc.locationId,
-              destinationLocationId: disc.reassignedLocationId,
-              quantity: disc.physicalQuantity > 0 ? disc.physicalQuantity : disc.systemQuantity,
-              reference: folio,
-              reason: `Mapeo: Reasignación de ${disc.locationCode} a ${disc.reassignedLocationCode}`,
-            }),
-          }).catch((err) => console.warn("Transfer err:", err));
+        const sourceLocId = resolveLocationUuid(disc.locationId) || resolveLocationUuid(disc.locationCode) || disc.locationId;
+        const destLocId = disc.reassignedLocationId
+          ? (resolveLocationUuid(disc.reassignedLocationId) || resolveLocationUuid(disc.reassignedLocationCode) || disc.reassignedLocationId)
+          : undefined;
 
-          executedLogs.push({
-            type: "REASIGNACION",
-            location: disc.locationCode,
-            detail: `Reasignado a ${disc.reassignedLocationCode} (${disc.physicalQuantity} u)`,
-            reason: disc.reason,
-          });
+        if (destLocId && disc.systemProductId) {
+          try {
+            await apiFetch("/movements/transfer", token, {
+              method: "POST",
+              body: JSON.stringify({
+                productId: disc.systemProductId,
+                sourceLocationId: sourceLocId,
+                destinationLocationId: destLocId,
+                quantity: disc.physicalQuantity > 0 ? disc.physicalQuantity : disc.systemQuantity,
+                reference: folio,
+                reason: `Mapeo: Reasignación de ${disc.locationCode} a ${disc.reassignedLocationCode}`,
+              }),
+            });
+
+            executedLogs.push({
+              type: "REASIGNACION",
+              location: disc.locationCode,
+              detail: `Reasignado a ${disc.reassignedLocationCode} (${disc.physicalQuantity} u)`,
+              reason: disc.reason,
+            });
+          } catch (err: any) {
+            console.error("Transfer err:", err);
+            executedLogs.push({
+              type: "ERROR_TRANSFER",
+              location: disc.locationCode,
+              detail: `Error al transferir: ${err.message}`,
+              reason: disc.reason,
+            });
+          }
         } else if (disc.systemProductId && disc.physicalQuantity !== disc.systemQuantity) {
           const delta = disc.physicalQuantity - disc.systemQuantity;
-          await apiFetch("/movements/adjustment", token, {
-            method: "POST",
-            body: JSON.stringify({
-              productId: disc.systemProductId,
-              locationId: disc.locationId,
-              delta: delta,
-              reference: folio,
-              reason: `Mapeo: ${disc.reason}. ${disc.notes}`,
-            }),
-          }).catch((err) => console.warn("Adjust err:", err));
+          try {
+            await apiFetch("/movements/adjustment", token, {
+              method: "POST",
+              body: JSON.stringify({
+                productId: disc.systemProductId,
+                locationId: sourceLocId,
+                delta: delta,
+                reference: folio,
+                reason: `Mapeo: ${disc.reason}. ${disc.notes}`,
+              }),
+            });
 
-          executedLogs.push({
-            type: delta > 0 ? "AJUSTE_POSITIVO" : "AJUSTE_NEGATIVO",
-            location: disc.locationCode,
-            detail: `Stock ajustado: ${disc.systemQuantity} ➔ ${disc.physicalQuantity} (Delta: ${delta > 0 ? `+${delta}` : delta} u)`,
-            reason: disc.reason,
-          });
+            executedLogs.push({
+              type: delta > 0 ? "AJUSTE_POSITIVO" : "AJUSTE_NEGATIVO",
+              location: disc.locationCode,
+              detail: `Stock ajustado: ${disc.systemQuantity} ➔ ${disc.physicalQuantity} (Delta: ${delta > 0 ? `+${delta}` : delta} u)`,
+              reason: disc.reason,
+            });
+          } catch (err: any) {
+            console.error("Adjust err:", err);
+            executedLogs.push({
+              type: "ERROR_AJUSTE",
+              location: disc.locationCode,
+              detail: `Error al ajustar stock: ${err.message}`,
+              reason: disc.reason,
+            });
+          }
         } else if (disc.physicalProductId && (!disc.systemProductId || disc.physicalProductId !== disc.systemProductId)) {
-          await apiFetch("/movements/entry", token, {
-            method: "POST",
-            body: JSON.stringify({
-              productId: disc.physicalProductId,
-              locationId: disc.locationId,
-              quantity: disc.physicalQuantity,
-              reference: folio,
-              reason: `Mapeo: Regularización de producto en ${disc.locationCode}`,
-            }),
-          }).catch((err) => console.warn("Entry err:", err));
+          try {
+            await apiFetch("/movements/entry", token, {
+              method: "POST",
+              body: JSON.stringify({
+                productId: disc.physicalProductId,
+                locationId: sourceLocId,
+                quantity: disc.physicalQuantity,
+                reference: folio,
+                reason: `Mapeo: Regularización de producto en ${disc.locationCode}`,
+              }),
+            });
 
-          executedLogs.push({
-            type: "REGULARIZACION_SKU",
-            location: disc.locationCode,
-            detail: `Asignado nuevo SKU: ${disc.physicalProductSku} (${disc.physicalQuantity} u)`,
-            reason: disc.reason,
-          });
+            executedLogs.push({
+              type: "REGULARIZACION_SKU",
+              location: disc.locationCode,
+              detail: `Asignado nuevo SKU: ${disc.physicalProductSku} (${disc.physicalQuantity} u)`,
+              reason: disc.reason,
+            });
+          } catch (err: any) {
+            console.error("Entry err:", err);
+            executedLogs.push({
+              type: "ERROR_REGULARIZACION",
+              location: disc.locationCode,
+              detail: `Error al regularizar: ${err.message}`,
+              reason: disc.reason,
+            });
+          }
         }
       }
 

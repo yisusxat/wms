@@ -1,35 +1,23 @@
+import {
+  getWarehouseSeedLocations,
+  isUuid,
+  resolveLocationUuid,
+  normalizeLocationCode,
+  LOCATION_CODE_TO_UUID,
+} from './locations-data';
+
+export {
+  getWarehouseSeedLocations,
+  isUuid,
+  resolveLocationUuid,
+  normalizeLocationCode,
+  LOCATION_CODE_TO_UUID,
+};
+
 const configuredApiUrl = process.env.NEXT_PUBLIC_API_URL;
 const rawInsforgeUrl = process.env.NEXT_PUBLIC_INSFORGE_URL ?? 'https://jirv3k8h.us-east.insforge.app';
 const insforgeUrl = rawInsforgeUrl.replace(/-\w+\.us-east/, '.us-east').replace(/\/$/, '');
 const insforgeAnonKey = process.env.NEXT_PUBLIC_INSFORGE_ANON_KEY ?? 'anon_8c78b5a48a1c49627477ca316a70504fab071593359304c6f8484186628ad952';
-
-export function getWarehouseSeedLocations(): Location[] {
-  const rackDefs = [
-    { code: 'C', name: 'Rack Central', levels: 2, positions: 15 },
-    { code: 'P', name: 'Rack Pared', levels: 2, positions: 22 },
-  ];
-  return ['A', 'B'].flatMap((aisleCode) =>
-    rackDefs.flatMap((def) =>
-      Array.from({ length: def.levels }, (_, l) => l + 1).flatMap((level) =>
-        Array.from({ length: def.positions }, (_, p) => p + 1).map((position) => ({
-          id: `${aisleCode}-${def.code}-${level}-${position}`,
-          code: `${aisleCode}-${def.code}-${String(level).padStart(2, '0')}-${String(position).padStart(2, '0')}`,
-          status: 'AVAILABLE',
-          level,
-          position,
-          rack: {
-            id: `rack-${aisleCode}-${def.code}`,
-            code: def.code,
-            name: def.name,
-            levels: def.levels,
-            positions: def.positions,
-            aisle: { code: aisleCode },
-          },
-        }))
-      )
-    )
-  );
-}
 
 export type Page<T> = { items: T[]; total: number; page: number; pageSize: number };
 export type Product = { id: string; sku: string; name: string; unit: string; active: boolean; barcode?: string; category?: string };
@@ -59,11 +47,47 @@ export async function apiFetch<T>(path: string, token: string, init?: RequestIni
   const isLocalHost = isClient && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
   const apiUrl = configuredApiUrl ? configuredApiUrl.replace(/\/$/, '') : (isLocalHost ? 'http://localhost:3001' : null);
 
+  // Normalize path and resolve any location codes to UUIDs for movements and locations
+  let requestPath = path;
+  let requestInit = init ? { ...init } : undefined;
+
+  if (requestPath.startsWith('/movements/') && requestInit?.body && typeof requestInit.body === 'string') {
+    try {
+      const parsed = JSON.parse(requestInit.body);
+      let changed = false;
+      if (parsed.locationId && !isUuid(parsed.locationId)) {
+        parsed.locationId = resolveLocationUuid(parsed.locationId);
+        changed = true;
+      }
+      if (parsed.sourceLocationId && !isUuid(parsed.sourceLocationId)) {
+        parsed.sourceLocationId = resolveLocationUuid(parsed.sourceLocationId);
+        changed = true;
+      }
+      if (parsed.destinationLocationId && !isUuid(parsed.destinationLocationId)) {
+        parsed.destinationLocationId = resolveLocationUuid(parsed.destinationLocationId);
+        changed = true;
+      }
+      if (changed) {
+        requestInit.body = JSON.stringify(parsed);
+      }
+    } catch {}
+  }
+
+  if (requestPath.startsWith('/locations/') && requestInit?.method && ['PATCH', 'PUT'].includes(requestInit.method)) {
+    const rawId = requestPath.replace('/locations/', '').split('?')[0];
+    if (rawId && !isUuid(rawId)) {
+      const resolved = resolveLocationUuid(rawId);
+      if (resolved && isUuid(resolved)) {
+        requestPath = `/locations/${resolved}${requestPath.includes('?') ? '?' + requestPath.split('?')[1] : ''}`;
+      }
+    }
+  }
+
   if (apiUrl) {
     try {
-      const response = await fetch(`${apiUrl}/api${path}`, {
-        ...init,
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}`, ...(init?.headers ?? {}) },
+      const response = await fetch(`${apiUrl}/api${requestPath}`, {
+        ...requestInit,
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}`, ...(requestInit?.headers ?? {}) },
       });
       if (response.ok) {
         return (await response.json()) as T;
@@ -71,7 +95,8 @@ export async function apiFetch<T>(path: string, token: string, init?: RequestIni
       // If endpoint doesn't exist on NestJS backend (404), fall back to InsForge computation
       if (response.status !== 404 && response.status >= 400 && response.status < 500) {
         const payload = await response.json().catch(() => null);
-        throw new Error(payload?.message ?? `Error (${response.status})`);
+        const errMsg = Array.isArray(payload?.message) ? payload.message.join(', ') : (payload?.message ?? `Error (${response.status})`);
+        throw new Error(errMsg);
       }
     } catch (err: any) {
       if (err?.message && !err.message.includes('Failed to fetch') && !err.message.includes('NetworkError') && !err.message.includes('fetch failed')) {
@@ -80,7 +105,7 @@ export async function apiFetch<T>(path: string, token: string, init?: RequestIni
     }
   }
 
-  return fallbackInsforge<T>(path, token, init);
+  return fallbackInsforge<T>(requestPath, token, requestInit);
 }
 
 async function fallbackInsforge<T>(path: string, token: string, init?: RequestInit): Promise<T> {
@@ -261,6 +286,39 @@ async function fallbackInsforge<T>(path: string, token: string, init?: RequestIn
       }
     } catch {}
 
+    try {
+      const resFallback = await fetch(
+        `${insforgeUrl}/api/database/records/locations?select=id,code,status,level,position,rack_id&order=code.asc`,
+        { headers }
+      );
+      if (resFallback.ok) {
+        const rawItems = await resFallback.json();
+        if (Array.isArray(rawItems) && rawItems.length > 0) {
+          const items = rawItems.map((l: any) => {
+            const parts = (l.code || '').split('-');
+            const aisleCode = parts[0] || 'A';
+            const rackCode = parts[1] || 'C';
+            return {
+              id: l.id,
+              code: l.code,
+              status: l.status,
+              level: l.level,
+              position: l.position,
+              rack: {
+                id: l.rack_id || `rack-${aisleCode}-${rackCode}`,
+                code: rackCode,
+                name: rackCode === 'C' ? 'Rack Central' : 'Rack Pared',
+                levels: 2,
+                positions: rackCode === 'C' ? 15 : 22,
+                aisle: { code: aisleCode },
+              },
+            };
+          });
+          return { items, total: items.length, page: 1, pageSize: items.length } as T;
+        }
+      }
+    } catch {}
+
     const seed = getWarehouseSeedLocations();
     return { items: seed, total: seed.length, page: 1, pageSize: seed.length } as T;
   }
@@ -372,8 +430,10 @@ async function fallbackInsforge<T>(path: string, token: string, init?: RequestIn
     const mType = typeMap[subpath] ?? 'ADJUSTMENT';
     const qty = Math.abs(parsed.quantity ?? parsed.delta ?? 1);
     const delta = parsed.delta ?? (subpath === 'exit' ? -qty : qty);
-    const sourceLocId = parsed.sourceLocationId ?? (subpath === 'exit' || (subpath === 'adjustment' && delta < 0) ? parsed.locationId : null);
-    const destLocId = parsed.destinationLocationId ?? (subpath === 'entry' || (subpath === 'adjustment' && delta > 0) ? parsed.locationId : null);
+    const rawSource = parsed.sourceLocationId ?? (subpath === 'exit' || (subpath === 'adjustment' && delta < 0) ? parsed.locationId : null);
+    const rawDest = parsed.destinationLocationId ?? (subpath === 'entry' || (subpath === 'adjustment' && delta > 0) ? parsed.locationId : null);
+    const sourceLocId = rawSource ? (resolveLocationUuid(rawSource) || rawSource) : null;
+    const destLocId = rawDest ? (resolveLocationUuid(rawDest) || rawDest) : null;
 
     // 1. Synchronize Inventory in InsForge database
     try {
@@ -394,6 +454,14 @@ async function fallbackInsforge<T>(path: string, token: string, init?: RequestIn
             body: JSON.stringify([{ product_id: parsed.productId, location_id: destLocId, quantity: qty }]),
           });
         }
+
+        // Set destination location status to OCCUPIED
+        const destQuery = isUuid(destLocId) ? `id=eq.${destLocId}` : `code=eq.${destLocId}`;
+        await fetch(`${insforgeUrl}/api/database/records/locations?${destQuery}`, {
+          method: 'PATCH',
+          headers,
+          body: JSON.stringify({ status: 'OCCUPIED' }),
+        }).catch(() => {});
       } else if (subpath === 'exit' && sourceLocId && parsed.productId) {
         const invRes = await fetch(`${insforgeUrl}/api/database/records/inventory?product_id=eq.${parsed.productId}&location_id=eq.${sourceLocId}`, { headers });
         const invList = invRes.ok ? await invRes.json().catch(() => []) : [];
@@ -405,6 +473,16 @@ async function fallbackInsforge<T>(path: string, token: string, init?: RequestIn
             headers,
             body: JSON.stringify({ quantity: newQ }),
           });
+
+          // If location is emptied, set status to AVAILABLE
+          if (newQ === 0) {
+            const srcQuery = isUuid(sourceLocId) ? `id=eq.${sourceLocId}` : `code=eq.${sourceLocId}`;
+            await fetch(`${insforgeUrl}/api/database/records/locations?${srcQuery}`, {
+              method: 'PATCH',
+              headers,
+              body: JSON.stringify({ status: 'AVAILABLE' }),
+            }).catch(() => {});
+          }
         }
       } else if (subpath === 'transfer' && sourceLocId && destLocId && parsed.productId) {
         // Source decrement
@@ -412,11 +490,21 @@ async function fallbackInsforge<T>(path: string, token: string, init?: RequestIn
         const srcList = srcRes.ok ? await srcRes.json().catch(() => []) : [];
         if (Array.isArray(srcList) && srcList.length > 0) {
           const cur = srcList[0];
+          const newSrcQ = Math.max(0, (cur.quantity || 0) - qty);
           await fetch(`${insforgeUrl}/api/database/records/inventory?id=eq.${cur.id}`, {
             method: 'PATCH',
             headers,
-            body: JSON.stringify({ quantity: Math.max(0, (cur.quantity || 0) - qty) }),
+            body: JSON.stringify({ quantity: newSrcQ }),
           });
+
+          if (newSrcQ === 0) {
+            const srcQuery = isUuid(sourceLocId) ? `id=eq.${sourceLocId}` : `code=eq.${sourceLocId}`;
+            await fetch(`${insforgeUrl}/api/database/records/locations?${srcQuery}`, {
+              method: 'PATCH',
+              headers,
+              body: JSON.stringify({ status: 'AVAILABLE' }),
+            }).catch(() => {});
+          }
         }
         // Destination increment
         const destRes = await fetch(`${insforgeUrl}/api/database/records/inventory?product_id=eq.${parsed.productId}&location_id=eq.${destLocId}`, { headers });
@@ -435,22 +523,43 @@ async function fallbackInsforge<T>(path: string, token: string, init?: RequestIn
             body: JSON.stringify([{ product_id: parsed.productId, location_id: destLocId, quantity: qty }]),
           });
         }
-      } else if (subpath === 'adjustment' && parsed.locationId && parsed.productId) {
-        const invRes = await fetch(`${insforgeUrl}/api/database/records/inventory?product_id=eq.${parsed.productId}&location_id=eq.${parsed.locationId}`, { headers });
-        const invList = invRes.ok ? await invRes.json().catch(() => []) : [];
-        if (Array.isArray(invList) && invList.length > 0) {
-          const cur = invList[0];
-          await fetch(`${insforgeUrl}/api/database/records/inventory?id=eq.${cur.id}`, {
+
+        const destQuery = isUuid(destLocId) ? `id=eq.${destLocId}` : `code=eq.${destLocId}`;
+        await fetch(`${insforgeUrl}/api/database/records/locations?${destQuery}`, {
+          method: 'PATCH',
+          headers,
+          body: JSON.stringify({ status: 'OCCUPIED' }),
+        }).catch(() => {});
+      } else if (subpath === 'adjustment' && parsed.productId) {
+        const rawAdjLoc = parsed.locationId;
+        const adjLocId = rawAdjLoc ? (resolveLocationUuid(rawAdjLoc) || rawAdjLoc) : null;
+        if (adjLocId) {
+          const invRes = await fetch(`${insforgeUrl}/api/database/records/inventory?product_id=eq.${parsed.productId}&location_id=eq.${adjLocId}`, { headers });
+          const invList = invRes.ok ? await invRes.json().catch(() => []) : [];
+          let finalQ = 0;
+          if (Array.isArray(invList) && invList.length > 0) {
+            const cur = invList[0];
+            finalQ = Math.max(0, (cur.quantity || 0) + delta);
+            await fetch(`${insforgeUrl}/api/database/records/inventory?id=eq.${cur.id}`, {
+              method: 'PATCH',
+              headers,
+              body: JSON.stringify({ quantity: finalQ }),
+            });
+          } else if (delta > 0) {
+            finalQ = delta;
+            await fetch(`${insforgeUrl}/api/database/records/inventory`, {
+              method: 'POST',
+              headers,
+              body: JSON.stringify([{ product_id: parsed.productId, location_id: adjLocId, quantity: delta }]),
+            });
+          }
+
+          const locQuery = isUuid(adjLocId) ? `id=eq.${adjLocId}` : `code=eq.${adjLocId}`;
+          await fetch(`${insforgeUrl}/api/database/records/locations?${locQuery}`, {
             method: 'PATCH',
             headers,
-            body: JSON.stringify({ quantity: Math.max(0, (cur.quantity || 0) + delta) }),
-          });
-        } else if (delta > 0) {
-          await fetch(`${insforgeUrl}/api/database/records/inventory`, {
-            method: 'POST',
-            headers,
-            body: JSON.stringify([{ product_id: parsed.productId, location_id: parsed.locationId, quantity: delta }]),
-          });
+            body: JSON.stringify({ status: finalQ > 0 ? 'OCCUPIED' : 'AVAILABLE' }),
+          }).catch(() => {});
         }
       }
     } catch (invErr) {
@@ -479,12 +588,14 @@ async function fallbackInsforge<T>(path: string, token: string, init?: RequestIn
   }
 
   if (cleanPath.startsWith('/locations/') && (init?.method === 'PATCH' || init?.method === 'PUT')) {
-    const locationId = cleanPath.replace('/locations/', '').split('/')[0];
+    const rawLocId = cleanPath.replace('/locations/', '').split('/')[0];
+    const locationId = resolveLocationUuid(rawLocId) || rawLocId;
     const parsed = init.body ? JSON.parse(init.body as string) : {};
     const patchBody: Record<string, any> = {};
     if (parsed.status) patchBody.status = parsed.status;
 
-    const res = await fetch(`${insforgeUrl}/api/database/records/locations?id=eq.${locationId}`, {
+    const query = isUuid(locationId) ? `id=eq.${locationId}` : `code=eq.${locationId}`;
+    const res = await fetch(`${insforgeUrl}/api/database/records/locations?${query}`, {
       method: 'PATCH',
       headers: { ...headers, Prefer: 'return=representation' },
       body: JSON.stringify(patchBody),
