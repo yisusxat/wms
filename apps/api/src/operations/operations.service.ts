@@ -107,7 +107,7 @@ export class OperationsService {
       const reasons: string[] = [];
 
       // A) Consolidación: Si ya tiene este producto, priorizarlo para no dispersar stock
-      const hasProduct = loc.inventory.length > 0;
+      const hasProduct = Array.isArray(loc.inventory) && loc.inventory.length > 0;
       if (hasProduct) {
         score += 35;
         reasons.push("Consolidación: ubicación con stock previo del mismo SKU (+35)");

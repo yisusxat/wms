@@ -1,4 +1,4 @@
-﻿import { Injectable, BadRequestException } from "@nestjs/common";
+import { Injectable, BadRequestException } from "@nestjs/common";
 import { PrismaService } from "../prisma/prisma.service";
 import * as ExcelJS from "exceljs";
 
@@ -260,7 +260,7 @@ export class ReportsService {
       if (isValid) validCount++;
       else invalidCount++;
 
-      const currentInv = prod && loc ? prod.inventory.find((i) => i.locationId === loc.id) : undefined;
+      const currentInv = prod && loc && prod.inventory ? prod.inventory.find((i) => i.locationId === loc.id) : undefined;
 
       results.push({
         row: index + 1,
