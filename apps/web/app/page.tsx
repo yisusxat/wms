@@ -53,14 +53,59 @@ const baseTabs: { id: Tab; label: string; icon?: string }[] = [
   { id: 'mapping', label: 'Mapeo Almacén', icon: '🔍' },
 ];
 
+function isTokenValid(jwt: string): boolean {
+  try {
+    const parts = jwt.split('.');
+    if (parts.length !== 3) return false;
+    const payload = JSON.parse(atob(parts[1]));
+    if (!payload.exp) return true;
+    return payload.exp * 1000 > Date.now() + 15000;
+  } catch {
+    return false;
+  }
+}
+
+function getEmailFromJwt(jwt: string): string {
+  try {
+    const parts = jwt.split('.');
+    if (parts.length !== 3) return '';
+    const payload = JSON.parse(atob(parts[1]));
+    return payload.email ?? '';
+  } catch {
+    return '';
+  }
+}
+
 export default function HomePage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [user, setUser] = useState<{ email?: string } | null>(null);
+  const [rememberPassword, setRememberPassword] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+  const [user, setUser] = useState<{ email?: string; id?: string } | null>(null);
   const [profile, setProfile] = useState<CurrentUser | null>(null);
   const [token, setToken] = useState<string | null>(null);
   const [summary, setSummary] = useState<Summary | null>(null);
-  const [tab, setTab] = useState<Tab>('dashboard');
+
+  // Restore active tab from localStorage so page reload preserves the current section
+  const [tab, setTab] = useState<Tab>(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const saved = localStorage.getItem('wms_active_tab') as Tab;
+        if (saved && baseTabs.some(t => t.id === saved)) {
+          return saved;
+        }
+      } catch {}
+    }
+    return 'dashboard';
+  });
+
+  const changeTab = useCallback((newTab: Tab) => {
+    setTab(newTab);
+    try {
+      localStorage.setItem('wms_active_tab', newTab);
+    } catch {}
+  }, []);
+
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(true);
 
@@ -75,29 +120,69 @@ export default function HomePage() {
 
   useEffect(() => {
     let active = true;
+
+    // 1. Restore remembered credentials for login form if previously saved
+    try {
+      const savedCreds = localStorage.getItem('wms_remembered_credentials');
+      if (savedCreds) {
+        const parsed = JSON.parse(savedCreds);
+        if (parsed?.email) setEmail(parsed.email);
+        if (parsed?.password) setPassword(parsed.password);
+        setRememberPassword(true);
+      }
+    } catch {}
+
+    // 2. Restore active session across page reloads (F5)
     void (async () => {
       try {
-        const { data, error: userError } = await insforge.auth.getCurrentUser();
-        if (!active) return;
-        if (userError || !data?.user) {
-          setLoading(false);
-          return;
+        const savedSessionRaw = localStorage.getItem('wms_auth_session');
+        if (savedSessionRaw) {
+          try {
+            const savedSession = JSON.parse(savedSessionRaw);
+            const tokenStr = savedSession?.accessToken;
+            if (tokenStr && isTokenValid(tokenStr)) {
+              insforge.setAccessToken(tokenStr);
+              if (!active) return;
+              setToken(tokenStr);
+              setUser(savedSession.user ?? { email: getEmailFromJwt(tokenStr) });
+              setLoading(false);
+              return;
+            }
+          } catch {}
         }
-        const { data: session, error: refreshError } = await insforge.auth.refreshSession();
+
+        // Fallback: Check if InsForge has an active session cookie or can refresh
+        const { data } = await insforge.auth.getCurrentUser().catch(() => ({ data: null }));
         if (!active) return;
-        if (refreshError || !session?.accessToken) {
-          setUser(null);
-          setLoading(false);
-          return;
+        if (data?.user) {
+          const { data: session } = await insforge.auth.refreshSession().catch(() => ({ data: null }));
+          if (session?.accessToken) {
+            insforge.setAccessToken(session.accessToken);
+            if (!active) return;
+            setToken(session.accessToken);
+            const userObj = { email: data.user.email, id: data.user.id };
+            setUser(userObj);
+            try {
+              localStorage.setItem('wms_auth_session', JSON.stringify({
+                accessToken: session.accessToken,
+                user: userObj,
+              }));
+            } catch {}
+            setLoading(false);
+            return;
+          }
         }
-        insforge.setAccessToken(session.accessToken);
-        setToken(session.accessToken);
-        setUser({ email: data.user.email });
-        setLoading(false);
+
+        // Not authenticated
+        try {
+          localStorage.removeItem('wms_auth_session');
+        } catch {}
+        if (active) setLoading(false);
       } catch {
         if (active) setLoading(false);
       }
     })();
+
     const unsubscribe = insforge.auth.onAuthStateChange(() => {
       if (active) setLoading(false);
     });
@@ -117,7 +202,13 @@ export default function HomePage() {
         setSummary(nextSummary);
         setProfile(nextProfile);
       })
-      .catch((e: Error) => setError(e.message));
+      .catch((e: Error) => {
+        if (e.message?.includes('401') || e.message?.includes('Unauthorized') || e.message?.includes('jwt expired')) {
+          signOut();
+        } else {
+          setError(e.message);
+        }
+      });
   }, [token]);
 
   const [dataVersion, setDataVersion] = useState(0);
@@ -182,9 +273,9 @@ export default function HomePage() {
   // Fallback to first available tab if current tab is restricted
   useEffect(() => {
     if (token && visibleTabs.length > 0 && !visibleTabs.some((t) => t.id === tab)) {
-      setTab(visibleTabs[0].id);
+      changeTab(visibleTabs[0].id);
     }
-  }, [token, visibleTabs, tab]);
+  }, [token, visibleTabs, tab, changeTab]);
 
   async function signIn(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -196,16 +287,41 @@ export default function HomePage() {
     }
     insforge.setAccessToken(data.accessToken);
     setToken(data.accessToken);
-    setUser({ email: data.user.email });
+    const userObj = { email: data.user.email, id: data.user.id };
+    setUser(userObj);
+
+    // Save active session in localStorage so F5 / refresh stays logged in
+    try {
+      localStorage.setItem('wms_auth_session', JSON.stringify({
+        accessToken: data.accessToken,
+        user: userObj,
+      }));
+    } catch {}
+
+    // Save or clear remembered credentials
+    try {
+      if (rememberPassword) {
+        localStorage.setItem('wms_remembered_credentials', JSON.stringify({ email, password }));
+      } else {
+        localStorage.removeItem('wms_remembered_credentials');
+      }
+    } catch {}
   }
 
   async function signOut() {
-    await insforge.auth.signOut();
+    try {
+      await insforge.auth.signOut().catch(() => {});
+    } catch {}
     insforge.setAccessToken(null);
     setToken(null);
     setUser(null);
     setProfile(null);
     setSummary(null);
+    try {
+      localStorage.removeItem('wms_auth_session');
+      localStorage.removeItem('wms_active_tab');
+      // Do NOT clear wms_remembered_credentials so user's password stays remembered if checked
+    } catch {}
   }
 
   async function revokeAll() {
@@ -232,40 +348,75 @@ export default function HomePage() {
       <main className="grid min-h-screen place-items-center bg-slate-50 p-6">
         <div className="w-full max-w-md space-y-4">
           <form onSubmit={signIn} className="rounded-2xl bg-white p-8 shadow-sm border border-slate-100 space-y-4">
-            <p className="text-sm font-semibold uppercase tracking-widest text-brand">WMS</p>
+            <div className="flex items-center gap-2">
+              <span className="rounded bg-blue-100 px-2 py-0.5 text-xs font-bold tracking-wider text-blue-800">WMS</span>
+              <p className="text-sm font-semibold uppercase tracking-widest text-brand">Logística</p>
+            </div>
             <h1 className="text-3xl font-bold text-slate-900">Iniciar sesión</h1>
-            <label className="block text-sm font-medium">
-              Correo
+
+            <label className="block text-sm font-medium text-slate-700">
+              Correo electrónico
               <input
-                className="mt-1.5 w-full rounded-lg border p-3 outline-blue-600"
+                name="email"
+                autoComplete="username"
+                className="mt-1.5 w-full rounded-lg border p-3 outline-blue-600 focus:ring-2 focus:ring-blue-500"
                 type="email"
                 required
+                placeholder="usuario@bodega.com"
                 value={email}
                 onChange={e => setEmail(e.target.value)}
               />
             </label>
-            <label className="block text-sm font-medium">
+
+            <label className="block text-sm font-medium text-slate-700">
               Contraseña
-              <input
-                className="mt-1.5 w-full rounded-lg border p-3 outline-blue-600"
-                type="password"
-                required
-                value={password}
-                onChange={e => setPassword(e.target.value)}
-              />
+              <div className="relative mt-1.5">
+                <input
+                  name="password"
+                  autoComplete="current-password"
+                  className="w-full rounded-lg border p-3 pr-10 outline-blue-600 focus:ring-2 focus:ring-blue-500"
+                  type={showPassword ? "text" : "password"}
+                  required
+                  placeholder="••••••••"
+                  value={password}
+                  onChange={e => setPassword(e.target.value)}
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute right-3 top-3.5 text-slate-400 hover:text-slate-600 text-sm cursor-pointer select-none"
+                  tabIndex={-1}
+                  title={showPassword ? "Ocultar contraseña" : "Ver contraseña"}
+                >
+                  {showPassword ? "👁️" : "👁️‍🗨️"}
+                </button>
+              </div>
             </label>
-            <div className="flex justify-end">
+
+            <div className="flex items-center justify-between pt-1">
+              <label className="flex items-center gap-2 cursor-pointer text-xs font-semibold text-slate-700 select-none">
+                <input
+                  type="checkbox"
+                  checked={rememberPassword}
+                  onChange={(e) => setRememberPassword(e.target.checked)}
+                  className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
+                />
+                <span>Recordar contraseña</span>
+              </label>
+
               <button
                 type="button"
                 onClick={() => setForgotOpen(true)}
-                className="text-xs font-semibold text-blue-600 hover:text-blue-800 transition"
+                className="text-xs font-semibold text-blue-600 hover:text-blue-800 transition cursor-pointer"
               >
                 ¿Olvidaste tu contraseña?
               </button>
             </div>
+
             {error && <p className="rounded-lg bg-red-50 p-3 text-sm text-danger">{error}</p>}
-            <button className="w-full rounded-lg bg-brand p-3 font-semibold text-white transition hover:bg-blue-800">
-              Entrar
+
+            <button className="w-full rounded-lg bg-brand p-3 font-semibold text-white transition hover:bg-blue-800 cursor-pointer shadow-sm">
+              Entrar al Sistema
             </button>
           </form>
 
@@ -335,7 +486,7 @@ export default function HomePage() {
               <button
                 key={item.id}
                 onClick={() => {
-                  setTab(item.id);
+                  changeTab(item.id);
                   setMobileMenuOpen(false);
                 }}
                 className={"flex items-center gap-2.5 w-full rounded-lg px-3 py-2.5 text-left text-sm transition " + (tab === item.id ? "bg-white/20 font-semibold text-white shadow-xs" : "text-blue-100 hover:bg-white/10")}
@@ -419,7 +570,7 @@ export default function HomePage() {
         {error && <p className="mt-6 rounded-lg bg-red-50 p-3 text-sm text-danger">{error}</p>}
 
         <div className="mt-8">
-          {tab === 'dashboard' && <Dashboard summary={summary} onNavigate={setTab} role={profile?.role} />}
+          {tab === 'dashboard' && <Dashboard summary={summary} onNavigate={changeTab} role={profile?.role} />}
           {tab === 'kpis' && <KPIPanel token={token} organizationId={profile?.organizationId} refreshKey={dataVersion} />}
           {tab === 'reports' && <ReportsPanel token={token} organizationId={profile?.organizationId} onDataChanged={refreshSummary} />}
           {tab === 'products' && <ProductsPanel token={token} role={profile?.role} onError={setError} onDataChanged={refreshSummary} />}
@@ -435,9 +586,9 @@ export default function HomePage() {
               onNavigate={(nextTab, locCode) => {
                 if (nextTab === 'mapping') {
                   if (locCode) setMappingInitialLocation(locCode);
-                  setTab('mapping');
+                  changeTab('mapping');
                 } else {
-                  setTab(nextTab as Tab);
+                  changeTab(nextTab as Tab);
                 }
               }}
             />
@@ -447,7 +598,7 @@ export default function HomePage() {
               token={token}
               onError={setError}
               initialLocationCode={mappingInitialLocation}
-              onNavigate={(nextTab) => setTab(nextTab as Tab)}
+              onNavigate={(nextTab) => changeTab(nextTab as Tab)}
               onDataChanged={refreshSummary}
             />
           )}
