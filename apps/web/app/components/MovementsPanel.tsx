@@ -56,6 +56,7 @@ export function MovementsPanel({
   // FIFO State
   const [fifoSuggestion, setFifoSuggestion] = useState<any>(null);
   const [loadingFifo, setLoadingFifo] = useState(false);
+  const [fifoRefreshKey, setFifoRefreshKey] = useState(0);
 
   // Scanner modal state
   const [scannerTarget, setScannerTarget] = useState<"product" | "location" | null>(null);
@@ -148,6 +149,16 @@ export function MovementsPanel({
       apiFetch<any>(`/operations/fifo/suggest/${form.productId}/${form.quantity}`, token)
         .then((data) => {
           setFifoSuggestion(data);
+          // Si hay sugerencias y la posición actual no tiene stock, pre-seleccionar la mejor ubicación FIFO
+          if (data && Array.isArray(data.suggestions) && data.suggestions.length > 0) {
+            setForm((current) => {
+              const hasMatchingLoc = data.suggestions.some((s: any) => s.locationId === current.locationId);
+              if (!hasMatchingLoc) {
+                return { ...current, locationId: data.suggestions[0].locationId };
+              }
+              return current;
+            });
+          }
         })
         .catch(() => {
           setFifoSuggestion(null);
@@ -156,7 +167,7 @@ export function MovementsPanel({
     } else {
       setFifoSuggestion(null);
     }
-  }, [mode, form.productId, form.quantity, token]);
+  }, [mode, form.productId, form.quantity, token, fifoRefreshKey]);
 
   // Cargar cola offline al inicio y escuchar estado de red
   useEffect(() => {
@@ -212,6 +223,11 @@ export function MovementsPanel({
       return;
     }
 
+    if (mode === "exit" && fifoSuggestion && Array.isArray(fifoSuggestion.suggestions) && fifoSuggestion.suggestions.length === 0) {
+      setLocalError("No es posible despachar: este producto no cuenta con existencias registradas en ninguna posición de la bodega.");
+      return;
+    }
+
     const payload =
       mode === "transfer"
         ? {
@@ -261,7 +277,14 @@ export function MovementsPanel({
 
     try {
       await apiFetch(`/movements/${mode}`, token, { method: "POST", body: JSON.stringify(payload) });
-      await loadMovements();
+      const [updatedLocations] = await Promise.all([
+        apiFetch<Page<Location>>("/locations?pageSize=500", token).catch(() => null),
+        loadMovements(),
+      ]);
+      if (updatedLocations?.items) {
+        setLocations(updatedLocations.items);
+      }
+      setFifoRefreshKey((k) => k + 1);
       onDataChanged?.();
 
       const prodObj = products.find((p) => p.id === form.productId);
@@ -523,6 +546,19 @@ export function MovementsPanel({
         </div>
       )}
 
+      {/* No Stock Alert (Exit Mode) */}
+      {mode === "exit" && fifoSuggestion && Array.isArray(fifoSuggestion.suggestions) && fifoSuggestion.suggestions.length === 0 && (
+        <div className="rounded-xl border border-amber-200 bg-amber-50/80 p-4 shadow-sm text-sm text-amber-900 flex items-center gap-3">
+          <span className="text-xl">⚠️</span>
+          <div>
+            <p className="font-bold">Sin existencias registradas para despachar</p>
+            <p className="text-xs text-amber-800">
+              Este producto no cuenta con existencias en ninguna posición del almacén. Realiza una entrada o ajuste previo para poder registrar una salida.
+            </p>
+          </div>
+        </div>
+      )}
+
       {/* Main Movement Form */}
       <form onSubmit={submit} className="space-y-4 rounded-xl bg-white p-5 shadow-sm border border-slate-100">
         <div className="grid gap-3 md:grid-cols-2">
@@ -572,11 +608,16 @@ export function MovementsPanel({
               value={form.locationId}
               onChange={(e) => setForm({ ...form, locationId: e.target.value })}
             >
-              {allLocations.map((location) => (
-                <option key={location.id} value={location.id}>
-                  {location.code} — {location.status}
-                </option>
-              ))}
+              {allLocations.map((location) => {
+                const fifoMatch = mode === "exit" && fifoSuggestion?.suggestions?.find((s: any) => s.locationId === location.id);
+                return (
+                  <option key={location.id} value={location.id}>
+                    {fifoMatch
+                      ? `⭐ ${location.code} — CON STOCK (${fifoMatch.availableQuantity} u disponible)`
+                      : `${location.code} — ${location.status}`}
+                  </option>
+                );
+              })}
             </select>
           </div>
 

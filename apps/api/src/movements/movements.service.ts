@@ -51,7 +51,7 @@ export class MovementsService {
   receive(data: ReceiveStockDto, userId: string) {
     return this.callMovementFunction(Prisma.sql`
       SELECT public.wms_receive_stock(
-        ${data.productId}::uuid, ${data.locationId}::uuid, ${data.quantity},
+        ${data.productId}::uuid, ${data.locationId}::uuid, ${data.quantity}::integer,
         ${data.reason ?? null}, ${userId}::uuid, ${data.reference ?? null}
       ) AS "movementId"
     `);
@@ -60,7 +60,7 @@ export class MovementsService {
   issue(data: IssueStockDto, userId: string) {
     return this.callMovementFunction(Prisma.sql`
       SELECT public.wms_issue_stock(
-        ${data.productId}::uuid, ${data.locationId}::uuid, ${data.quantity},
+        ${data.productId}::uuid, ${data.locationId}::uuid, ${data.quantity}::integer,
         ${data.reason ?? null}, ${userId}::uuid, ${data.reference ?? null}
       ) AS "movementId"
     `);
@@ -70,7 +70,7 @@ export class MovementsService {
     return this.callMovementFunction(Prisma.sql`
       SELECT public.wms_transfer_stock(
         ${data.productId}::uuid, ${data.sourceLocationId}::uuid,
-        ${data.destinationLocationId}::uuid, ${data.quantity},
+        ${data.destinationLocationId}::uuid, ${data.quantity}::integer,
         ${data.reason ?? null}, ${userId}::uuid, ${data.reference ?? null}
       ) AS "movementId"
     `);
@@ -79,7 +79,7 @@ export class MovementsService {
   adjustment(data: AdjustStockDto, userId: string) {
     return this.callMovementFunction(Prisma.sql`
       SELECT public.wms_adjust_stock(
-        ${data.productId}::uuid, ${data.locationId}::uuid, ${data.delta},
+        ${data.productId}::uuid, ${data.locationId}::uuid, ${data.delta}::integer,
         ${data.reason ?? null}, ${userId}::uuid, ${data.reference ?? null}
       ) AS "movementId"
     `);

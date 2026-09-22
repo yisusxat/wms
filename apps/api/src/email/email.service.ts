@@ -8,9 +8,9 @@ export class EmailService {
   private readonly resend: Resend | null = null;
   private readonly fromEmail: string;
 
-  constructor(private readonly config: ConfigService) {
-    const apiKey = this.config.get<string>('RESEND_API_KEY');
-    this.fromEmail = this.config.get<string>('EMAIL_FROM', 'WMS Logística <onboarding@resend.dev>');
+  constructor(private readonly config?: ConfigService) {
+    const apiKey = this.config?.get<string>('RESEND_API_KEY') ?? process.env.RESEND_API_KEY;
+    this.fromEmail = this.config?.get<string>('EMAIL_FROM') ?? process.env.EMAIL_FROM ?? 'WMS Logística <onboarding@resend.dev>';
     if (apiKey) {
       this.resend = new Resend(apiKey);
       this.logger.log('Resend email client initialized successfully');
@@ -47,7 +47,7 @@ export class EmailService {
   }
 
   async sendPasswordResetEmail(to: string, resetToken: string, name?: string): Promise<boolean> {
-    const webOrigin = this.config.get<string>('WEB_ORIGIN', 'http://localhost:3000');
+    const webOrigin = this.config?.get<string>('WEB_ORIGIN') ?? process.env.WEB_ORIGIN ?? 'http://localhost:3000';
     const resetUrl = `${webOrigin}/?resetToken=${resetToken}&email=${encodeURIComponent(to)}`;
 
     const html = `
@@ -77,7 +77,7 @@ export class EmailService {
   }
 
   async sendWelcomeEmail(to: string, orgName: string, tempPassword?: string, name?: string): Promise<boolean> {
-    const webOrigin = this.config.get<string>('WEB_ORIGIN', 'http://localhost:3000');
+    const webOrigin = this.config?.get<string>('WEB_ORIGIN') ?? process.env.WEB_ORIGIN ?? 'http://localhost:3000';
 
     const html = `
       <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 600px; margin: 0 auto; padding: 24px; color: #1e293b;">

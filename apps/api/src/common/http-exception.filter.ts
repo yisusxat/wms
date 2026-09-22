@@ -29,7 +29,19 @@ export class HttpExceptionFilter implements ExceptionFilter {
         message = 'Referenced record does not exist';
       } else if (exception.code === 'P2010') {
         status = HttpStatus.BAD_REQUEST;
-        message = 'Inventory operation rejected';
+        const rawMsg = (exception.meta?.message as string) || exception.message || '';
+        if (rawMsg.includes('insufficient stock')) {
+          message = 'Stock insuficiente en la posición para realizar el despacho o ajuste.';
+        } else if (rawMsg.includes('quantity must be greater than zero')) {
+          message = 'La cantidad debe ser mayor a cero.';
+        } else if (rawMsg.includes('destination is not available')) {
+          message = 'La ubicación de destino no se encuentra disponible.';
+        } else if (rawMsg.includes('source and destination cannot be the same')) {
+          message = 'La ubicación de origen y destino no pueden ser iguales.';
+        } else {
+          const match = rawMsg.match(/ERROR:\s*([^\n]+)/i);
+          message = match ? match[1].trim() : ((exception.meta?.message as string) || 'Operación de inventario rechazada');
+        }
       }
     }
 

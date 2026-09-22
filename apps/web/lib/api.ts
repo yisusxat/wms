@@ -125,7 +125,7 @@ export async function apiFetch<T>(path: string, token: string, init?: RequestIni
         }
         return json as T;
       }
-      // If endpoint doesn't exist on NestJS backend (404), fall back to InsForge computation
+      // If endpoint doesn't exist on NestJS backend (404) or fails with 4xx/5xx
       if (response.status !== 404 && response.status >= 400 && response.status < 500) {
         const payload = await response.json().catch(() => null);
         const errMsg = Array.isArray(payload?.message) ? payload.message.join(', ') : (payload?.message ?? `Error (${response.status})`);
@@ -133,9 +133,21 @@ export async function apiFetch<T>(path: string, token: string, init?: RequestIni
         if (errMsg.includes('pageSize')) {
           return fallbackInsforge<T>(requestPath, token, requestInit);
         }
+        // If it's a clear inventory business validation (e.g. insufficient stock), throw it directly to alert user
+        if (errMsg.toLowerCase().includes('stock') || errMsg.toLowerCase().includes('insuficiente') || errMsg.toLowerCase().includes('cantidad')) {
+          throw new Error(errMsg);
+        }
+        // If the error was on movements or locations due to role restriction or older schema, fall back to InsForge direct
+        if (response.status === 403 || response.status === 401 || response.status === 404) {
+          console.warn(`NestJS API ${requestPath} returned ${response.status}, falling back to direct InsForge BaaS`);
+          return fallbackInsforge<T>(requestPath, token, requestInit);
+        }
         throw new Error(errMsg);
       }
     } catch (err: any) {
+      if (requestPath.startsWith('/movements/') || requestPath.startsWith('/locations/')) {
+        return fallbackInsforge<T>(requestPath, token, requestInit);
+      }
       if (err?.message && !err.message.includes('Failed to fetch') && !err.message.includes('NetworkError') && !err.message.includes('fetch failed')) {
         throw err;
       }
@@ -502,37 +514,42 @@ async function fallbackInsforge<T>(path: string, token: string, init?: RequestIn
       } else if (subpath === 'exit' && sourceLocId && parsed.productId) {
         const invRes = await fetch(`${insforgeUrl}/api/database/records/inventory?product_id=eq.${parsed.productId}&location_id=eq.${sourceLocId}`, { headers });
         const invList = invRes.ok ? await invRes.json().catch(() => []) : [];
-        if (Array.isArray(invList) && invList.length > 0) {
-          const cur = invList[0];
-          const newQ = Math.max(0, (cur.quantity || 0) - qty);
-          await fetch(`${insforgeUrl}/api/database/records/inventory?id=eq.${cur.id}`, {
+        if (!Array.isArray(invList) || invList.length === 0 || (invList[0].quantity || 0) < qty) {
+          const avail = Array.isArray(invList) && invList[0] ? invList[0].quantity : 0;
+          throw new Error(`Stock insuficiente en la ubicación seleccionada (${avail} disponibles, solicitados ${qty}).`);
+        }
+        const cur = invList[0];
+        const newQ = Math.max(0, (cur.quantity || 0) - qty);
+        await fetch(`${insforgeUrl}/api/database/records/inventory?id=eq.${cur.id}`, {
+          method: 'PATCH',
+          headers,
+          body: JSON.stringify({ quantity: newQ }),
+        });
+
+        // If location is emptied, set status to AVAILABLE
+        if (newQ === 0) {
+          const srcQuery = isUuid(sourceLocId) ? `id=eq.${sourceLocId}` : `code=eq.${sourceLocId}`;
+          await fetch(`${insforgeUrl}/api/database/records/locations?${srcQuery}`, {
             method: 'PATCH',
             headers,
-            body: JSON.stringify({ quantity: newQ }),
-          });
-
-          // If location is emptied, set status to AVAILABLE
-          if (newQ === 0) {
-            const srcQuery = isUuid(sourceLocId) ? `id=eq.${sourceLocId}` : `code=eq.${sourceLocId}`;
-            await fetch(`${insforgeUrl}/api/database/records/locations?${srcQuery}`, {
-              method: 'PATCH',
-              headers,
-              body: JSON.stringify({ status: 'AVAILABLE' }),
-            }).catch(() => {});
-          }
+            body: JSON.stringify({ status: 'AVAILABLE' }),
+          }).catch(() => {});
         }
       } else if (subpath === 'transfer' && sourceLocId && destLocId && parsed.productId) {
         // Source decrement
         const srcRes = await fetch(`${insforgeUrl}/api/database/records/inventory?product_id=eq.${parsed.productId}&location_id=eq.${sourceLocId}`, { headers });
         const srcList = srcRes.ok ? await srcRes.json().catch(() => []) : [];
-        if (Array.isArray(srcList) && srcList.length > 0) {
-          const cur = srcList[0];
-          const newSrcQ = Math.max(0, (cur.quantity || 0) - qty);
-          await fetch(`${insforgeUrl}/api/database/records/inventory?id=eq.${cur.id}`, {
-            method: 'PATCH',
-            headers,
-            body: JSON.stringify({ quantity: newSrcQ }),
-          });
+        if (!Array.isArray(srcList) || srcList.length === 0 || (srcList[0].quantity || 0) < qty) {
+          const avail = Array.isArray(srcList) && srcList[0] ? srcList[0].quantity : 0;
+          throw new Error(`Stock insuficiente en la ubicación de origen (${avail} disponibles, solicitados ${qty}).`);
+        }
+        const cur = srcList[0];
+        const newSrcQ = Math.max(0, (cur.quantity || 0) - qty);
+        await fetch(`${insforgeUrl}/api/database/records/inventory?id=eq.${cur.id}`, {
+          method: 'PATCH',
+          headers,
+          body: JSON.stringify({ quantity: newSrcQ }),
+        });
 
           if (newSrcQ === 0) {
             const srcQuery = isUuid(sourceLocId) ? `id=eq.${sourceLocId}` : `code=eq.${sourceLocId}`;
@@ -542,7 +559,6 @@ async function fallbackInsforge<T>(path: string, token: string, init?: RequestIn
               body: JSON.stringify({ status: 'AVAILABLE' }),
             }).catch(() => {});
           }
-        }
         // Destination increment
         const destRes = await fetch(`${insforgeUrl}/api/database/records/inventory?product_id=eq.${parsed.productId}&location_id=eq.${destLocId}`, { headers });
         const destList = destRes.ok ? await destRes.json().catch(() => []) : [];

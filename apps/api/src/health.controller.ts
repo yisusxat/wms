@@ -23,6 +23,7 @@ export class HealthController {
       };
     } catch (error: any) {
       throw new ServiceUnavailableException({
+        message: error?.message ?? 'Database unreachable',
         status: 'error',
         service: 'wms-api',
         database: {

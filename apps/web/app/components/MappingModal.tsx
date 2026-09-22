@@ -1,5 +1,5 @@
 "use client";
-import { useState, useEffect, useMemo, Component, ErrorInfo, ReactNode } from "react";
+import { useState, useEffect, useMemo, useCallback, Component, ErrorInfo, ReactNode } from "react";
 import { apiFetch, Location, Product, InventoryItem, getWarehouseSeedLocations, resolveLocationUuid, normalizeLocationCode } from "../../lib/api";
 
 // Error boundary to protect the UI
@@ -184,27 +184,18 @@ function MappingModalInner({
   const [addEmptyProductId, setAddEmptyProductId] = useState("");
   const [addEmptyQuantity, setAddEmptyQuantity] = useState(1);
 
-  // Initialize data on open
-  useEffect(() => {
-    if (!isOpen) return;
+  // Direct modification state and feedback
+  const [isApplyingDirect, setIsApplyingDirect] = useState(false);
+  const [directFeedback, setDirectFeedback] = useState<{ type: "success" | "error"; message: string } | null>(null);
 
+  // Reusable function to load and refresh mapping data from backend / InsForge
+  const loadData = useCallback(() => {
     setLoading(true);
-    setStep("AUDIT");
-    setEditingCode(null);
-    setShowAddEmpty(false);
-    if (initialLocationCode) {
-      setSearch(initialLocationCode);
-      setSelectedLocationCode(initialLocationCode);
-    } else {
-      setSearch("");
-      setSelectedLocationCode(null);
-    }
-
     const fetchLocationsPromise = (locations && locations.length > 0)
       ? Promise.resolve({ items: locations })
       : apiFetch<{ items?: Location[] }>("/locations?pageSize=500", token).catch(() => ({ items: [] }));
 
-    Promise.all([
+    return Promise.all([
       apiFetch<{ items?: InventoryItem[] }>("/inventory?pageSize=500", token).catch(() => ({ items: [] })),
       apiFetch<{ items?: Product[] }>("/products?pageSize=200", token).catch(() => ({ items: [] })),
       fetchLocationsPromise,
@@ -262,43 +253,80 @@ function MappingModalInner({
           }
         }
 
-        // Build audit list based on all warehouse locations
-        const auditList: AuditItem[] = allWarehouseLocs.map((loc) => {
-          const inv =
-            invMap.get(loc.code) ||
-            invMap.get(normalizeLocationCode(loc.code)) ||
-            invMap.get(loc.id) ||
-            (resolveLocationUuid(loc.id) ? invMap.get(resolveLocationUuid(loc.id)!) : undefined);
-          const hasInv = Boolean(inv && (inv.quantity || 0) > 0);
-          const prod = inv && typeof inv.product === "object" ? inv.product : undefined;
+        // Build audit list based on all warehouse locations, preserving any currently staged DISCREPANCY
+        setItems((currentItems) => {
+          const stagedMap = new Map<string, AuditItem>();
+          if (Array.isArray(currentItems)) {
+            for (const it of currentItems) {
+              if (it.status === "DISCREPANCY") {
+                stagedMap.set(it.locationCode, it);
+              }
+            }
+          }
 
-          return {
-            locationId: resolveLocationUuid(loc.id) || resolveLocationUuid(loc.code) || loc.id,
-            locationCode: loc.code || "POS-DESCONOCIDA",
-            systemProductId: hasInv ? prod?.id : undefined,
-            systemProductName: hasInv ? prod?.name || "Producto Asignado" : "Posición Disponible (Vacía)",
-            systemProductSku: hasInv ? prod?.sku || "SKU" : "VACÍO",
-            systemProductUnit: prod?.unit || "u",
-            systemQuantity: hasInv ? inv?.quantity || 0 : 0,
-            status: "PENDING",
-            physicalQuantity: hasInv ? inv?.quantity || 0 : 0,
-            physicalProductId: hasInv ? prod?.id : undefined,
-            physicalProductName: hasInv ? prod?.name : undefined,
-            physicalProductSku: hasInv ? prod?.sku : undefined,
-            physicalProductUnit: prod?.unit || "u",
-            reason: COMMON_REASONS[0],
-            notes: "",
-          };
+          return allWarehouseLocs.map((loc) => {
+            const staged = stagedMap.get(loc.code);
+            const inv =
+              invMap.get(loc.code) ||
+              invMap.get(normalizeLocationCode(loc.code)) ||
+              invMap.get(loc.id) ||
+              (resolveLocationUuid(loc.id) ? invMap.get(resolveLocationUuid(loc.id)!) : undefined);
+            const hasInv = Boolean(inv && (inv.quantity || 0) > 0);
+            const prod = inv && typeof inv.product === "object" ? inv.product : undefined;
+
+            if (staged) {
+              return {
+                ...staged,
+                systemProductId: hasInv ? prod?.id : undefined,
+                systemProductName: hasInv ? prod?.name || "Producto Asignado" : "Posición Disponible (Vacía)",
+                systemProductSku: hasInv ? prod?.sku || "SKU" : "VACÍO",
+                systemProductUnit: prod?.unit || "u",
+                systemQuantity: hasInv ? inv?.quantity || 0 : 0,
+              };
+            }
+
+            return {
+              locationId: resolveLocationUuid(loc.id) || resolveLocationUuid(loc.code) || loc.id,
+              locationCode: loc.code || "POS-DESCONOCIDA",
+              systemProductId: hasInv ? prod?.id : undefined,
+              systemProductName: hasInv ? prod?.name || "Producto Asignado" : "Posición Disponible (Vacía)",
+              systemProductSku: hasInv ? prod?.sku || "SKU" : "VACÍO",
+              systemProductUnit: prod?.unit || "u",
+              systemQuantity: hasInv ? inv?.quantity || 0 : 0,
+              status: "PENDING",
+              physicalQuantity: hasInv ? inv?.quantity || 0 : 0,
+              physicalProductId: hasInv ? prod?.id : undefined,
+              physicalProductName: hasInv ? prod?.name : undefined,
+              physicalProductSku: hasInv ? prod?.sku : undefined,
+              physicalProductUnit: prod?.unit || "u",
+              reason: COMMON_REASONS[0],
+              notes: "",
+            };
+          });
         });
-
-        setItems(auditList);
-        if (initialLocationCode) {
-          setSelectedLocationCode(initialLocationCode);
-        }
       })
       .catch((err) => console.warn("Error cargando inventario de mapeo:", err))
       .finally(() => setLoading(false));
-  }, [isOpen, token, initialLocationCode, locations, refreshKey]);
+  }, [locations, token]);
+
+  // Initialize data on open
+  useEffect(() => {
+    if (!isOpen) return;
+
+    setStep("AUDIT");
+    setEditingCode(null);
+    setShowAddEmpty(false);
+    setDirectFeedback(null);
+    if (initialLocationCode) {
+      setSearch(initialLocationCode);
+      setSelectedLocationCode(initialLocationCode);
+    } else {
+      setSearch("");
+      setSelectedLocationCode(null);
+    }
+
+    loadData();
+  }, [isOpen, initialLocationCode, refreshKey, loadData]);
 
   // Index items by locationCode for instant O(1) 2D square lookups
   const auditMap = useMemo(() => {
@@ -443,13 +471,15 @@ function MappingModalInner({
   // Open Edit Form for an item
   const handleOpenEdit = (item: AuditItem) => {
     setEditingCode(item.locationCode);
+    setDirectFeedback(null);
+    const isEmpty = !item.systemProductId || item.systemQuantity === 0;
     const initialProdId = item.physicalProductId || item.systemProductId || (safeProducts[0]?.id ?? "");
     const initialProd = safeProducts.find((p) => p.id === initialProdId);
     setProductSearchQuery(initialProd ? initialProd.name : "");
-    setIsProductDropdownOpen(false);
+    setIsProductDropdownOpen(isEmpty);
     setEditForm({
       physicalQuantity: item.physicalQuantity,
-      differentProduct: Boolean(item.physicalProductId && item.physicalProductId !== item.systemProductId),
+      differentProduct: isEmpty ? true : Boolean(item.physicalProductId && item.physicalProductId !== item.systemProductId),
       physicalProductId: initialProdId,
       reassignLocation: Boolean(item.reassignedLocationId),
       reassignedLocationId: item.reassignedLocationId || (safeLocations[0]?.id ?? ""),
@@ -458,28 +488,37 @@ function MappingModalInner({
     });
   };
 
-  // Save Edit Form
+  // Save Edit Form in Audit Batch (staged discrepancy)
   const handleSaveEdit = (locationCode: string) => {
+    const item = items.find((i) => i.locationCode === locationCode);
+    const isEmpty = !item?.systemProductId || item?.systemQuantity === 0;
+    const effectiveDiffProd = isEmpty ? true : editForm.differentProduct;
     const selectedProd = safeProducts.find((p) => p.id === editForm.physicalProductId);
     const selectedLoc = safeLocations.find((l) => l.id === editForm.reassignedLocationId);
 
-    setItems((curr) =>
-      curr.map((item) => {
-        if (item.locationCode !== locationCode) return item;
+    const targetProdId = effectiveDiffProd ? editForm.physicalProductId : (item?.systemProductId ?? editForm.physicalProductId);
+    const targetProdName = effectiveDiffProd ? selectedProd?.name || "Producto Asignado" : (item?.systemProductName ?? selectedProd?.name ?? "Producto Asignado");
+    const targetProdSku = effectiveDiffProd ? selectedProd?.sku || "SKU" : (item?.systemProductSku ?? selectedProd?.sku ?? "SKU");
+    const targetProdUnit = effectiveDiffProd ? selectedProd?.unit || "u" : (item?.systemProductUnit ?? selectedProd?.unit ?? "u");
+    const targetQty = Number(editForm.physicalQuantity);
 
-        const isDiscrepancy =
-          editForm.physicalQuantity !== item.systemQuantity ||
-          (editForm.differentProduct && editForm.physicalProductId !== item.systemProductId) ||
-          editForm.reassignLocation;
+    const isDiscrepancy =
+      targetQty !== (item?.systemQuantity ?? 0) ||
+      (effectiveDiffProd && targetProdId !== item?.systemProductId) ||
+      editForm.reassignLocation;
+
+    setItems((curr) =>
+      curr.map((it) => {
+        if (it.locationCode !== locationCode) return it;
 
         return {
-          ...item,
+          ...it,
           status: isDiscrepancy ? "DISCREPANCY" : "MATCHED",
-          physicalQuantity: Number(editForm.physicalQuantity),
-          physicalProductId: editForm.differentProduct ? editForm.physicalProductId : item.systemProductId,
-          physicalProductName: editForm.differentProduct ? selectedProd?.name || "Nuevo Producto" : item.systemProductName,
-          physicalProductSku: editForm.differentProduct ? selectedProd?.sku || "SKU" : item.systemProductSku,
-          physicalProductUnit: editForm.differentProduct ? selectedProd?.unit || "u" : item.systemProductUnit,
+          physicalQuantity: targetQty,
+          physicalProductId: targetProdId,
+          physicalProductName: targetProdName,
+          physicalProductSku: targetProdSku,
+          physicalProductUnit: targetProdUnit,
           reassignedLocationId: editForm.reassignLocation ? editForm.reassignedLocationId : undefined,
           reassignedLocationCode: editForm.reassignLocation ? selectedLoc?.code : undefined,
           reason: editForm.reason,
@@ -489,6 +528,320 @@ function MappingModalInner({
     );
 
     setEditingCode(null);
+    setDirectFeedback({
+      type: "success",
+      message: `Modificación guardada en borrador de auditoría (${targetQty} u). Puedes aplicarla ahora con el botón 'Aplicar en BD' o confirmarla al finalizar la auditoría.`
+    });
+  };
+
+  // Directly apply edit form changes to database in real time
+  const handleApplyDirectEdit = async (locationCode: string) => {
+    const item = items.find((i) => i.locationCode === locationCode);
+    if (!item) return;
+
+    const isEmpty = !item.systemProductId || item.systemQuantity === 0;
+    const effectiveDiffProd = isEmpty ? true : editForm.differentProduct;
+    const selectedProd = safeProducts.find((p) => p.id === editForm.physicalProductId);
+    const selectedLoc = safeLocations.find((l) => l.id === editForm.reassignedLocationId);
+
+    const targetProdId = effectiveDiffProd ? editForm.physicalProductId : (item.systemProductId ?? editForm.physicalProductId);
+    const targetProdName = effectiveDiffProd ? selectedProd?.name || "Producto Asignado" : item.systemProductName;
+    const targetProdSku = effectiveDiffProd ? selectedProd?.sku || "SKU" : item.systemProductSku;
+    const targetProdUnit = effectiveDiffProd ? selectedProd?.unit || "u" : item.systemProductUnit;
+    const targetQty = Number(editForm.physicalQuantity);
+
+    if (targetQty > 0 && !targetProdId) {
+      alert("Por favor selecciona un producto para asignar a esta posición.");
+      return;
+    }
+
+    setIsApplyingDirect(true);
+    setDirectFeedback(null);
+
+    const now = new Date();
+    const folio = `MAP-DIR-${now.getFullYear()}-${now.getTime().toString().slice(-5)}`;
+    const sourceLocId = resolveLocationUuid(item.locationId) || resolveLocationUuid(item.locationCode) || item.locationId;
+    const destLocId = editForm.reassignLocation
+      ? (resolveLocationUuid(editForm.reassignedLocationId) || resolveLocationUuid(selectedLoc?.code) || editForm.reassignedLocationId)
+      : undefined;
+
+    try {
+      // 1. REASSIGNMENT / TRANSFER
+      if (editForm.reassignLocation && destLocId && targetProdId) {
+        await apiFetch("/movements/transfer", token, {
+          method: "POST",
+          body: JSON.stringify({
+            productId: targetProdId,
+            sourceLocationId: sourceLocId,
+            destinationLocationId: destLocId,
+            quantity: targetQty > 0 ? targetQty : Math.max(1, item.systemQuantity),
+            reference: folio,
+            reason: `Mapeo Directo: Reasignación de ${item.locationCode} a ${selectedLoc?.code || destLocId}. ${editForm.notes || ''}`,
+          }),
+        });
+      }
+      // 2. PRODUCT SUBSTITUTION
+      else if (targetProdId && item.systemProductId && targetProdId !== item.systemProductId) {
+        if (item.systemQuantity > 0) {
+          await apiFetch("/movements/adjustment", token, {
+            method: "POST",
+            body: JSON.stringify({
+              productId: item.systemProductId,
+              locationId: sourceLocId,
+              delta: -item.systemQuantity,
+              reference: folio,
+              reason: `Mapeo Directo: Retiro de SKU anterior ${item.systemProductSku} en ${item.locationCode}`,
+            }),
+          });
+        }
+        if (targetQty > 0) {
+          await apiFetch("/movements/entry", token, {
+            method: "POST",
+            body: JSON.stringify({
+              productId: targetProdId,
+              locationId: sourceLocId,
+              quantity: targetQty,
+              reference: folio,
+              reason: `Mapeo Directo: Asignación física de nuevo SKU ${targetProdSku} en ${item.locationCode}. ${editForm.notes || ''}`,
+            }),
+          });
+        }
+      }
+      // 3. NEW PRODUCT IN EMPTY LOCATION
+      else if (targetProdId && (!item.systemProductId || item.systemQuantity === 0) && targetQty > 0) {
+        await apiFetch("/movements/entry", token, {
+          method: "POST",
+          body: JSON.stringify({
+            productId: targetProdId,
+            locationId: sourceLocId,
+            quantity: targetQty,
+            reference: folio,
+            reason: `Mapeo Directo: Hallazgo de stock en posición ${item.locationCode}. ${editForm.notes || ''}`,
+          }),
+        });
+      }
+      // 4. QUANTITY ADJUSTMENT
+      else if (targetProdId && targetQty !== item.systemQuantity) {
+        const delta = targetQty - item.systemQuantity;
+        await apiFetch("/movements/adjustment", token, {
+          method: "POST",
+          body: JSON.stringify({
+            productId: targetProdId,
+            locationId: sourceLocId,
+            delta: delta,
+            reference: folio,
+            reason: `Mapeo Directo: ${editForm.reason}. ${editForm.notes || ''}`,
+          }),
+        });
+      }
+
+      // Synchronize location operational status (OCCUPIED if targetQty > 0, AVAILABLE if 0)
+      const updatedStatus = targetQty > 0 ? "OCCUPIED" : "AVAILABLE";
+      await apiFetch(`/locations/${sourceLocId}`, token, {
+        method: "PATCH",
+        body: JSON.stringify({ status: updatedStatus }),
+      }).catch(() => {});
+
+      // Record audit log
+      await apiFetch("/audit-logs", token, {
+        method: "POST",
+        body: JSON.stringify({
+          action: "WAREHOUSE_MAPPING_DIRECT_MODIFICATION",
+          entity: "WAREHOUSE_2D",
+          details: {
+            folio,
+            locationCode: item.locationCode,
+            productSku: targetProdSku,
+            oldQuantity: item.systemQuantity,
+            newQuantity: targetQty,
+            reason: editForm.reason,
+          },
+        }),
+      }).catch(() => {});
+
+      // Update local item to MATCHED with new values
+      setItems((curr) =>
+        curr.map((it) => {
+          if (it.locationCode !== locationCode) return it;
+          return {
+            ...it,
+            status: "MATCHED",
+            systemProductId: targetQty > 0 ? targetProdId : undefined,
+            systemProductName: targetQty > 0 ? targetProdName : "Posición Disponible (Vacía)",
+            systemProductSku: targetQty > 0 ? targetProdSku : "VACÍO",
+            systemProductUnit: targetProdUnit,
+            systemQuantity: targetQty,
+            physicalQuantity: targetQty,
+            physicalProductId: targetQty > 0 ? targetProdId : undefined,
+            physicalProductName: targetQty > 0 ? targetProdName : undefined,
+            physicalProductSku: targetQty > 0 ? targetProdSku : undefined,
+            physicalProductUnit: targetProdUnit,
+            reassignedLocationId: undefined,
+            reassignedLocationCode: undefined,
+            reason: editForm.reason,
+            notes: editForm.notes,
+          };
+        })
+      );
+
+      setEditingCode(null);
+      setDirectFeedback({
+        type: "success",
+        message: `¡Posición ${locationCode} modificada y sincronizada en tiempo real con la base de datos! (${targetQty} ${targetProdUnit} de ${targetProdName})`
+      });
+
+      onSuccess();
+    } catch (err: any) {
+      console.error("Direct modification err:", err);
+      setDirectFeedback({
+        type: "error",
+        message: `Error al aplicar modificación: ${err.message || 'Error en servidor'}`
+      });
+    } finally {
+      setIsApplyingDirect(false);
+    }
+  };
+
+  // Directly apply an existing staged discrepancy
+  const handleApplySingleDiscrepancy = async (disc: AuditItem) => {
+    setIsApplyingDirect(true);
+    setDirectFeedback(null);
+
+    const now = new Date();
+    const folio = `MAP-DIR-${now.getFullYear()}-${now.getTime().toString().slice(-5)}`;
+    const sourceLocId = resolveLocationUuid(disc.locationId) || resolveLocationUuid(disc.locationCode) || disc.locationId;
+    const destLocId = disc.reassignedLocationId
+      ? (resolveLocationUuid(disc.reassignedLocationId) || resolveLocationUuid(disc.reassignedLocationCode) || disc.reassignedLocationId)
+      : undefined;
+
+    try {
+      // 1. REASSIGNMENT / TRANSFER
+      if (destLocId && (disc.physicalProductId || disc.systemProductId)) {
+        const prodId = disc.physicalProductId || disc.systemProductId;
+        await apiFetch("/movements/transfer", token, {
+          method: "POST",
+          body: JSON.stringify({
+            productId: prodId,
+            sourceLocationId: sourceLocId,
+            destinationLocationId: destLocId,
+            quantity: disc.physicalQuantity > 0 ? disc.physicalQuantity : Math.max(1, disc.systemQuantity),
+            reference: folio,
+            reason: `Mapeo Directo: Reasignación de ${disc.locationCode} a ${disc.reassignedLocationCode}. ${disc.notes || ''}`,
+          }),
+        });
+      }
+      // 2. PRODUCT SUBSTITUTION
+      else if (disc.physicalProductId && disc.systemProductId && disc.physicalProductId !== disc.systemProductId) {
+        if (disc.systemQuantity > 0) {
+          await apiFetch("/movements/adjustment", token, {
+            method: "POST",
+            body: JSON.stringify({
+              productId: disc.systemProductId,
+              locationId: sourceLocId,
+              delta: -disc.systemQuantity,
+              reference: folio,
+              reason: `Mapeo Directo: Retiro de SKU anterior en ${disc.locationCode}`,
+            }),
+          });
+        }
+        if (disc.physicalQuantity > 0) {
+          await apiFetch("/movements/entry", token, {
+            method: "POST",
+            body: JSON.stringify({
+              productId: disc.physicalProductId,
+              locationId: sourceLocId,
+              quantity: disc.physicalQuantity,
+              reference: folio,
+              reason: `Mapeo Directo: Asignación física de ${disc.physicalProductSku} en ${disc.locationCode}. ${disc.notes || ''}`,
+            }),
+          });
+        }
+      }
+      // 3. NEW PRODUCT IN EMPTY LOCATION
+      else if (disc.physicalProductId && (!disc.systemProductId || disc.systemQuantity === 0) && disc.physicalQuantity > 0) {
+        await apiFetch("/movements/entry", token, {
+          method: "POST",
+          body: JSON.stringify({
+            productId: disc.physicalProductId,
+            locationId: sourceLocId,
+            quantity: disc.physicalQuantity,
+            reference: folio,
+            reason: `Mapeo Directo: Hallazgo de stock en ${disc.locationCode}. ${disc.notes || ''}`,
+          }),
+        });
+      }
+      // 4. QUANTITY ADJUSTMENT
+      else if ((disc.physicalProductId || disc.systemProductId) && disc.physicalQuantity !== disc.systemQuantity) {
+        const prodId = disc.physicalProductId || disc.systemProductId;
+        const delta = disc.physicalQuantity - disc.systemQuantity;
+        await apiFetch("/movements/adjustment", token, {
+          method: "POST",
+          body: JSON.stringify({
+            productId: prodId,
+            locationId: sourceLocId,
+            delta: delta,
+            reference: folio,
+            reason: `Mapeo Directo: ${disc.reason}. ${disc.notes || ''}`,
+          }),
+        });
+      }
+
+      // Synchronize location operational status
+      const updatedStatus = disc.physicalQuantity > 0 ? "OCCUPIED" : "AVAILABLE";
+      await apiFetch(`/locations/${sourceLocId}`, token, {
+        method: "PATCH",
+        body: JSON.stringify({ status: updatedStatus }),
+      }).catch(() => {});
+
+      // Record audit log
+      await apiFetch("/audit-logs", token, {
+        method: "POST",
+        body: JSON.stringify({
+          action: "WAREHOUSE_MAPPING_DIRECT_MODIFICATION",
+          entity: "WAREHOUSE_2D",
+          details: {
+            folio,
+            locationCode: disc.locationCode,
+            newQuantity: disc.physicalQuantity,
+            reason: disc.reason,
+          },
+        }),
+      }).catch(() => {});
+
+      // Mark local item as MATCHED with new values
+      setItems((curr) =>
+        curr.map((it) => {
+          if (it.locationCode !== disc.locationCode) return it;
+          return {
+            ...it,
+            status: "MATCHED",
+            systemProductId: disc.physicalProductId ?? disc.systemProductId,
+            systemProductName: disc.physicalProductName ?? disc.systemProductName,
+            systemProductSku: disc.physicalProductSku ?? disc.systemProductSku,
+            systemProductUnit: disc.physicalProductUnit ?? disc.systemProductUnit,
+            systemQuantity: disc.physicalQuantity,
+            physicalQuantity: disc.physicalQuantity,
+            reassignedLocationId: undefined,
+            reassignedLocationCode: undefined,
+          };
+        })
+      );
+
+      setDirectFeedback({
+        type: "success",
+        message: `¡Modificación de ${disc.locationCode} aplicada y sincronizada en tiempo real con la base de datos! (${disc.physicalQuantity} ${disc.physicalProductUnit})`
+      });
+
+      onSuccess();
+    } catch (err: any) {
+      console.error("Apply single discrepancy err:", err);
+      setDirectFeedback({
+        type: "error",
+        message: `Error al aplicar modificación: ${err.message || 'Error en servidor'}`
+      });
+    } finally {
+      setIsApplyingDirect(false);
+    }
   };
 
   // Add empty location to audit
@@ -671,7 +1024,7 @@ function MappingModalInner({
           }
         }
         // Discrepancy scenario 3: NEW PRODUCT IN PREVIOUSLY EMPTY LOCATION
-        else if (disc.physicalProductId && !disc.systemProductId && disc.physicalQuantity > 0) {
+        else if (disc.physicalProductId && (!disc.systemProductId || disc.systemQuantity === 0) && disc.physicalQuantity > 0) {
           try {
             await apiFetch("/movements/entry", token, {
               method: "POST",
@@ -680,7 +1033,7 @@ function MappingModalInner({
                 locationId: sourceLocId,
                 quantity: disc.physicalQuantity,
                 reference: folio,
-                reason: `Mapeo: Hallazgo de stock físico en posición vacía ${disc.locationCode}`,
+                reason: `Mapeo: Hallazgo de stock físico en posición vacía ${disc.locationCode}. ${disc.notes || ''}`,
               }),
             });
             executedLogs.push({
@@ -700,17 +1053,18 @@ function MappingModalInner({
           }
         }
         // Discrepancy scenario 4: STOCK QUANTITY ADJUSTMENT (Same product, physical count != system count)
-        else if (disc.systemProductId && disc.physicalQuantity !== disc.systemQuantity) {
+        else if ((disc.physicalProductId || disc.systemProductId) && disc.physicalQuantity !== disc.systemQuantity) {
+          const prodId = disc.physicalProductId || disc.systemProductId;
           const delta = disc.physicalQuantity - disc.systemQuantity;
           try {
             await apiFetch("/movements/adjustment", token, {
               method: "POST",
               body: JSON.stringify({
-                productId: disc.systemProductId,
+                productId: prodId,
                 locationId: sourceLocId,
                 delta: delta,
                 reference: folio,
-                reason: `Mapeo: ${disc.reason}. ${disc.notes}`,
+                reason: `Mapeo: ${disc.reason}. ${disc.notes || ''}`,
               }),
             });
 
@@ -773,6 +1127,7 @@ function MappingModalInner({
 
       setStep("REPORT");
       onSuccess();
+      loadData();
     } catch (err) {
       alert(`Error al procesar el mapeo: ${(err as Error).message}`);
     } finally {
@@ -966,6 +1321,45 @@ function MappingModalInner({
                 <span className="text-[10px] uppercase font-bold text-indigo-700">Exactitud IRA</span>
                 <p className="text-sm font-black text-indigo-900">{stats.ira}%</p>
               </div>
+            </div>
+          </div>
+        )}
+
+        {/* Sticky Action Banner when there are pending modifications in audit batch */}
+        {step === "AUDIT" && stats.discrepancies > 0 && (
+          <div className="mx-6 my-3 rounded-2xl border-2 border-amber-400 bg-amber-50 p-4 shadow-md flex flex-wrap items-center justify-between gap-3 animate-fadeIn">
+            <div className="flex items-center gap-3">
+              <span className="flex h-10 w-10 items-center justify-center rounded-2xl bg-amber-500 text-white font-black text-xl shadow-sm">
+                ⚠️
+              </span>
+              <div>
+                <h4 className="font-black text-slate-900 text-xs sm:text-sm">
+                  Tienes {stats.discrepancies} {stats.discrepancies === 1 ? "modificación en borrador" : "modificaciones en borrador"} pendientes de aplicar en la base de datos
+                </h4>
+                <p className="text-xs text-amber-900 font-medium">
+                  Confirma las modificaciones para sincronizar el inventario físico en tiempo real con todas las secciones del sistema.
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={handleConfirmModifications}
+                disabled={submitting}
+                className="rounded-xl bg-indigo-600 px-5 py-2.5 text-xs font-black text-white hover:bg-indigo-700 shadow-md transition hover:scale-105 active:scale-95 cursor-pointer disabled:opacity-50 flex items-center gap-2"
+              >
+                <span>{submitting ? "⏳" : "🚀"}</span>
+                <span>{submitting ? "Aplicando en BD..." : `Confirmar y Aplicar en BD (${stats.discrepancies})`}</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setStep("PRE_REPORT")}
+                className="rounded-xl border border-indigo-200 bg-white px-3.5 py-2.5 text-xs font-bold text-indigo-700 hover:bg-indigo-50 transition cursor-pointer"
+              >
+                Revisar Pre-Reporte ➔
+              </button>
             </div>
           </div>
         )}
@@ -1488,6 +1882,20 @@ function MappingModalInner({
                   </div>
                 </div>
 
+                {/* Direct feedback notification banner inside modal */}
+                {directFeedback && (
+                  <div
+                    className={`p-3 rounded-2xl text-xs font-bold border flex items-center gap-2 animate-fadeIn ${
+                      directFeedback.type === "success"
+                        ? "bg-emerald-50 text-emerald-900 border-emerald-300"
+                        : "bg-red-50 text-red-900 border-red-300"
+                    }`}
+                  >
+                    <span>{directFeedback.type === "success" ? "✅" : "❌"}</span>
+                    <p className="flex-1">{directFeedback.message}</p>
+                  </div>
+                )}
+
                 {/* Discrepancy details if modified */}
                 {activeSelectedItem.status === "DISCREPANCY" && editingCode !== activeSelectedItem.locationCode && (
                   <div className="rounded-2xl border border-amber-300 bg-amber-50/50 p-3.5 space-y-2">
@@ -1525,6 +1933,19 @@ function MappingModalInner({
                 {/* Normal Actions (When not in edit mode) */}
                 {editingCode !== activeSelectedItem.locationCode ? (
                   <div className="space-y-3 pt-2">
+                    {/* Quick Apply Button if there's a staged discrepancy */}
+                    {activeSelectedItem.status === "DISCREPANCY" && (
+                      <button
+                        type="button"
+                        onClick={() => handleApplySingleDiscrepancy(activeSelectedItem)}
+                        disabled={isApplyingDirect}
+                        className="w-full rounded-2xl bg-indigo-600 py-3 text-xs font-black text-white shadow-md hover:bg-indigo-700 transition hover:scale-101 active:scale-98 flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+                      >
+                        <span>{isApplyingDirect ? "⏳" : "🚀"}</span>
+                        <span>{isApplyingDirect ? "Sincronizando con Base de Datos..." : "Aplicar y Sincronizar Modificación en BD Ahora"}</span>
+                      </button>
+                    )}
+
                     <button
                       onClick={() => handleMarkMatched(activeSelectedItem.locationCode, false)}
                       className="w-full rounded-2xl bg-emerald-600 py-3 text-xs font-black text-white shadow-md hover:bg-emerald-700 transition hover:scale-102 active:scale-98 flex items-center justify-center gap-2 cursor-pointer"
@@ -1616,34 +2037,46 @@ function MappingModalInner({
                       </div>
                     </div>
 
-                    {/* 2. Cambiar Producto con Búsqueda en Tiempo Real */}
-                    <div className="space-y-1.5">
-                      <div className="flex items-center justify-between">
-                        <label className="font-bold text-slate-700 text-xs flex items-center gap-1.5">
-                          <span>2. ¿Es otro producto diferente?</span>
-                          {editForm.differentProduct && selectedProduct && (
-                            <span className="rounded bg-indigo-100 px-1.5 py-0.5 text-[10px] font-bold text-indigo-800 font-mono">
-                              {selectedProduct.sku}
-                            </span>
-                          )}
-                        </label>
-                        <input
-                          type="checkbox"
-                          checked={editForm.differentProduct}
-                          onChange={(e) => {
-                            const checked = e.target.checked;
-                            setEditForm({ ...editForm, differentProduct: checked });
-                            if (checked) {
-                              setIsProductDropdownOpen(true);
-                            } else {
-                              setIsProductDropdownOpen(false);
-                            }
-                          }}
-                          className="h-4 w-4 rounded text-indigo-600 cursor-pointer"
-                        />
-                      </div>
+                    {/* 2. Asignar o Cambiar Producto */}
+                    <div className="space-y-2">
+                      {(!activeSelectedItem.systemProductId || activeSelectedItem.systemQuantity === 0) ? (
+                        <div className="rounded-xl bg-indigo-50/70 p-2.5 border border-indigo-200 flex items-center justify-between">
+                          <label className="font-black text-indigo-950 text-xs flex items-center gap-1.5">
+                            <span>2. Asignar Producto Físico a esta Posición:</span>
+                            {selectedProduct && (
+                              <span className="rounded bg-indigo-200 px-1.5 py-0.5 text-[10px] font-bold text-indigo-900 font-mono">
+                                {selectedProduct.sku}
+                              </span>
+                            )}
+                          </label>
+                          <span className="rounded bg-indigo-100 px-2 py-0.5 text-[10px] font-bold text-indigo-700 uppercase">
+                            Requerido
+                          </span>
+                        </div>
+                      ) : (
+                        <div className="flex items-center justify-between">
+                          <label className="font-bold text-slate-700 text-xs flex items-center gap-1.5">
+                            <span>2. ¿Sustituir por otro producto diferente? (Cambio de SKU)</span>
+                            {editForm.differentProduct && selectedProduct && (
+                              <span className="rounded bg-indigo-100 px-1.5 py-0.5 text-[10px] font-bold text-indigo-800 font-mono">
+                                {selectedProduct.sku}
+                              </span>
+                            )}
+                          </label>
+                          <input
+                            type="checkbox"
+                            checked={editForm.differentProduct}
+                            onChange={(e) => {
+                              const checked = e.target.checked;
+                              setEditForm({ ...editForm, differentProduct: checked });
+                              setIsProductDropdownOpen(checked);
+                            }}
+                            className="h-4 w-4 rounded text-indigo-600 cursor-pointer"
+                          />
+                        </div>
+                      )}
 
-                      {editForm.differentProduct && (
+                      {((!activeSelectedItem.systemProductId || activeSelectedItem.systemQuantity === 0) || editForm.differentProduct) && (
                         <div className="space-y-2 rounded-2xl bg-indigo-50/50 p-3 border border-indigo-200 animate-fadeIn">
                           <label className="block text-[11px] font-bold text-slate-600">
                             Escribe para buscar y filtrar el producto:
@@ -1845,19 +2278,34 @@ function MappingModalInner({
                     </div>
 
                     {/* Form Buttons */}
-                    <div className="flex gap-2 pt-2">
+                    <div className="space-y-2 pt-2 border-t border-slate-100">
                       <button
-                        onClick={() => setEditingCode(null)}
-                        className="flex-1 rounded-xl border border-slate-200 py-2.5 font-bold text-slate-600 hover:bg-slate-50"
+                        type="button"
+                        onClick={() => handleApplyDirectEdit(activeSelectedItem.locationCode)}
+                        disabled={isApplyingDirect}
+                        className="w-full rounded-2xl bg-indigo-600 py-3 text-xs font-black text-white hover:bg-indigo-700 shadow-md transition hover:scale-101 active:scale-98 cursor-pointer disabled:opacity-50 flex items-center justify-center gap-2"
                       >
-                        Cancelar
+                        <span>{isApplyingDirect ? "⏳" : "⚡"}</span>
+                        <span>{isApplyingDirect ? "Guardando y Sincronizando en BD..." : "Guardar y Aplicar a BD Ahora (Tiempo Real)"}</span>
                       </button>
-                      <button
-                        onClick={() => handleSaveEdit(activeSelectedItem.locationCode)}
-                        className="flex-1 rounded-xl bg-indigo-600 py-2.5 font-bold text-white hover:bg-indigo-700 shadow-md"
-                      >
-                        Guardar Modificación
-                      </button>
+
+                      <div className="flex gap-2">
+                        <button
+                          type="button"
+                          onClick={() => setEditingCode(null)}
+                          className="flex-1 rounded-xl border border-slate-200 py-2 font-bold text-slate-600 hover:bg-slate-50 transition"
+                        >
+                          Cancelar
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleSaveEdit(activeSelectedItem.locationCode)}
+                          className="flex-1 rounded-xl border-2 border-indigo-200 bg-indigo-50/80 py-2 font-bold text-indigo-900 hover:bg-indigo-100 transition shadow-xs text-center"
+                          title="Guarda en borrador de auditoría para confirmar en el cierre general"
+                        >
+                          Guardar en Borrador Auditoría
+                        </button>
+                      </div>
                     </div>
                   </div>
                 )}

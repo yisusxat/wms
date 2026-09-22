@@ -40,7 +40,7 @@ export class MovementsController {
   }
 
   @Post('adjustment')
-  @Roles('ADMIN', 'SUPERVISOR')
+  @Roles('ADMIN', 'SUPERVISOR', 'OPERATOR')
   adjustment(@Body() body: AdjustStockDto, @CurrentUser() user: AuthenticatedUser) {
     return this.movements.adjustment(body, user.id);
   }
