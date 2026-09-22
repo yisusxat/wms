@@ -27,11 +27,13 @@ export function MovementsPanel({
   role,
   onError,
   onDataChanged,
+  refreshKey,
 }: {
   token: string;
   role?: CurrentUser["role"];
   onError: (value: string) => void;
   onDataChanged?: () => void;
+  refreshKey?: number;
 }) {
   const [mode, setMode] = useState<Mode>("entry");
   const [products, setProducts] = useState<Product[]>([]);
@@ -88,7 +90,7 @@ export function MovementsPanel({
         }));
       })
       .catch((e: Error) => onError(e.message));
-  }, [token]);
+  }, [token, refreshKey]);
 
   // Consultar Smart Slotting cuando cambia el producto en modo entrada
   useEffect(() => {

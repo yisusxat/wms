@@ -1,6 +1,6 @@
 "use client";
 import { useState, useEffect, useMemo, Component, ErrorInfo, ReactNode } from "react";
-import { apiFetch, Location, Product, InventoryItem, getWarehouseSeedLocations, resolveLocationUuid } from "../../lib/api";
+import { apiFetch, Location, Product, InventoryItem, getWarehouseSeedLocations, resolveLocationUuid, normalizeLocationCode } from "../../lib/api";
 
 // Error boundary to protect the UI
 class ModalErrorBoundary extends Component<
@@ -243,16 +243,30 @@ function MappingModalInner({
         for (const item of invList) {
           if (!item) continue;
           if (typeof item.location === "object" && item.location) {
-            if (item.location.code) invMap.set(item.location.code, item);
-            if (item.location.id) invMap.set(item.location.id, item);
+            if (item.location.code) {
+              invMap.set(item.location.code, item);
+              invMap.set(normalizeLocationCode(item.location.code), item);
+            }
+            if (item.location.id) {
+              invMap.set(item.location.id, item);
+              const res = resolveLocationUuid(item.location.id);
+              if (res) invMap.set(res, item);
+            }
           } else if (typeof item.location === "string") {
             invMap.set(item.location, item);
+            invMap.set(normalizeLocationCode(item.location), item);
+            const res = resolveLocationUuid(item.location);
+            if (res) invMap.set(res, item);
           }
         }
 
         // Build audit list based on all warehouse locations
         const auditList: AuditItem[] = allWarehouseLocs.map((loc) => {
-          const inv = invMap.get(loc.code) || invMap.get(loc.id);
+          const inv =
+            invMap.get(loc.code) ||
+            invMap.get(normalizeLocationCode(loc.code)) ||
+            invMap.get(loc.id) ||
+            (resolveLocationUuid(loc.id) ? invMap.get(resolveLocationUuid(loc.id)!) : undefined);
           const hasInv = Boolean(inv && (inv.quantity || 0) > 0);
           const prod = inv && typeof inv.product === "object" ? inv.product : undefined;
 
@@ -567,6 +581,7 @@ function MappingModalInner({
           ? (resolveLocationUuid(disc.reassignedLocationId) || resolveLocationUuid(disc.reassignedLocationCode) || disc.reassignedLocationId)
           : undefined;
 
+        // Discrepancy scenario 1: REASSIGNMENT (Physical inventory was moved to another location)
         if (destLocId && disc.systemProductId) {
           try {
             await apiFetch("/movements/transfer", token, {
@@ -584,7 +599,7 @@ function MappingModalInner({
             executedLogs.push({
               type: "REASIGNACION",
               location: disc.locationCode,
-              detail: `Reasignado a ${disc.reassignedLocationCode} (${disc.physicalQuantity} u)`,
+              detail: `Reasignado a ${disc.reassignedLocationCode} (${disc.physicalQuantity > 0 ? disc.physicalQuantity : disc.systemQuantity} u)`,
               reason: disc.reason,
             });
           } catch (err: any) {
@@ -596,7 +611,94 @@ function MappingModalInner({
               reason: disc.reason,
             });
           }
-        } else if (disc.systemProductId && disc.physicalQuantity !== disc.systemQuantity) {
+        }
+        // Discrepancy scenario 2: SKU REPLACEMENT / SUBSTITUTION (Different product physically found in this position)
+        else if (disc.physicalProductId && disc.systemProductId && disc.physicalProductId !== disc.systemProductId) {
+          // A) Clear out old system product stock
+          if (disc.systemQuantity > 0) {
+            try {
+              await apiFetch("/movements/adjustment", token, {
+                method: "POST",
+                body: JSON.stringify({
+                  productId: disc.systemProductId,
+                  locationId: sourceLocId,
+                  delta: -disc.systemQuantity,
+                  reference: folio,
+                  reason: `Mapeo: Retiro de SKU anterior por sustitución física en ${disc.locationCode}`,
+                }),
+              });
+              executedLogs.push({
+                type: "RETIRO_SKU_ANTERIOR",
+                location: disc.locationCode,
+                detail: `Retirado SKU anterior ${disc.systemProductSku}: -${disc.systemQuantity} u`,
+                reason: disc.reason,
+              });
+            } catch (err: any) {
+              console.error("Removal err:", err);
+            }
+          }
+
+          // B) Ingest new physical product stock
+          if (disc.physicalQuantity > 0) {
+            try {
+              await apiFetch("/movements/entry", token, {
+                method: "POST",
+                body: JSON.stringify({
+                  productId: disc.physicalProductId,
+                  locationId: sourceLocId,
+                  quantity: disc.physicalQuantity,
+                  reference: folio,
+                  reason: `Mapeo: Regularización física de nuevo SKU ${disc.physicalProductSku} en ${disc.locationCode}`,
+                }),
+              });
+              executedLogs.push({
+                type: "REGULARIZACION_SKU",
+                location: disc.locationCode,
+                detail: `Ingresado nuevo SKU: ${disc.physicalProductSku} (${disc.physicalQuantity} u)`,
+                reason: disc.reason,
+              });
+            } catch (err: any) {
+              console.error("Entry err:", err);
+              executedLogs.push({
+                type: "ERROR_REGULARIZACION",
+                location: disc.locationCode,
+                detail: `Error al regularizar: ${err.message}`,
+                reason: disc.reason,
+              });
+            }
+          }
+        }
+        // Discrepancy scenario 3: NEW PRODUCT IN PREVIOUSLY EMPTY LOCATION
+        else if (disc.physicalProductId && !disc.systemProductId && disc.physicalQuantity > 0) {
+          try {
+            await apiFetch("/movements/entry", token, {
+              method: "POST",
+              body: JSON.stringify({
+                productId: disc.physicalProductId,
+                locationId: sourceLocId,
+                quantity: disc.physicalQuantity,
+                reference: folio,
+                reason: `Mapeo: Hallazgo de stock físico en posición vacía ${disc.locationCode}`,
+              }),
+            });
+            executedLogs.push({
+              type: "REGULARIZACION_SKU",
+              location: disc.locationCode,
+              detail: `Ingreso de producto encontrado: ${disc.physicalProductSku} (${disc.physicalQuantity} u)`,
+              reason: disc.reason,
+            });
+          } catch (err: any) {
+            console.error("Entry err:", err);
+            executedLogs.push({
+              type: "ERROR_REGULARIZACION",
+              location: disc.locationCode,
+              detail: `Error al regularizar: ${err.message}`,
+              reason: disc.reason,
+            });
+          }
+        }
+        // Discrepancy scenario 4: STOCK QUANTITY ADJUSTMENT (Same product, physical count != system count)
+        else if (disc.systemProductId && disc.physicalQuantity !== disc.systemQuantity) {
           const delta = disc.physicalQuantity - disc.systemQuantity;
           try {
             await apiFetch("/movements/adjustment", token, {
@@ -625,34 +727,17 @@ function MappingModalInner({
               reason: disc.reason,
             });
           }
-        } else if (disc.physicalProductId && (!disc.systemProductId || disc.physicalProductId !== disc.systemProductId)) {
-          try {
-            await apiFetch("/movements/entry", token, {
-              method: "POST",
-              body: JSON.stringify({
-                productId: disc.physicalProductId,
-                locationId: sourceLocId,
-                quantity: disc.physicalQuantity,
-                reference: folio,
-                reason: `Mapeo: Regularización de producto en ${disc.locationCode}`,
-              }),
-            });
+        }
 
-            executedLogs.push({
-              type: "REGULARIZACION_SKU",
-              location: disc.locationCode,
-              detail: `Asignado nuevo SKU: ${disc.physicalProductSku} (${disc.physicalQuantity} u)`,
-              reason: disc.reason,
-            });
-          } catch (err: any) {
-            console.error("Entry err:", err);
-            executedLogs.push({
-              type: "ERROR_REGULARIZACION",
-              location: disc.locationCode,
-              detail: `Error al regularizar: ${err.message}`,
-              reason: disc.reason,
-            });
-          }
+        // Also synchronize location operational status in real time (OCCUPIED if physicalQuantity > 0, AVAILABLE if 0)
+        const updatedStatus = disc.physicalQuantity > 0 ? "OCCUPIED" : "AVAILABLE";
+        try {
+          await apiFetch(`/locations/${sourceLocId}`, token, {
+            method: "PATCH",
+            body: JSON.stringify({ status: updatedStatus }),
+          });
+        } catch {
+          // Non-blocking fallback
         }
       }
 
@@ -2037,7 +2122,10 @@ function MappingModalInner({
               </button>
 
               <button
-                onClick={onClose}
+                onClick={() => {
+                  onSuccess();
+                  onClose();
+                }}
                 className="rounded-xl bg-slate-900 px-6 py-2.5 font-bold text-white shadow-md hover:bg-slate-800 transition"
               >
                 {inline ? "Finalizar y Cerrar Sección" : "Finalizar y Volver al Plano 2D"}

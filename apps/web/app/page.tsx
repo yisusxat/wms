@@ -576,13 +576,14 @@ export default function HomePage() {
           {tab === 'products' && <ProductsPanel token={token} role={profile?.role} onError={setError} onDataChanged={refreshSummary} />}
           {tab === 'locations' && <Locations token={token} onError={setError} refreshKey={dataVersion} />}
           {tab === 'inventory' && <Inventory token={token} onError={setError} refreshKey={dataVersion} />}
-          {tab === 'movements' && <MovementsPanel token={token} role={profile?.role} onError={setError} onDataChanged={refreshSummary} />}
+          {tab === 'movements' && <MovementsPanel token={token} role={profile?.role} onError={setError} onDataChanged={refreshSummary} refreshKey={dataVersion} />}
           {tab === 'warehouse3d' && <Warehouse3D token={token} onError={setError} />}
           {tab === 'warehouse2d' && (
             <Warehouse2D
               token={token}
               onError={setError}
               onDataChanged={refreshSummary}
+              refreshKey={dataVersion}
               onNavigate={(nextTab, locCode) => {
                 if (nextTab === 'mapping') {
                   if (locCode) setMappingInitialLocation(locCode);

@@ -30,6 +30,7 @@ export function WarehouseMappingView({
         locations={locations}
         initialLocationCode={initialLocationCode}
         onClose={() => {
+          onDataChanged?.();
           if (onNavigate) {
             onNavigate('warehouse2d');
           }

@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { apiFetch, getWarehouseSeedLocations, Location, Page, resolveLocationUuid } from '../../lib/api';
+import { apiFetch, getWarehouseSeedLocations, Location, Page, resolveLocationUuid, InventoryItem, normalizeLocationCode } from '../../lib/api';
 import { Entry2DModal } from './Entry2DModal';
 import { Exit2DModal } from './Exit2DModal';
 import { MappingModal } from './MappingModal';
@@ -54,6 +54,7 @@ const STATUS_CONFIG: Record<
 
 type TooltipInfo = {
   location: Location;
+  inventory?: InventoryItem | null;
   x: number;
   y: number;
 };
@@ -63,11 +64,13 @@ interface Warehouse2DProps {
   onError: (value: string) => void;
   onNavigate?: (tab: string, locationCode?: string) => void;
   onDataChanged?: () => void;
+  refreshKey?: number;
 }
 
-export function Warehouse2D({ token, onError, onNavigate, onDataChanged }: Warehouse2DProps) {
+export function Warehouse2D({ token, onError, onNavigate, onDataChanged, refreshKey }: Warehouse2DProps) {
   // Pre-seed with all 148 locations so squares are 100% visible immediately
   const [locations, setLocations] = useState<Location[]>(() => getWarehouseSeedLocations());
+  const [inventoryMap, setInventoryMap] = useState<Map<string, InventoryItem>>(new Map());
   const [selected, setSelected] = useState<Location | null>(null);
   const [tooltip, setTooltip] = useState<TooltipInfo | null>(null);
   const [levelFilter, setLevelFilter] = useState<'all' | '1' | '2'>('all');
@@ -78,13 +81,44 @@ export function Warehouse2D({ token, onError, onNavigate, onDataChanged }: Wareh
   const [exitModalOpen, setExitModalOpen] = useState(false);
 
   const refreshLocations = () => {
-    apiFetch<Page<Location>>('/locations?pageSize=500', token)
-      .then((page) => {
-        if (page.items && page.items.length > 0) {
-          // Merge live statuses
+    Promise.all([
+      apiFetch<Page<Location>>('/locations?pageSize=500', token).catch(() => ({ items: [] as Location[] })),
+      apiFetch<Page<InventoryItem>>('/inventory?pageSize=500', token).catch(() => ({ items: [] as InventoryItem[] })),
+    ])
+      .then(([locPage, invPage]) => {
+        const invItems = invPage?.items || [];
+        const invM = new Map<string, InventoryItem>();
+        for (const item of invItems) {
+          if (!item || (item.quantity || 0) <= 0) continue;
+          if (item.location && typeof item.location === 'object') {
+            if (item.location.code) {
+              invM.set(item.location.code, item);
+              invM.set(normalizeLocationCode(item.location.code), item);
+            }
+            if (item.location.id) {
+              invM.set(item.location.id, item);
+              const resId = resolveLocationUuid(item.location.id);
+              if (resId) invM.set(resId, item);
+            }
+          }
+        }
+        setInventoryMap(invM);
+
+        if (locPage.items && locPage.items.length > 0) {
+          // Merge live statuses and update with inventory occupancy
           setLocations((current) => {
-            const liveMap = new Map(page.items.map((l) => [l.code, l]));
-            return current.map((loc) => liveMap.get(loc.code) ?? loc);
+            const liveMap = new Map(locPage.items.map((l) => [l.code, l]));
+            return current.map((loc) => {
+              const live = liveMap.get(loc.code) ?? loc;
+              const hasStock = invM.has(loc.code) || invM.has(normalizeLocationCode(loc.code)) || invM.has(loc.id);
+              let computedStatus = live.status;
+              if (hasStock && live.status === 'AVAILABLE') {
+                computedStatus = 'OCCUPIED';
+              } else if (!hasStock && live.status === 'OCCUPIED') {
+                computedStatus = 'AVAILABLE';
+              }
+              return { ...live, status: computedStatus };
+            });
           });
         }
       })
@@ -96,7 +130,7 @@ export function Warehouse2D({ token, onError, onNavigate, onDataChanged }: Wareh
   // Fetch live updates from API / InsForge
   useEffect(() => {
     refreshLocations();
-  }, [token, onError]);
+  }, [token, onError, refreshKey]);
 
   // Index locations by "Aisle-RackCode-Level-Position"
   const locationMap = useMemo(() => {
@@ -222,8 +256,14 @@ export function Warehouse2D({ token, onError, onNavigate, onDataChanged }: Wareh
         } ${highlighted ? 'z-30 scale-125 ring-4 ring-amber-400 animate-pulse shadow-xl' : ''}`}
         onMouseEnter={(e) => {
           const rect = e.currentTarget.getBoundingClientRect();
+          const invItem =
+            inventoryMap.get(loc.code) ||
+            inventoryMap.get(normalizeLocationCode(loc.code)) ||
+            inventoryMap.get(loc.id) ||
+            null;
           setTooltip({
             location: loc,
+            inventory: invItem,
             x: rect.right + 12,
             y: rect.top - 8,
           });
@@ -349,6 +389,18 @@ export function Warehouse2D({ token, onError, onNavigate, onDataChanged }: Wareh
             className="rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs font-bold text-slate-700 hover:bg-slate-50 shadow-sm"
           >
             {orderAsc ? 'Orden: Entrada (01) → Fondo' : 'Orden: Fondo (01) → Entrada'}
+          </button>
+
+          <button
+            onClick={() => {
+              refreshLocations();
+              onDataChanged?.();
+            }}
+            className="flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs font-bold text-slate-700 hover:bg-slate-50 shadow-sm transition hover:scale-105 active:scale-95"
+            title="Sincronizar ubicaciones e inventario físico en tiempo real"
+          >
+            <span>🔄</span>
+            <span>Actualizar Plano</span>
           </button>
 
           <button
@@ -635,8 +687,8 @@ export function Warehouse2D({ token, onError, onNavigate, onDataChanged }: Wareh
       {/* 4. Floating Tooltip */}
       {tooltip && (
         <div
-          className="pointer-events-none fixed z-50 min-w-[200px] rounded-2xl bg-slate-900/95 p-3.5 text-white shadow-2xl backdrop-blur-md border border-slate-700 animate-fadeIn"
-          style={{ left: Math.min(tooltip.x, window.innerWidth - 220), top: tooltip.y }}
+          className="pointer-events-none fixed z-50 min-w-[220px] max-w-[300px] rounded-2xl bg-slate-900/95 p-3.5 text-white shadow-2xl backdrop-blur-md border border-slate-700 animate-fadeIn"
+          style={{ left: Math.min(tooltip.x, window.innerWidth - 240), top: tooltip.y }}
         >
           <div className="flex items-center justify-between gap-2 border-b border-slate-800 pb-2">
             <span className="font-mono text-base font-black text-amber-400">{tooltip.location.code}</span>
@@ -652,6 +704,22 @@ export function Warehouse2D({ token, onError, onNavigate, onDataChanged }: Wareh
                 {STATUS_CONFIG[tooltip.location.status]?.label}
               </strong>
             </p>
+            {tooltip.inventory ? (
+              <div className="my-2 rounded-xl bg-slate-800/90 p-2.5 border border-slate-700">
+                <div className="flex items-center justify-between text-[10px] font-bold uppercase tracking-wider text-emerald-400">
+                  <span>Stock Físico</span>
+                  <span className="font-mono bg-emerald-950/80 text-emerald-300 px-1.5 py-0.5 rounded border border-emerald-800/50">
+                    {tooltip.inventory.quantity} {tooltip.inventory.product?.unit || 'u'}
+                  </span>
+                </div>
+                <p className="mt-1 font-mono font-bold text-amber-300 text-xs truncate">
+                  {tooltip.inventory.product?.sku || 'SKU'}
+                </p>
+                <p className="text-[11px] text-slate-200 line-clamp-2 leading-snug mt-0.5">
+                  {tooltip.inventory.product?.name || 'Producto Asignado'}
+                </p>
+              </div>
+            ) : null}
             <p className="flex justify-between">
               <span className="text-slate-400">Nivel:</span>
               <span className="font-bold text-white">
@@ -695,66 +763,116 @@ export function Warehouse2D({ token, onError, onNavigate, onDataChanged }: Wareh
               </button>
             </div>
 
-            {/* Availability Banner */}
-            <div className="mt-5">
-              {selected.status === 'AVAILABLE' ? (
-                <div className="rounded-2xl border-2 border-emerald-200 bg-emerald-50 p-4">
-                  <div className="flex items-center gap-3">
-                    <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-500 text-xl text-white shadow-sm">
-                      ✓
-                    </span>
-                    <div>
-                      <h4 className="font-black text-emerald-900">UBICACIÓN DISPONIBLE</h4>
-                      <p className="text-xs text-emerald-700">
-                        Esta posición está 100% vacía y lista para recibir ingresos de mercadería.
-                      </p>
+            {/* Availability Banner with Live Product Info */}
+            {(() => {
+              const activeInv = selected
+                ? inventoryMap.get(selected.code) ||
+                  inventoryMap.get(normalizeLocationCode(selected.code)) ||
+                  inventoryMap.get(selected.id) ||
+                  null
+                : null;
+
+              return (
+                <div className="mt-5">
+                  {selected.status === 'AVAILABLE' ? (
+                    <div className="rounded-2xl border-2 border-emerald-200 bg-emerald-50 p-4">
+                      <div className="flex items-center gap-3">
+                        <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-500 text-xl text-white shadow-sm">
+                          ✓
+                        </span>
+                        <div>
+                          <h4 className="font-black text-emerald-900">UBICACIÓN DISPONIBLE</h4>
+                          <p className="text-xs text-emerald-700">
+                            Esta posición está 100% vacía y lista para recibir ingresos de mercadería.
+                          </p>
+                        </div>
+                      </div>
                     </div>
-                  </div>
-                </div>
-              ) : selected.status === 'OCCUPIED' ? (
-                <div className="rounded-2xl border-2 border-rose-200 bg-rose-50 p-4">
-                  <div className="flex items-center gap-3">
-                    <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-rose-500 text-xl text-white shadow-sm">
-                      📦
-                    </span>
-                    <div>
-                      <h4 className="font-black text-rose-900">UBICACIÓN OCUPADA</h4>
-                      <p className="text-xs text-rose-700">
-                        Posición con stock registrado. No ingresar productos hasta que sea liberada.
-                      </p>
+                  ) : selected.status === 'OCCUPIED' ? (
+                    activeInv ? (
+                      <div className="rounded-2xl border-2 border-rose-200 bg-rose-50 p-4">
+                        <div className="flex items-start gap-3">
+                          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-rose-500 text-xl text-white shadow-sm">
+                            📦
+                          </span>
+                          <div className="w-full min-w-0">
+                            <div className="flex items-center justify-between">
+                              <h4 className="font-black text-rose-900">UBICACIÓN OCUPADA</h4>
+                              <span className="rounded-full bg-rose-200 px-2 py-0.5 text-[10px] font-black text-rose-800">
+                                Stock Físico
+                              </span>
+                            </div>
+                            <p className="text-xs text-rose-700 mt-0.5">
+                              Contiene producto asignado en la auditoría física y sistema.
+                            </p>
+                            <div className="mt-3 rounded-xl border border-rose-200 bg-white p-3 shadow-sm text-xs space-y-1">
+                              <div className="flex items-center justify-between">
+                                <span className="font-mono font-black text-rose-800 text-sm">
+                                  {activeInv.product?.sku || 'SKU N/D'}
+                                </span>
+                                <span className="font-black text-slate-900 text-sm bg-slate-100 px-2.5 py-0.5 rounded-lg border border-slate-200">
+                                  {activeInv.quantity} {activeInv.product?.unit || 'uds'}
+                                </span>
+                              </div>
+                              <p className="font-medium text-slate-800">
+                                {activeInv.product?.name || 'Producto sin nombre'}
+                              </p>
+                              {activeInv.product?.category && (
+                                <p className="text-[11px] text-slate-500">
+                                  Categoría: <span className="font-semibold text-slate-700">{activeInv.product.category}</span>
+                                </p>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="rounded-2xl border-2 border-rose-200 bg-rose-50 p-4">
+                        <div className="flex items-center gap-3">
+                          <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-rose-500 text-xl text-white shadow-sm">
+                            📦
+                          </span>
+                          <div>
+                            <h4 className="font-black text-rose-900">UBICACIÓN OCUPADA</h4>
+                            <p className="text-xs text-rose-700">
+                              Posición con stock registrado. No ingresar productos hasta que sea liberada.
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                    )
+                  ) : selected.status === 'BLOCKED' ? (
+                    <div className="rounded-2xl border-2 border-slate-300 bg-slate-100 p-4">
+                      <div className="flex items-center gap-3">
+                        <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-slate-600 text-xl text-white shadow-sm">
+                          🔒
+                        </span>
+                        <div>
+                          <h4 className="font-black text-slate-900">UBICACIÓN BLOQUEADA</h4>
+                          <p className="text-xs text-slate-600">
+                            Posición inoperativa por decisión administrativa o restricción física.
+                          </p>
+                        </div>
+                      </div>
                     </div>
-                  </div>
-                </div>
-              ) : selected.status === 'BLOCKED' ? (
-                <div className="rounded-2xl border-2 border-slate-300 bg-slate-100 p-4">
-                  <div className="flex items-center gap-3">
-                    <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-slate-600 text-xl text-white shadow-sm">
-                      🔒
-                    </span>
-                    <div>
-                      <h4 className="font-black text-slate-900">UBICACIÓN BLOQUEADA</h4>
-                      <p className="text-xs text-slate-600">
-                        Posición inoperativa por decisión administrativa o restricción física.
-                      </p>
+                  ) : (
+                    <div className="rounded-2xl border-2 border-amber-300 bg-amber-50 p-4">
+                      <div className="flex items-center gap-3">
+                        <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-amber-500 text-xl text-white shadow-sm">
+                          ⚠️
+                        </span>
+                        <div>
+                          <h4 className="font-black text-amber-900">EN MANTENCIÓN</h4>
+                          <p className="text-xs text-amber-700">
+                            En revisión técnica de estantería o limpieza.
+                          </p>
+                        </div>
+                      </div>
                     </div>
-                  </div>
+                  )}
                 </div>
-              ) : (
-                <div className="rounded-2xl border-2 border-amber-300 bg-amber-50 p-4">
-                  <div className="flex items-center gap-3">
-                    <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-amber-500 text-xl text-white shadow-sm">
-                      ⚠️
-                    </span>
-                    <div>
-                      <h4 className="font-black text-amber-900">EN MANTENCIÓN</h4>
-                      <p className="text-xs text-amber-700">
-                        En revisión técnica de estantería o limpieza.
-                      </p>
-                    </div>
-                  </div>
-                </div>
-              )}
-            </div>
+              );
+            })()}
 
             {/* Technical Specifications Grid */}
             <div className="mt-5 grid grid-cols-2 gap-3 rounded-2xl bg-slate-50 p-4 text-xs">
