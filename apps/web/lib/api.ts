@@ -83,19 +83,56 @@ export async function apiFetch<T>(path: string, token: string, init?: RequestIni
     }
   }
 
+  // Normalize pageSize so it never exceeds 100 for NestJS endpoints that enforce @Max(100)
+  let normalizedPath = requestPath;
+  if (normalizedPath.includes('pageSize=')) {
+    normalizedPath = normalizedPath.replace(/pageSize=(\d+)/g, (_, val) => {
+      const num = parseInt(val, 10);
+      return `pageSize=${Math.min(num, 100)}`;
+    });
+  }
+
   if (apiUrl) {
     try {
-      const response = await fetch(`${apiUrl}/api${requestPath}`, {
+      const response = await fetch(`${apiUrl}/api${normalizedPath}`, {
         ...requestInit,
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}`, ...(requestInit?.headers ?? {}) },
       });
       if (response.ok) {
-        return (await response.json()) as T;
+        const json = await response.json();
+        // If the caller requested full inventory or locations and the response has more pages, auto-fetch page 2
+        if (
+          json &&
+          Array.isArray(json.items) &&
+          typeof json.total === 'number' &&
+          json.total > json.items.length &&
+          json.page === 1 &&
+          (requestPath.includes('pageSize=500') || requestPath.includes('pageSize=148') || requestPath.includes('pageSize=200'))
+        ) {
+          try {
+            const separator = normalizedPath.includes('?') ? '&' : '?';
+            const page2Url = `${apiUrl}/api${normalizedPath}${separator}page=2`;
+            const p2Res = await fetch(page2Url, {
+              headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+            });
+            if (p2Res.ok) {
+              const p2Json = await p2Res.json();
+              if (Array.isArray(p2Json.items)) {
+                json.items = [...json.items, ...p2Json.items];
+              }
+            }
+          } catch {}
+        }
+        return json as T;
       }
       // If endpoint doesn't exist on NestJS backend (404), fall back to InsForge computation
       if (response.status !== 404 && response.status >= 400 && response.status < 500) {
         const payload = await response.json().catch(() => null);
         const errMsg = Array.isArray(payload?.message) ? payload.message.join(', ') : (payload?.message ?? `Error (${response.status})`);
+        // If the error was pageSize validation from an older backend, fall back to InsForge computation
+        if (errMsg.includes('pageSize')) {
+          return fallbackInsforge<T>(requestPath, token, requestInit);
+        }
         throw new Error(errMsg);
       }
     } catch (err: any) {
