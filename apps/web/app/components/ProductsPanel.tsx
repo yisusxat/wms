@@ -8,9 +8,10 @@ interface ProductsPanelProps {
   token: string;
   role?: CurrentUser['role'];
   onError: (value: string) => void;
+  onDataChanged?: () => void;
 }
 
-export function ProductsPanel({ token, role, onError }: ProductsPanelProps) {
+export function ProductsPanel({ token, role, onError, onDataChanged }: ProductsPanelProps) {
   const [data, setData] = useState<Page<Product> | null>(null);
   const [allProducts, setAllProducts] = useState<Product[]>([]);
   const [search, setSearch] = useState('');
@@ -115,6 +116,7 @@ export function ProductsPanel({ token, role, onError }: ProductsPanelProps) {
       setForm({ sku: '', name: '', category: '', unit: 'unidad', barcode: '', description: '' });
       setShowAddForm(false);
       await load();
+      onDataChanged?.();
     } catch (e: any) {
       onError(e.message || 'Error al crear producto');
     } finally {
@@ -142,6 +144,7 @@ export function ProductsPanel({ token, role, onError }: ProductsPanelProps) {
       });
       setEditingProduct(null);
       await load();
+      onDataChanged?.();
     } catch (e: any) {
       onError(e.message || 'Error al actualizar producto');
     } finally {
@@ -161,6 +164,7 @@ export function ProductsPanel({ token, role, onError }: ProductsPanelProps) {
         }),
       });
       await load();
+      onDataChanged?.();
     } catch (e: any) {
       onError(e.message || 'Error al cambiar estado');
     }
@@ -667,7 +671,10 @@ export function ProductsPanel({ token, role, onError }: ProductsPanelProps) {
         isOpen={importModalOpen}
         onClose={() => setImportModalOpen(false)}
         token={token}
-        onSuccess={() => void load()}
+        onSuccess={() => {
+          void load();
+          onDataChanged?.();
+        }}
       />
     </section>
   );

@@ -62,9 +62,10 @@ interface Warehouse2DProps {
   token: string;
   onError: (value: string) => void;
   onNavigate?: (tab: string, locationCode?: string) => void;
+  onDataChanged?: () => void;
 }
 
-export function Warehouse2D({ token, onError, onNavigate }: Warehouse2DProps) {
+export function Warehouse2D({ token, onError, onNavigate, onDataChanged }: Warehouse2DProps) {
   // Pre-seed with all 148 locations so squares are 100% visible immediately
   const [locations, setLocations] = useState<Location[]>(() => getWarehouseSeedLocations());
   const [selected, setSelected] = useState<Location | null>(null);
@@ -142,7 +143,7 @@ export function Warehouse2D({ token, onError, onNavigate }: Warehouse2DProps) {
     };
   };
 
-  // Change location status interactively
+  // Change location status interactively and persist to database
   const handleStatusChange = (loc: Location, newStatus: string) => {
     setLocations((prev) =>
       prev.map((l) => (l.code === loc.code ? { ...l, status: newStatus } : l))
@@ -150,6 +151,18 @@ export function Warehouse2D({ token, onError, onNavigate }: Warehouse2DProps) {
     if (selected && selected.code === loc.code) {
       setSelected({ ...selected, status: newStatus });
     }
+
+    // Persist to backend / database
+    apiFetch(`/locations/${loc.id}`, token, {
+      method: 'PATCH',
+      body: JSON.stringify({ status: newStatus }),
+    })
+      .then(() => {
+        onDataChanged?.();
+      })
+      .catch((err: any) => {
+        console.warn('Error al persistir estado de ubicación en BD:', err?.message);
+      });
   };
 
   // Filter checks
@@ -848,6 +861,7 @@ export function Warehouse2D({ token, onError, onNavigate }: Warehouse2DProps) {
           } else {
             // Confirmado directamente en la base de datos
             refreshLocations();
+            onDataChanged?.();
           }
         }}
       />
@@ -859,6 +873,7 @@ export function Warehouse2D({ token, onError, onNavigate }: Warehouse2DProps) {
         token={token}
         onSuccess={() => {
           refreshLocations();
+          onDataChanged?.();
         }}
       />
     </section>

@@ -363,32 +363,142 @@ async function fallbackInsforge<T>(path: string, token: string, init?: RequestIn
   if (cleanPath.startsWith('/movements/') && init?.method === 'POST') {
     const subpath = cleanPath.replace('/movements/', '');
     const parsed = init.body ? JSON.parse(init.body as string) : {};
+    const typeMap: Record<string, string> = {
+      entry: 'RECEIPT',
+      exit: 'ISSUE',
+      transfer: 'TRANSFER',
+      adjustment: 'ADJUSTMENT',
+    };
+    const mType = typeMap[subpath] ?? 'ADJUSTMENT';
+    const qty = Math.abs(parsed.quantity ?? parsed.delta ?? 1);
+    const delta = parsed.delta ?? (subpath === 'exit' ? -qty : qty);
+    const sourceLocId = parsed.sourceLocationId ?? (subpath === 'exit' || (subpath === 'adjustment' && delta < 0) ? parsed.locationId : null);
+    const destLocId = parsed.destinationLocationId ?? (subpath === 'entry' || (subpath === 'adjustment' && delta > 0) ? parsed.locationId : null);
+
+    // 1. Synchronize Inventory in InsForge database
     try {
-      const typeMap: Record<string, string> = {
-        entry: 'RECEIVE',
-        exit: 'ISSUE',
-        transfer: 'TRANSFER',
-        adjustment: 'ADJUSTMENT',
-      };
-      const mType = typeMap[subpath] ?? 'ADJUSTMENT';
-      await fetch(`${insforgeUrl}/api/database/records/movements`, {
-        method: 'POST',
-        headers,
-        body: JSON.stringify([{
-          type: mType,
-          product_id: parsed.productId,
-          source_location_id: parsed.sourceLocationId ?? (subpath === 'exit' || subpath === 'adjustment' ? parsed.locationId : null),
-          destination_location_id: parsed.destinationLocationId ?? (subpath === 'entry' ? parsed.locationId : null),
-          quantity: Math.abs(parsed.quantity ?? parsed.delta ?? 1),
-          reason: parsed.reason ?? 'Movimiento registrado desde sistema',
-          reference: parsed.reference ?? `MOV-${Date.now().toString().slice(-6)}`,
-        }]),
-      });
-    } catch {}
+      if (subpath === 'entry' && destLocId && parsed.productId) {
+        const invRes = await fetch(`${insforgeUrl}/api/database/records/inventory?product_id=eq.${parsed.productId}&location_id=eq.${destLocId}`, { headers });
+        const invList = invRes.ok ? await invRes.json().catch(() => []) : [];
+        if (Array.isArray(invList) && invList.length > 0) {
+          const cur = invList[0];
+          await fetch(`${insforgeUrl}/api/database/records/inventory?id=eq.${cur.id}`, {
+            method: 'PATCH',
+            headers,
+            body: JSON.stringify({ quantity: (cur.quantity || 0) + qty }),
+          });
+        } else {
+          await fetch(`${insforgeUrl}/api/database/records/inventory`, {
+            method: 'POST',
+            headers,
+            body: JSON.stringify([{ product_id: parsed.productId, location_id: destLocId, quantity: qty }]),
+          });
+        }
+      } else if (subpath === 'exit' && sourceLocId && parsed.productId) {
+        const invRes = await fetch(`${insforgeUrl}/api/database/records/inventory?product_id=eq.${parsed.productId}&location_id=eq.${sourceLocId}`, { headers });
+        const invList = invRes.ok ? await invRes.json().catch(() => []) : [];
+        if (Array.isArray(invList) && invList.length > 0) {
+          const cur = invList[0];
+          const newQ = Math.max(0, (cur.quantity || 0) - qty);
+          await fetch(`${insforgeUrl}/api/database/records/inventory?id=eq.${cur.id}`, {
+            method: 'PATCH',
+            headers,
+            body: JSON.stringify({ quantity: newQ }),
+          });
+        }
+      } else if (subpath === 'transfer' && sourceLocId && destLocId && parsed.productId) {
+        // Source decrement
+        const srcRes = await fetch(`${insforgeUrl}/api/database/records/inventory?product_id=eq.${parsed.productId}&location_id=eq.${sourceLocId}`, { headers });
+        const srcList = srcRes.ok ? await srcRes.json().catch(() => []) : [];
+        if (Array.isArray(srcList) && srcList.length > 0) {
+          const cur = srcList[0];
+          await fetch(`${insforgeUrl}/api/database/records/inventory?id=eq.${cur.id}`, {
+            method: 'PATCH',
+            headers,
+            body: JSON.stringify({ quantity: Math.max(0, (cur.quantity || 0) - qty) }),
+          });
+        }
+        // Destination increment
+        const destRes = await fetch(`${insforgeUrl}/api/database/records/inventory?product_id=eq.${parsed.productId}&location_id=eq.${destLocId}`, { headers });
+        const destList = destRes.ok ? await destRes.json().catch(() => []) : [];
+        if (Array.isArray(destList) && destList.length > 0) {
+          const cur = destList[0];
+          await fetch(`${insforgeUrl}/api/database/records/inventory?id=eq.${cur.id}`, {
+            method: 'PATCH',
+            headers,
+            body: JSON.stringify({ quantity: (cur.quantity || 0) + qty }),
+          });
+        } else {
+          await fetch(`${insforgeUrl}/api/database/records/inventory`, {
+            method: 'POST',
+            headers,
+            body: JSON.stringify([{ product_id: parsed.productId, location_id: destLocId, quantity: qty }]),
+          });
+        }
+      } else if (subpath === 'adjustment' && parsed.locationId && parsed.productId) {
+        const invRes = await fetch(`${insforgeUrl}/api/database/records/inventory?product_id=eq.${parsed.productId}&location_id=eq.${parsed.locationId}`, { headers });
+        const invList = invRes.ok ? await invRes.json().catch(() => []) : [];
+        if (Array.isArray(invList) && invList.length > 0) {
+          const cur = invList[0];
+          await fetch(`${insforgeUrl}/api/database/records/inventory?id=eq.${cur.id}`, {
+            method: 'PATCH',
+            headers,
+            body: JSON.stringify({ quantity: Math.max(0, (cur.quantity || 0) + delta) }),
+          });
+        } else if (delta > 0) {
+          await fetch(`${insforgeUrl}/api/database/records/inventory`, {
+            method: 'POST',
+            headers,
+            body: JSON.stringify([{ product_id: parsed.productId, location_id: parsed.locationId, quantity: delta }]),
+          });
+        }
+      }
+    } catch (invErr) {
+      console.warn('Fallback inventory update warning:', invErr);
+    }
+
+    // 2. Insert into movements table
+    const movRes = await fetch(`${insforgeUrl}/api/database/records/movements`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify([{
+        type: mType,
+        product_id: parsed.productId,
+        source_location_id: sourceLocId,
+        destination_location_id: destLocId,
+        quantity: qty,
+        reason: parsed.reason ?? 'Movimiento registrado desde sistema',
+        reference: parsed.reference ?? `MOV-${Date.now().toString().slice(-6)}`,
+      }]),
+    });
+    if (!movRes.ok) {
+      const errPayload = await movRes.json().catch(() => null);
+      throw new Error(errPayload?.message ?? `Error al registrar movimiento (${movRes.status})`);
+    }
     return { status: 'ok', movementId: `mov-${Date.now()}` } as T;
   }
 
+  if (cleanPath.startsWith('/locations/') && (init?.method === 'PATCH' || init?.method === 'PUT')) {
+    const locationId = cleanPath.replace('/locations/', '').split('/')[0];
+    const parsed = init.body ? JSON.parse(init.body as string) : {};
+    const patchBody: Record<string, any> = {};
+    if (parsed.status) patchBody.status = parsed.status;
+
+    const res = await fetch(`${insforgeUrl}/api/database/records/locations?id=eq.${locationId}`, {
+      method: 'PATCH',
+      headers: { ...headers, Prefer: 'return=representation' },
+      body: JSON.stringify(patchBody),
+    });
+    if (!res.ok) {
+      const errPayload = await res.json().catch(() => null);
+      throw new Error(errPayload?.message ?? 'Error al actualizar ubicación');
+    }
+    const data = await res.json().catch(() => patchBody);
+    return (Array.isArray(data) ? data[0] : data) as T;
+  }
+
   if (cleanPath === '/users') {
+
     if (init?.method === 'POST' && init.body) {
       const parsed = JSON.parse(init.body as string);
       // Register in InsForge Auth

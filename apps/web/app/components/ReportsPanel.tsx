@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 import { useState } from "react";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "https://wms-api-service.onrender.com";
@@ -11,6 +11,7 @@ type PanelSubTab = "reports" | "bulk" | "schedule";
 interface Props {
   token: string;
   organizationId?: string;
+  onDataChanged?: () => void;
 }
 
 const REPORTS: { id: ReportType; label: string; description: string; icon: string; hasPeriod: boolean }[] = [
@@ -68,7 +69,7 @@ interface DryRunResponse {
   rows: DryRunRow[];
 }
 
-export default function ReportsPanel({ token, organizationId }: Props) {
+export default function ReportsPanel({ token, organizationId, onDataChanged }: Props) {
   const [subTab, setSubTab] = useState<PanelSubTab>("reports");
   const [selectedFormat, setSelectedFormat] = useState<ReportFormat>("xlsx");
   const [selectedPeriod, setSelectedPeriod] = useState<Period>("30d");
@@ -203,6 +204,7 @@ export default function ReportsPanel({ token, organizationId }: Props) {
       setApplyResult(data);
       setDryRunData(null);
       setBulkRawText("");
+      onDataChanged?.();
     } catch (err) {
       alert((err as Error).message);
     } finally {

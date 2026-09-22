@@ -25,6 +25,7 @@ type ActiveTab = "overview" | "abc" | "dead" | "throughput" | "breaks";
 interface Props {
   token: string;
   organizationId?: string;
+  refreshKey?: number;
 }
 
 function StatusBadge({ value, alert, unit = "%" }: { value: number | string; alert: boolean; unit?: string }) {
@@ -83,7 +84,7 @@ function ThroughputChart({ trend }: { trend: { date: string; receipts: number; i
   );
 }
 
-export default function KPIPanel({ token, organizationId }: Props) {
+export default function KPIPanel({ token, organizationId, refreshKey }: Props) {
   const [kpis, setKpis] = useState<KpiData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -105,7 +106,7 @@ export default function KPIPanel({ token, organizationId }: Props) {
     }
   }, [token, organizationId]);
 
-  useEffect(() => { fetchKpis(); }, [fetchKpis]);
+  useEffect(() => { fetchKpis(); }, [fetchKpis, refreshKey]);
 
   const tabs: { id: ActiveTab; label: string; icon: string }[] = [
     { id: "overview", label: "Resumen", icon: "🏢" },

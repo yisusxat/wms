@@ -26,10 +26,12 @@ export function MovementsPanel({
   token,
   role,
   onError,
+  onDataChanged,
 }: {
   token: string;
   role?: CurrentUser["role"];
   onError: (value: string) => void;
+  onDataChanged?: () => void;
 }) {
   const [mode, setMode] = useState<Mode>("entry");
   const [products, setProducts] = useState<Product[]>([]);
@@ -138,6 +140,7 @@ export function MovementsPanel({
       const result = await syncOfflineMovements(token, apiBase);
       if (result.synced > 0) {
         await loadMovements();
+        onDataChanged?.();
         alert(`✅ Sincronizados ${result.synced} movimientos pendientes de la cola offline.`);
       }
       const updated = await getPendingMovements();
@@ -193,6 +196,7 @@ export function MovementsPanel({
     try {
       await apiFetch(`/movements/${mode}`, token, { method: "POST", body: JSON.stringify(payload) });
       await loadMovements();
+      onDataChanged?.();
     } catch (e) {
       // Si falló por desconexión de red repentina
       if (!navigator.onLine || (e as Error).message.includes("Failed to fetch") || (e as Error).message.includes("NetworkError")) {

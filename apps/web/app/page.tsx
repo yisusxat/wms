@@ -120,8 +120,20 @@ export default function HomePage() {
       .catch((e: Error) => setError(e.message));
   }, [token]);
 
+  const [dataVersion, setDataVersion] = useState(0);
+
+  // Shared callback — passed to all mutating panels so Dashboard summary stays fresh
+  const refreshSummary = useCallback(() => {
+    if (!token) return;
+    setDataVersion((v) => v + 1);
+    apiFetch<Summary>('/dashboard/summary', token)
+      .then(setSummary)
+      .catch(() => {/* silent — do not replace visible error for a background refresh */});
+  }, [token]);
+
   // User permissions and tab visibility (Hooks must be called unconditionally at top level)
   const userPerms = profile?.permissions as any;
+
 
   const isTabVisible = useCallback(
     (tabId: Tab): boolean => {
@@ -408,17 +420,18 @@ export default function HomePage() {
 
         <div className="mt-8">
           {tab === 'dashboard' && <Dashboard summary={summary} onNavigate={setTab} role={profile?.role} />}
-          {tab === 'kpis' && <KPIPanel token={token} organizationId={profile?.organizationId} />}
-          {tab === 'reports' && <ReportsPanel token={token} organizationId={profile?.organizationId} />}
-          {tab === 'products' && <ProductsPanel token={token} role={profile?.role} onError={setError} />}
-          {tab === 'locations' && <Locations token={token} onError={setError} />}
-          {tab === 'inventory' && <Inventory token={token} onError={setError} />}
-          {tab === 'movements' && <MovementsPanel token={token} role={profile?.role} onError={setError} />}
+          {tab === 'kpis' && <KPIPanel token={token} organizationId={profile?.organizationId} refreshKey={dataVersion} />}
+          {tab === 'reports' && <ReportsPanel token={token} organizationId={profile?.organizationId} onDataChanged={refreshSummary} />}
+          {tab === 'products' && <ProductsPanel token={token} role={profile?.role} onError={setError} onDataChanged={refreshSummary} />}
+          {tab === 'locations' && <Locations token={token} onError={setError} refreshKey={dataVersion} />}
+          {tab === 'inventory' && <Inventory token={token} onError={setError} refreshKey={dataVersion} />}
+          {tab === 'movements' && <MovementsPanel token={token} role={profile?.role} onError={setError} onDataChanged={refreshSummary} />}
           {tab === 'warehouse3d' && <Warehouse3D token={token} onError={setError} />}
           {tab === 'warehouse2d' && (
             <Warehouse2D
               token={token}
               onError={setError}
+              onDataChanged={refreshSummary}
               onNavigate={(nextTab, locCode) => {
                 if (nextTab === 'mapping') {
                   if (locCode) setMappingInitialLocation(locCode);
@@ -435,6 +448,7 @@ export default function HomePage() {
               onError={setError}
               initialLocationCode={mappingInitialLocation}
               onNavigate={(nextTab) => setTab(nextTab as Tab)}
+              onDataChanged={refreshSummary}
             />
           )}
           {tab === 'team' && (profile?.role === 'ADMIN' || userPerms?.canManageTeam) && (
@@ -595,26 +609,74 @@ function Dashboard({
 }
 
 
-function Locations({ token, onError }: { token: string; onError: (value: string) => void }) {
+function Locations({ token, onError, refreshKey }: { token: string; onError: (value: string) => void; refreshKey?: number }) {
   const [data, setData] = useState<Page<Location> | null>(null);
+  const [loading, setLoading] = useState(false);
+
+  const load = useCallback(() => {
+    setLoading(true);
+    apiFetch<Page<Location>>('/locations?pageSize=100', token)
+      .then(setData)
+      .catch((e: Error) => onError(e.message))
+      .finally(() => setLoading(false));
+  }, [token, onError]);
+
   useEffect(() => {
-    void apiFetch<Page<Location>>('/locations?pageSize=100', token).then(setData).catch((e: Error) => onError(e.message));
-  }, [token]);
+    load();
+  }, [load, refreshKey]);
+
   return (
-    <div className="rounded-xl bg-white p-5 shadow-sm border border-slate-100">
-      <Table headers={['Código', 'Nivel', 'Posición', 'Estado']} rows={(data?.items ?? []).map(item => [item.code, item.level, item.position, item.status])} />
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <h2 className="text-base font-bold text-slate-800">Ubicaciones del Almacén</h2>
+        <button
+          onClick={load}
+          disabled={loading}
+          className="rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 transition shadow-xs flex items-center gap-1.5"
+        >
+          <span>{loading ? '⏳' : '🔄'}</span>
+          <span>Actualizar</span>
+        </button>
+      </div>
+      <div className="rounded-xl bg-white p-5 shadow-sm border border-slate-100">
+        <Table headers={['Código', 'Nivel', 'Posición', 'Estado']} rows={(data?.items ?? []).map(item => [item.code, item.level, item.position, item.status])} />
+      </div>
     </div>
   );
 }
 
-function Inventory({ token, onError }: { token: string; onError: (value: string) => void }) {
+function Inventory({ token, onError, refreshKey }: { token: string; onError: (value: string) => void; refreshKey?: number }) {
   const [data, setData] = useState<Page<InventoryItem> | null>(null);
+  const [loading, setLoading] = useState(false);
+
+  const load = useCallback(() => {
+    setLoading(true);
+    apiFetch<Page<InventoryItem>>('/inventory?pageSize=100', token)
+      .then(setData)
+      .catch((e: Error) => onError(e.message))
+      .finally(() => setLoading(false));
+  }, [token, onError]);
+
   useEffect(() => {
-    void apiFetch<Page<InventoryItem>>('/inventory?pageSize=100', token).then(setData).catch((e: Error) => onError(e.message));
-  }, [token]);
+    load();
+  }, [load, refreshKey]);
+
   return (
-    <div className="rounded-xl bg-white p-5 shadow-sm border border-slate-100">
-      <Table headers={['SKU', 'Producto', 'Ubicación', 'Cantidad', 'Reservado']} rows={(data?.items ?? []).map(item => [item.product.sku, item.product.name, item.location.code, item.quantity, item.reservedQuantity])} />
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <h2 className="text-base font-bold text-slate-800">Inventario Consolidado</h2>
+        <button
+          onClick={load}
+          disabled={loading}
+          className="rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 transition shadow-xs flex items-center gap-1.5"
+        >
+          <span>{loading ? '⏳' : '🔄'}</span>
+          <span>Actualizar</span>
+        </button>
+      </div>
+      <div className="rounded-xl bg-white p-5 shadow-sm border border-slate-100">
+        <Table headers={['SKU', 'Producto', 'Ubicación', 'Cantidad', 'Reservado']} rows={(data?.items ?? []).map(item => [item.product?.sku ?? 'N/A', item.product?.name ?? 'N/A', item.location?.code ?? 'N/A', item.quantity, item.reservedQuantity])} />
+      </div>
     </div>
   );
 }

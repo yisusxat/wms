@@ -10,6 +10,7 @@ interface WarehouseMappingViewProps {
   locations?: Location[];
   initialLocationCode?: string | null;
   onNavigate?: (tab: string) => void;
+  onDataChanged?: () => void;
 }
 
 export function WarehouseMappingView({
@@ -18,6 +19,7 @@ export function WarehouseMappingView({
   locations,
   initialLocationCode,
   onNavigate,
+  onDataChanged,
 }: WarehouseMappingViewProps) {
   return (
     <section className="space-y-6">
@@ -33,7 +35,7 @@ export function WarehouseMappingView({
           }
         }}
         onSuccess={() => {
-          // Success callback
+          onDataChanged?.();
         }}
       />
     </section>
