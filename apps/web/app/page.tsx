@@ -223,6 +223,16 @@ export default function HomePage() {
       .catch(() => {/* silent — do not replace visible error for a background refresh */});
   }, [token]);
 
+  // Synchronize dashboard summary whenever user views the dashboard or data updates
+  useEffect(() => {
+    if (!token) return;
+    if (tab === 'dashboard') {
+      apiFetch<Summary>('/dashboard/summary', token)
+        .then(setSummary)
+        .catch(() => {});
+    }
+  }, [tab, token, dataVersion]);
+
   // User permissions and tab visibility (Hooks must be called unconditionally at top level)
   const userPerms = profile?.permissions as any;
 
