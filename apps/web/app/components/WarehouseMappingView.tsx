@@ -11,6 +11,7 @@ interface WarehouseMappingViewProps {
   initialLocationCode?: string | null;
   onNavigate?: (tab: string) => void;
   onDataChanged?: () => void;
+  refreshKey?: number;
 }
 
 export function WarehouseMappingView({
@@ -20,6 +21,7 @@ export function WarehouseMappingView({
   initialLocationCode,
   onNavigate,
   onDataChanged,
+  refreshKey,
 }: WarehouseMappingViewProps) {
   return (
     <section className="space-y-6">
@@ -29,6 +31,7 @@ export function WarehouseMappingView({
         token={token}
         locations={locations}
         initialLocationCode={initialLocationCode}
+        refreshKey={refreshKey}
         onClose={() => {
           onDataChanged?.();
           if (onNavigate) {

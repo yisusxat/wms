@@ -110,6 +110,7 @@ interface Props {
   initialLocationCode?: string | null;
   onSuccess: () => void;
   inline?: boolean;
+  refreshKey?: number;
 }
 
 const COMMON_REASONS = [
@@ -129,6 +130,7 @@ function MappingModalInner({
   initialLocationCode,
   onSuccess,
   inline = false,
+  refreshKey,
 }: Props) {
   const [locationsList, setLocationsList] = useState<Location[]>(() => {
     if (Array.isArray(locations) && locations.length > 0) return locations;
@@ -296,7 +298,7 @@ function MappingModalInner({
       })
       .catch((err) => console.warn("Error cargando inventario de mapeo:", err))
       .finally(() => setLoading(false));
-  }, [isOpen, token, initialLocationCode, locations]);
+  }, [isOpen, token, initialLocationCode, locations, refreshKey]);
 
   // Index items by locationCode for instant O(1) 2D square lookups
   const auditMap = useMemo(() => {

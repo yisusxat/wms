@@ -110,7 +110,15 @@ function RackStructure({ group, position, onSelect }: { group: RackGroup; positi
   );
 }
 
-export function Warehouse3D({ token, onError }: { token: string; onError: (value: string) => void }) {
+export function Warehouse3D({
+  token,
+  onError,
+  refreshKey,
+}: {
+  token: string;
+  onError: (value: string) => void;
+  refreshKey?: number;
+}) {
   const [locations, setLocations] = useState<Location[]>([]);
   const [selected, setSelected] = useState<Location | null>(null);
   const groups = useMemo(() => buildRackGroups(locations), [locations]);
@@ -121,10 +129,10 @@ export function Warehouse3D({ token, onError }: { token: string; onError: (value
   }, {} as Record<string, number>), [locations]);
 
   useEffect(() => {
-    void apiFetch<Page<Location>>('/locations?pageSize=148', token)
+    void apiFetch<Page<Location>>('/locations?pageSize=500', token)
       .then((page) => setLocations(page.items))
       .catch((error: Error) => onError(error.message));
-  }, [onError, token]);
+  }, [onError, token, refreshKey]);
 
   const rackSpacingX = 9.5;
   const aisleSpacingZ = 5.5;

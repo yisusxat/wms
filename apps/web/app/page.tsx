@@ -99,8 +99,11 @@ export default function HomePage() {
     return 'dashboard';
   });
 
+  const [dataVersion, setDataVersion] = useState(0);
+
   const changeTab = useCallback((newTab: Tab) => {
     setTab(newTab);
+    setDataVersion((v) => v + 1);
     try {
       localStorage.setItem('wms_active_tab', newTab);
     } catch {}
@@ -210,8 +213,6 @@ export default function HomePage() {
         }
       });
   }, [token]);
-
-  const [dataVersion, setDataVersion] = useState(0);
 
   // Shared callback — passed to all mutating panels so Dashboard summary stays fresh
   const refreshSummary = useCallback(() => {
@@ -572,12 +573,12 @@ export default function HomePage() {
         <div className="mt-8">
           {tab === 'dashboard' && <Dashboard summary={summary} onNavigate={changeTab} role={profile?.role} />}
           {tab === 'kpis' && <KPIPanel token={token} organizationId={profile?.organizationId} refreshKey={dataVersion} />}
-          {tab === 'reports' && <ReportsPanel token={token} organizationId={profile?.organizationId} onDataChanged={refreshSummary} />}
-          {tab === 'products' && <ProductsPanel token={token} role={profile?.role} onError={setError} onDataChanged={refreshSummary} />}
+          {tab === 'reports' && <ReportsPanel token={token} organizationId={profile?.organizationId} onDataChanged={refreshSummary} refreshKey={dataVersion} />}
+          {tab === 'products' && <ProductsPanel token={token} role={profile?.role} onError={setError} onDataChanged={refreshSummary} refreshKey={dataVersion} />}
           {tab === 'locations' && <Locations token={token} onError={setError} refreshKey={dataVersion} />}
           {tab === 'inventory' && <Inventory token={token} onError={setError} refreshKey={dataVersion} />}
           {tab === 'movements' && <MovementsPanel token={token} role={profile?.role} onError={setError} onDataChanged={refreshSummary} refreshKey={dataVersion} />}
-          {tab === 'warehouse3d' && <Warehouse3D token={token} onError={setError} />}
+          {tab === 'warehouse3d' && <Warehouse3D token={token} onError={setError} refreshKey={dataVersion} />}
           {tab === 'warehouse2d' && (
             <Warehouse2D
               token={token}
@@ -601,10 +602,11 @@ export default function HomePage() {
               initialLocationCode={mappingInitialLocation}
               onNavigate={(nextTab) => changeTab(nextTab as Tab)}
               onDataChanged={refreshSummary}
+              refreshKey={dataVersion}
             />
           )}
           {tab === 'team' && (profile?.role === 'ADMIN' || userPerms?.canManageTeam) && (
-            <TeamPanel token={token} onError={setError} />
+            <TeamPanel token={token} onError={setError} onDataChanged={refreshSummary} refreshKey={dataVersion} />
           )}
         </div>
       </section>
@@ -767,7 +769,7 @@ function Locations({ token, onError, refreshKey }: { token: string; onError: (va
 
   const load = useCallback(() => {
     setLoading(true);
-    apiFetch<Page<Location>>('/locations?pageSize=100', token)
+    apiFetch<Page<Location>>('/locations?pageSize=500', token)
       .then(setData)
       .catch((e: Error) => onError(e.message))
       .finally(() => setLoading(false));
@@ -803,7 +805,7 @@ function Inventory({ token, onError, refreshKey }: { token: string; onError: (va
 
   const load = useCallback(() => {
     setLoading(true);
-    apiFetch<Page<InventoryItem>>('/inventory?pageSize=100', token)
+    apiFetch<Page<InventoryItem>>('/inventory?pageSize=500', token)
       .then(setData)
       .catch((e: Error) => onError(e.message))
       .finally(() => setLoading(false));

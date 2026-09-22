@@ -12,6 +12,7 @@ interface Props {
   token: string;
   organizationId?: string;
   onDataChanged?: () => void;
+  refreshKey?: number;
 }
 
 const REPORTS: { id: ReportType; label: string; description: string; icon: string; hasPeriod: boolean }[] = [

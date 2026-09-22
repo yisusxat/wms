@@ -19,7 +19,17 @@ const ROLE_LABELS: Record<CurrentUser['role'], { label: string; bg: string; text
   VIEWER: { label: 'Visualizador', bg: 'bg-slate-100', text: 'text-slate-700' },
 };
 
-export function TeamPanel({ token, onError }: { token: string; onError: (msg: string) => void }) {
+export function TeamPanel({
+  token,
+  onError,
+  onDataChanged,
+  refreshKey,
+}: {
+  token: string;
+  onError: (msg: string) => void;
+  onDataChanged?: () => void;
+  refreshKey?: number;
+}) {
   const [members, setMembers] = useState<TeamMember[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
@@ -56,7 +66,7 @@ export function TeamPanel({ token, onError }: { token: string; onError: (msg: st
 
   useEffect(() => {
     void loadTeam();
-  }, [token]);
+  }, [token, refreshKey]);
 
   const handleCreateUser = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -70,6 +80,7 @@ export function TeamPanel({ token, onError }: { token: string; onError: (msg: st
       setForm({ name: '', email: '', password: '', role: 'OPERATOR' });
       setToastMessage('Nuevo miembro registrado exitosamente');
       await loadTeam();
+      onDataChanged?.();
     } catch (err: any) {
       onError(err?.message ?? 'Error al registrar miembro del equipo');
     } finally {
@@ -87,6 +98,7 @@ export function TeamPanel({ token, onError }: { token: string; onError: (msg: st
         prev.map((m) => (m.id === userId ? { ...m, role: newRole } : m))
       );
       setToastMessage(`Rol actualizado a ${ROLE_LABELS[newRole]?.label ?? newRole}`);
+      onDataChanged?.();
     } catch (err: any) {
       onError(err?.message ?? 'No fue posible actualizar el rol');
     }
@@ -107,6 +119,7 @@ export function TeamPanel({ token, onError }: { token: string; onError: (msg: st
           ? 'Cuenta de usuario reactivada correctamente'
           : 'Acceso de usuario suspendido'
       );
+      onDataChanged?.();
     } catch (err: any) {
       onError(err?.message ?? 'No fue posible cambiar el estado del usuario');
     }
@@ -140,6 +153,7 @@ export function TeamPanel({ token, onError }: { token: string; onError: (msg: st
         )
       );
       setToastMessage('Permisos y configuración de acceso guardados con éxito ✨');
+      onDataChanged?.();
     } catch (err: any) {
       onError(err?.message ?? 'No fue posible guardar los permisos');
       throw err;

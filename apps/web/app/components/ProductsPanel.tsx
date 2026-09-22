@@ -9,9 +9,10 @@ interface ProductsPanelProps {
   role?: CurrentUser['role'];
   onError: (value: string) => void;
   onDataChanged?: () => void;
+  refreshKey?: number;
 }
 
-export function ProductsPanel({ token, role, onError, onDataChanged }: ProductsPanelProps) {
+export function ProductsPanel({ token, role, onError, onDataChanged, refreshKey }: ProductsPanelProps) {
   const [data, setData] = useState<Page<Product> | null>(null);
   const [allProducts, setAllProducts] = useState<Product[]>([]);
   const [search, setSearch] = useState('');
@@ -69,7 +70,7 @@ export function ProductsPanel({ token, role, onError, onDataChanged }: ProductsP
 
   useEffect(() => {
     void load();
-  }, [page]);
+  }, [page, refreshKey]);
 
   // Extract all unique categories
   const categories = useMemo(() => {
