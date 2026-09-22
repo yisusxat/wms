@@ -1,7 +1,7 @@
 "use client";
 
-import { FormEvent, useEffect, useState } from "react";
-import { apiFetch, CurrentUser, Location, Movement, Page, Product } from "../../lib/api";
+import { FormEvent, useEffect, useMemo, useState } from "react";
+import { apiFetch, CurrentUser, Location, Movement, Page, Product, getWarehouseSeedLocations } from "../../lib/api";
 import BarcodeScanner from "./BarcodeScanner";
 import { LabelModal, LabelModalData } from "./LabelModal";
 import { PickingModal } from "./PickingModal";
@@ -68,6 +68,11 @@ export function MovementsPanel({
   const [pendingOffline, setPendingOffline] = useState<PendingMovement[]>([]);
   const [isSyncing, setIsSyncing] = useState(false);
 
+  // Form submission feedback states
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [successMsg, setSuccessMsg] = useState<string | null>(null);
+  const [localError, setLocalError] = useState<string | null>(null);
+
   const loadMovements = () =>
     apiFetch<Page<Movement>>("/movements?pageSize=100", token)
       .then(setMovements)
@@ -75,8 +80,8 @@ export function MovementsPanel({
 
   useEffect(() => {
     void Promise.all([
-      apiFetch<Page<Product>>("/products?pageSize=100", token),
-      apiFetch<Page<Location>>("/locations?pageSize=100", token),
+      apiFetch<Page<Product>>("/products?pageSize=500", token),
+      apiFetch<Page<Location>>("/locations?pageSize=500", token),
       loadMovements(),
     ])
       .then(([productPage, locationPage]) => {
@@ -91,6 +96,33 @@ export function MovementsPanel({
       })
       .catch((e: Error) => onError(e.message));
   }, [token, refreshKey]);
+
+  // Lista unificada de ubicaciones: combina las 148 de bodega, las traídas por API y las sugerencias
+  const allLocations = useMemo(() => {
+    const map = new Map<string, Location>();
+    // 1. Agregar seed locations de la bodega (148 posiciones completas)
+    const seed = getWarehouseSeedLocations();
+    for (const s of seed) {
+      map.set(s.id, s);
+    }
+    // 2. Agregar ubicaciones traídas de la API (con estados actualizados)
+    for (const loc of locations) {
+      map.set(loc.id, loc);
+    }
+    // 3. Agregar sugerencias de Smart Slotting
+    for (const sug of slottingSuggestions) {
+      if (sug.locationId && !map.has(sug.locationId)) {
+        map.set(sug.locationId, {
+          id: sug.locationId,
+          code: sug.locationCode,
+          status: "AVAILABLE",
+          level: sug.level,
+          position: sug.position,
+        });
+      }
+    }
+    return Array.from(map.values()).sort((a, b) => a.code.localeCompare(b.code));
+  }, [locations, slottingSuggestions]);
 
   // Consultar Smart Slotting cuando cambia el producto en modo entrada
   useEffect(() => {
@@ -156,6 +188,30 @@ export function MovementsPanel({
 
   async function submit(event: FormEvent) {
     event.preventDefault();
+    setSuccessMsg(null);
+    setLocalError(null);
+
+    if (!form.productId) {
+      setLocalError("Por favor selecciona un producto.");
+      return;
+    }
+    if (!form.locationId) {
+      setLocalError("Por favor selecciona una ubicación.");
+      return;
+    }
+    if (mode === "transfer" && !form.destinationLocationId) {
+      setLocalError("Por favor selecciona una ubicación de destino.");
+      return;
+    }
+    if (mode === "transfer" && form.locationId === form.destinationLocationId) {
+      setLocalError("La ubicación de origen y destino no pueden ser la misma.");
+      return;
+    }
+    if (mode !== "adjustment" && (!form.quantity || form.quantity <= 0)) {
+      setLocalError("La cantidad debe ser mayor a 0.");
+      return;
+    }
+
     const payload =
       mode === "transfer"
         ? {
@@ -163,45 +219,30 @@ export function MovementsPanel({
             sourceLocationId: form.locationId,
             destinationLocationId: form.destinationLocationId,
             quantity: form.quantity,
-            reason: form.reason,
-            reference: form.reference,
+            reason: form.reason || "Transferencia registrada desde sistema",
+            reference: form.reference || `TRF-${Date.now().toString().slice(-6)}`,
           }
         : mode === "adjustment"
         ? {
             productId: form.productId,
             locationId: form.locationId,
             delta: form.delta,
-            reason: form.reason,
-            reference: form.reference,
+            reason: form.reason || "Ajuste registrado desde sistema",
+            reference: form.reference || `ADJ-${Date.now().toString().slice(-6)}`,
           }
         : {
             productId: form.productId,
             locationId: form.locationId,
             quantity: form.quantity,
-            reason: form.reason,
-            reference: form.reference,
+            reason: form.reason || (mode === "entry" ? "Entrada registrada desde sistema" : "Salida registrada desde sistema"),
+            reference: form.reference || (mode === "entry" ? `REC-${Date.now().toString().slice(-6)}` : `ISS-${Date.now().toString().slice(-6)}`),
           };
+
+    setIsSubmitting(true);
 
     // Si no hay conexión a internet, guardar en cola local IndexedDB
     if (!navigator.onLine) {
-      await queueOfflineMovement({
-        mode,
-        payload,
-        timestamp: new Date().toISOString(),
-      });
-      const updated = await getPendingMovements();
-      setPendingOffline(updated);
-      alert("📶 Estás sin conexión: el movimiento fue guardado en IndexedDB local y se sincronizará automáticamente al recuperar señal.");
-      return;
-    }
-
-    try {
-      await apiFetch(`/movements/${mode}`, token, { method: "POST", body: JSON.stringify(payload) });
-      await loadMovements();
-      onDataChanged?.();
-    } catch (e) {
-      // Si falló por desconexión de red repentina
-      if (!navigator.onLine || (e as Error).message.includes("Failed to fetch") || (e as Error).message.includes("NetworkError")) {
+      try {
         await queueOfflineMovement({
           mode,
           payload,
@@ -209,10 +250,66 @@ export function MovementsPanel({
         });
         const updated = await getPendingMovements();
         setPendingOffline(updated);
-        alert("📶 Conexión perdida: el movimiento se guardó localmente en la cola offline.");
-      } else {
-        onError((e as Error).message);
+        setSuccessMsg("📶 Estás sin conexión: el movimiento fue guardado en IndexedDB local y se sincronizará automáticamente al recuperar señal.");
+      } catch (err: any) {
+        setLocalError("Error guardando en cola offline: " + err.message);
+      } finally {
+        setIsSubmitting(false);
       }
+      return;
+    }
+
+    try {
+      await apiFetch(`/movements/${mode}`, token, { method: "POST", body: JSON.stringify(payload) });
+      await loadMovements();
+      onDataChanged?.();
+
+      const prodObj = products.find((p) => p.id === form.productId);
+      const locObj = allLocations.find((l) => l.id === form.locationId);
+      const prodName = prodObj ? `${prodObj.sku} — ${prodObj.name}` : "Producto";
+      const locCode = locObj ? locObj.code : form.locationId;
+
+      const actionText =
+        mode === "entry"
+          ? `Entrada confirmada: ${form.quantity} unidades de ${prodName} en ubicación ${locCode}`
+          : mode === "exit"
+          ? `Salida confirmada: ${form.quantity} unidades de ${prodName} despachadas desde ${locCode}`
+          : mode === "transfer"
+          ? `Transferencia confirmada: ${form.quantity} unidades de ${prodName} movidas a ${locationLabel(form.destinationLocationId)}`
+          : `Ajuste de inventario aplicado (${form.delta > 0 ? "+" : ""}${form.delta}) en ${locCode}`;
+
+      setSuccessMsg(`✅ ${actionText}.`);
+
+      // Limpiar campos para permitir la siguiente operación de forma limpia
+      setForm((prev) => ({
+        ...prev,
+        quantity: 1,
+        delta: 1,
+        reference: "",
+        reason: "",
+      }));
+    } catch (e: any) {
+      // Si falló por desconexión de red repentina
+      if (!navigator.onLine || (e as Error).message.includes("Failed to fetch") || (e as Error).message.includes("NetworkError")) {
+        try {
+          await queueOfflineMovement({
+            mode,
+            payload,
+            timestamp: new Date().toISOString(),
+          });
+          const updated = await getPendingMovements();
+          setPendingOffline(updated);
+          setSuccessMsg("📶 Conexión perdida: el movimiento se guardó localmente en la cola offline y se sincronizará al reconectar.");
+        } catch {
+          setLocalError("Error al encolar movimiento offline.");
+        }
+      } else {
+        const errorMsg = (e as Error).message || "Error al registrar el movimiento";
+        setLocalError(errorMsg);
+        onError(errorMsg);
+      }
+    } finally {
+      setIsSubmitting(false);
     }
   }
 
@@ -257,7 +354,7 @@ export function MovementsPanel({
   };
 
   const locationLabel = (id: string) =>
-    locations.find((location) => location.id === id)?.code ?? "Seleccionar ubicación";
+    allLocations.find((location) => location.id === id)?.code ?? "Seleccionar ubicación";
   const canOperate = role === "ADMIN" || role === "SUPERVISOR" || role === "OPERATOR";
   const canAdjust = role === "ADMIN" || role === "SUPERVISOR";
   const availableModes = ["entry", "exit", "transfer", ...(canAdjust ? ["adjustment"] : [])] as Mode[];
@@ -475,7 +572,7 @@ export function MovementsPanel({
               value={form.locationId}
               onChange={(e) => setForm({ ...form, locationId: e.target.value })}
             >
-              {locations.map((location) => (
+              {allLocations.map((location) => (
                 <option key={location.id} value={location.id}>
                   {location.code} — {location.status}
                 </option>
@@ -492,7 +589,7 @@ export function MovementsPanel({
                 value={form.destinationLocationId}
                 onChange={(e) => setForm({ ...form, destinationLocationId: e.target.value })}
               >
-                {locations
+                {allLocations
                   .filter((location) => location.id !== form.locationId)
                   .map((location) => (
                     <option key={location.id} value={location.id}>
@@ -557,17 +654,79 @@ export function MovementsPanel({
             : "La operación se registra transaccionalmente con el usuario autenticado."}
         </p>
 
+        {/* Feedback Banners */}
+        {successMsg && (
+          <div className="rounded-xl border border-emerald-300 bg-emerald-50 p-4 text-emerald-900 shadow-sm flex items-center justify-between">
+            <div className="flex items-center gap-2.5">
+              <span className="text-xl">✅</span>
+              <div>
+                <p className="font-bold text-sm">Operación completada con éxito</p>
+                <p className="text-xs text-emerald-800 mt-0.5">{successMsg}</p>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => setSuccessMsg(null)}
+              className="text-xs text-emerald-700 hover:text-emerald-900 font-bold px-2 py-1"
+            >
+              ✕
+            </button>
+          </div>
+        )}
+
+        {localError && (
+          <div className="rounded-xl border border-red-300 bg-red-50 p-4 text-red-900 shadow-sm flex items-center justify-between">
+            <div className="flex items-center gap-2.5">
+              <span className="text-xl">⚠️</span>
+              <div>
+                <p className="font-bold text-sm">No se pudo registrar la operación</p>
+                <p className="text-xs text-red-800 mt-0.5">{localError}</p>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => setLocalError(null)}
+              className="text-xs text-red-700 hover:text-red-900 font-bold px-2 py-1"
+            >
+              ✕
+            </button>
+          </div>
+        )}
+
         {canOperate ? (
-          <button className="rounded-lg bg-brand px-5 py-3 font-semibold text-white shadow hover:opacity-95 transition">
-            Confirmar{" "}
-            {(
-              {
-                entry: "entrada",
-                exit: "salida",
-                transfer: "transferencia",
-                adjustment: "ajuste",
-              } as Record<Mode, string>
-            )[mode]}
+          <button
+            type="submit"
+            disabled={isSubmitting}
+            className="rounded-lg bg-brand px-6 py-3 font-semibold text-white shadow hover:opacity-95 transition disabled:opacity-60 flex items-center justify-center gap-2 cursor-pointer disabled:cursor-not-allowed"
+          >
+            {isSubmitting ? (
+              <>
+                <span className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
+                <span>
+                  Confirmando{" "}
+                  {(
+                    {
+                      entry: "entrada...",
+                      exit: "salida...",
+                      transfer: "transferencia...",
+                      adjustment: "ajuste...",
+                    } as Record<Mode, string>
+                  )[mode]}
+                </span>
+              </>
+            ) : (
+              <span>
+                Confirmar{" "}
+                {(
+                  {
+                    entry: "entrada",
+                    exit: "salida",
+                    transfer: "transferencia",
+                    adjustment: "ajuste",
+                  } as Record<Mode, string>
+                )[mode]}
+              </span>
+            )}
           </button>
         ) : (
           <p className="rounded-lg bg-amber-50 p-3 text-sm text-amber-800">
