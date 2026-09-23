@@ -78,8 +78,11 @@ export function Warehouse2D({ token, onError, onNavigate, onDataChanged, refresh
   const [searchQuery, setSearchQuery] = useState('');
   const [orderAsc, setOrderAsc] = useState(true);
   const [entryModalOpen, setEntryModalOpen] = useState(false);
-  const [preselectedLocation, setPreselectedLocation] = useState<Location | null>(null);
   const [exitModalOpen, setExitModalOpen] = useState(false);
+  const [isEntrySelectionMode, setIsEntrySelectionMode] = useState(false);
+  const [entryPositionsCount, setEntryPositionsCount] = useState<number>(1);
+  const [entrySelectedCodes, setEntrySelectedCodes] = useState<Set<string>>(new Set());
+  const [successBanner, setSuccessBanner] = useState<string | null>(null);
 
   const refreshLocations = () => {
     Promise.all([
@@ -155,6 +158,32 @@ export function Warehouse2D({ token, onError, onNavigate, onDataChanged, refresh
       { AVAILABLE: 0, OCCUPIED: 0, BLOCKED: 0, MAINTENANCE: 0, TRANSIT: 0 } as Record<string, number>
     );
   }, [locations]);
+
+  // Array of Location objects corresponding to entrySelectedCodes
+  const entrySelectedLocations = useMemo(() => {
+    const map = new Map(locations.map((l) => [l.code, l]));
+    const list: Location[] = [];
+    for (const code of entrySelectedCodes) {
+      const loc = map.get(code);
+      if (loc) list.push(loc);
+    }
+    return list;
+  }, [locations, entrySelectedCodes]);
+
+  const availableCount = stats.AVAILABLE;
+
+  // Auto-select nearest available positions to the entrance
+  const handleAutoSelectNearest = () => {
+    const available = locations.filter((l) => l.status === 'AVAILABLE');
+    // Sort by proximity to entrance: lower position number is closer to the entrance gate (01 is nearest)
+    // and level 1 is easier to access than level 2
+    const sorted = [...available].sort((a, b) => {
+      if (a.position !== b.position) return a.position - b.position;
+      return a.level - b.level;
+    });
+    const picked = sorted.slice(0, Math.max(1, entryPositionsCount));
+    setEntrySelectedCodes(new Set(picked.map((l) => l.code)));
+  };
 
   const getLocation = (aisle: string, rack: string, level: number, position: number): Location => {
     const key = `${aisle}-${rack}-${level}-${position}`;
@@ -240,22 +269,87 @@ export function Warehouse2D({ token, onError, onNavigate, onDataChanged, refresh
     const isSelected = selected?.code === loc.code;
     const cfg = STATUS_CONFIG[loc.status] ?? STATUS_CONFIG.AVAILABLE;
 
+    // Entry selection mode state
+    const isSelectedForEntry = entrySelectedCodes.has(loc.code);
+    const selectedEntryIndex = isSelectedForEntry
+      ? Array.from(entrySelectedCodes).indexOf(loc.code) + 1
+      : 0;
+
+    let buttonBg = cfg.bg;
+    let buttonBorder = cfg.border;
+    let buttonOpacity = statusFilter !== 'all' && !matched ? 0.2 : 1;
+
+    if (isEntrySelectionMode) {
+      if (loc.status === 'AVAILABLE') {
+        if (isSelectedForEntry) {
+          buttonBg = '#2563EB'; // Royal Blue
+          buttonBorder = '#1D4ED8';
+        } else {
+          buttonBg = '#10B981'; // Green available
+          buttonBorder = '#059669';
+        }
+      } else {
+        buttonOpacity = 0.25;
+      }
+    } else if (isSelected) {
+      buttonBorder = '#1E3A8A';
+    }
+
+    const handleClick = () => {
+      if (isEntrySelectionMode) {
+        if (loc.status !== 'AVAILABLE') return;
+        setEntrySelectedCodes((prev) => {
+          const next = new Set(prev);
+          if (next.has(loc.code)) {
+            next.delete(loc.code);
+          } else {
+            if (entryPositionsCount === 1 && next.size === 1) {
+              return new Set([loc.code]);
+            }
+            if (next.size >= entryPositionsCount) {
+              setEntryPositionsCount(next.size + 1);
+            }
+            next.add(loc.code);
+          }
+          return next;
+        });
+      } else {
+        setSelected(loc);
+      }
+    };
+
     return (
       <button
         key={`${aisle}-${rack}-${level}-${position}`}
         type="button"
-        title={`${loc.code} · ${cfg.label}`}
+        disabled={isEntrySelectionMode && loc.status !== 'AVAILABLE'}
+        title={
+          isEntrySelectionMode
+            ? isSelectedForEntry
+              ? `✓ Posición ${loc.code} seleccionada (#${selectedEntryIndex}). Clic para quitar.`
+              : loc.status === 'AVAILABLE'
+              ? `📍 Posición ${loc.code} disponible. Clic para seleccionar para entrada.`
+              : `🔒 Posición ${loc.code} (${cfg.label}) - No disponible.`
+            : `${loc.code} · ${cfg.label}`
+        }
         style={{
-          backgroundColor: cfg.bg,
-          borderColor: isSelected ? '#1E3A8A' : cfg.border,
-          opacity: statusFilter !== 'all' && !matched ? 0.2 : 1,
+          backgroundColor: buttonBg,
+          borderColor: isSelected || isSelectedForEntry ? '#1E3A8A' : buttonBorder,
+          opacity: buttonOpacity,
         }}
-        className={`relative flex h-8 w-8 items-center justify-center rounded-md text-[11px] font-extrabold text-white shadow-sm transition-all duration-150 cursor-pointer focus:outline-none ${
-          isSelected
-            ? 'z-30 scale-125 ring-4 ring-blue-500 shadow-xl'
-            : 'hover:z-20 hover:scale-125 hover:shadow-lg hover:ring-2 hover:ring-white border'
+        className={`relative flex h-8 w-8 items-center justify-center rounded-md text-[11px] font-extrabold text-white shadow-sm transition-all duration-150 focus:outline-none ${
+          isEntrySelectionMode
+            ? loc.status === 'AVAILABLE'
+              ? isSelectedForEntry
+                ? 'z-30 scale-110 ring-4 ring-blue-400 shadow-xl cursor-pointer'
+                : 'hover:z-20 hover:scale-125 hover:shadow-lg hover:ring-2 hover:ring-white border cursor-pointer'
+              : 'cursor-not-allowed border'
+            : isSelected
+            ? 'z-30 scale-125 ring-4 ring-blue-500 shadow-xl cursor-pointer'
+            : 'hover:z-20 hover:scale-125 hover:shadow-lg hover:ring-2 hover:ring-white border cursor-pointer'
         } ${highlighted ? 'z-30 scale-125 ring-4 ring-amber-400 animate-pulse shadow-xl' : ''}`}
         onMouseEnter={(e) => {
+          if (isEntrySelectionMode) return; // avoid tooltip overlap while picking squares
           const rect = e.currentTarget.getBoundingClientRect();
           const invItem =
             inventoryMap.get(loc.code) ||
@@ -270,9 +364,15 @@ export function Warehouse2D({ token, onError, onNavigate, onDataChanged, refresh
           });
         }}
         onMouseLeave={() => setTooltip(null)}
-        onClick={() => setSelected(loc)}
+        onClick={handleClick}
       >
-        <span className="drop-shadow-md select-none">{String(position).padStart(2, '0')}</span>
+        {isEntrySelectionMode && isSelectedForEntry ? (
+          <span className="drop-shadow-md select-none text-[10px] font-black">
+            ✓{selectedEntryIndex}
+          </span>
+        ) : (
+          <span className="drop-shadow-md select-none">{String(position).padStart(2, '0')}</span>
+        )}
       </button>
     );
   };
@@ -406,14 +506,25 @@ export function Warehouse2D({ token, onError, onNavigate, onDataChanged, refresh
 
           <button
             onClick={() => {
-              setPreselectedLocation(null);
-              setEntryModalOpen(true);
+              if (isEntrySelectionMode) {
+                setIsEntrySelectionMode(false);
+                setEntrySelectedCodes(new Set());
+              } else {
+                setIsEntrySelectionMode(true);
+                if (entrySelectedCodes.size === 0) {
+                  setEntryPositionsCount(1);
+                }
+              }
             }}
-            className="flex items-center gap-1.5 rounded-xl bg-emerald-600 px-3.5 py-1.5 text-xs font-bold text-white hover:bg-emerald-700 shadow-sm transition hover:scale-105 active:scale-95"
-            title="Registrar o apartar entrada de mercancía"
+            className={`flex items-center gap-1.5 rounded-xl px-3.5 py-1.5 text-xs font-bold shadow-sm transition hover:scale-105 active:scale-95 ${
+              isEntrySelectionMode
+                ? 'bg-amber-500 text-white ring-2 ring-amber-300'
+                : 'bg-emerald-600 text-white hover:bg-emerald-700'
+            }`}
+            title="Seleccionar directamente las posiciones en el plano 2D para registrar entrada"
           >
             <span>📥</span>
-            <span>Entrada de Mercancía</span>
+            <span>{isEntrySelectionMode ? '✕ Salir Modo Selección' : 'Entrada de Mercancía'}</span>
           </button>
 
           <button
@@ -439,6 +550,181 @@ export function Warehouse2D({ token, onError, onNavigate, onDataChanged, refresh
           </button>
         </div>
       </div>
+
+      {/* Success Notification Toast */}
+      {successBanner && (
+        <div className="rounded-2xl border-2 border-emerald-300 bg-emerald-50 p-4 text-emerald-900 shadow-md flex items-center justify-between animate-fadeIn">
+          <div className="flex items-center gap-3">
+            <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-emerald-600 text-white font-bold text-sm shadow-sm">
+              ✓
+            </span>
+            <span className="text-xs font-black">{successBanner}</span>
+          </div>
+          <button
+            type="button"
+            onClick={() => setSuccessBanner(null)}
+            className="rounded-lg p-1 text-emerald-700 hover:bg-emerald-100 font-bold"
+          >
+            ✕
+          </button>
+        </div>
+      )}
+
+      {/* Interactive Selection Bar directly on the Official 2D Layout */}
+      {isEntrySelectionMode && (
+        <div className="sticky top-2 z-40 rounded-3xl border-2 border-blue-600 bg-white/95 p-4 shadow-2xl backdrop-blur-md transition-all animate-fadeIn">
+          {/* Header row */}
+          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-blue-100 pb-3">
+            <div className="flex items-center gap-2.5">
+              <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-blue-600 text-white text-base font-bold shadow-sm">
+                📥
+              </span>
+              <div>
+                <h3 className="text-xs sm:text-sm font-black text-blue-950 uppercase tracking-wide">
+                  Modo Entrada · Selección Directa en el Plano Oficial
+                </h3>
+                <p className="text-[11px] text-blue-700 font-medium">
+                  Haz clic directamente sobre los casilleros verdes del plano para elegir las posiciones a ocupar.
+                </p>
+              </div>
+            </div>
+
+            {/* Target Quantity Selector and Progress */}
+            <div className="flex flex-wrap items-center gap-3">
+              <div className="flex items-center gap-2 rounded-xl border border-blue-200 bg-blue-50/80 px-3 py-1.5 shadow-2xs">
+                <span className="text-xs font-extrabold text-blue-900">¿Cuántas posiciones requieres?</span>
+                <div className="flex items-center gap-1">
+                  <button
+                    type="button"
+                    onClick={() => setEntryPositionsCount((c) => Math.max(1, c - 1))}
+                    className="flex h-6 w-6 items-center justify-center rounded-lg bg-white border border-blue-200 text-xs font-bold text-blue-800 hover:bg-blue-100 transition shadow-2xs"
+                  >
+                    -
+                  </button>
+                  <input
+                    type="number"
+                    min={1}
+                    max={availableCount || 148}
+                    value={entryPositionsCount}
+                    onChange={(e) => {
+                      const val = Math.max(1, parseInt(e.target.value) || 1);
+                      setEntryPositionsCount(val);
+                    }}
+                    className="w-12 rounded-lg border border-blue-200 bg-white py-0.5 text-center text-xs font-black text-blue-950 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setEntryPositionsCount((c) => c + 1)}
+                    className="flex h-6 w-6 items-center justify-center rounded-lg bg-white border border-blue-200 text-xs font-bold text-blue-800 hover:bg-blue-100 transition shadow-2xs"
+                  >
+                    +
+                  </button>
+                </div>
+              </div>
+
+              {/* Progress Badge */}
+              <div
+                className={`flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-xs font-black shadow-2xs ${
+                  entrySelectedCodes.size >= entryPositionsCount
+                    ? 'bg-emerald-100 text-emerald-800 border border-emerald-300'
+                    : 'bg-amber-100 text-amber-800 border border-amber-300'
+                }`}
+              >
+                <span>{entrySelectedCodes.size >= entryPositionsCount ? '✓' : '⏳'}</span>
+                <span>
+                  {entrySelectedCodes.size} de {entryPositionsCount} seleccionadas
+                </span>
+              </div>
+            </div>
+          </div>
+
+          {/* Chips and Actions */}
+          <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
+            {/* Selected Position Chips */}
+            <div className="flex flex-wrap items-center gap-1.5 flex-1 min-w-[280px]">
+              <span className="text-[11px] font-extrabold text-slate-500">Casilleros elegidos:</span>
+              {entrySelectedCodes.size === 0 ? (
+                <span className="text-xs italic text-slate-400">
+                  Ninguno seleccionado todavía. Haz clic en los casilleros verdes del plano ↓
+                </span>
+              ) : (
+                Array.from(entrySelectedCodes).map((code, idx) => (
+                  <span
+                    key={code}
+                    className="inline-flex items-center gap-1 rounded-lg bg-blue-600 px-2.5 py-0.5 font-mono text-xs font-bold text-white shadow-xs animate-fadeIn"
+                  >
+                    <span className="text-[10px] text-blue-200">#{idx + 1}</span>
+                    <span>{code}</span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setEntrySelectedCodes((prev) => {
+                          const next = new Set(prev);
+                          next.delete(code);
+                          return next;
+                        });
+                      }}
+                      className="ml-1 rounded text-blue-200 hover:text-white font-bold"
+                      title="Quitar casillero"
+                    >
+                      ✕
+                    </button>
+                  </span>
+                ))
+              )}
+
+              {entrySelectedCodes.size > 0 && (
+                <button
+                  type="button"
+                  onClick={() => setEntrySelectedCodes(new Set())}
+                  className="text-[11px] font-bold text-rose-600 hover:underline ml-2"
+                >
+                  Limpiar todas
+                </button>
+              )}
+            </div>
+
+            {/* Helper Auto-suggest and Confirmation button */}
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                onClick={handleAutoSelectNearest}
+                className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs font-bold text-slate-700 hover:bg-slate-100 transition shadow-2xs"
+                title="Sugerir automáticamente las posiciones disponibles más cercanas al portón de entrada"
+              >
+                ⚡ Sugerir {entryPositionsCount} más cercanas
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setIsEntrySelectionMode(false);
+                  setEntrySelectedCodes(new Set());
+                }}
+                className="rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs font-bold text-slate-600 hover:bg-slate-50 transition"
+              >
+                Cancelar
+              </button>
+
+              <button
+                type="button"
+                disabled={entrySelectedCodes.size === 0}
+                onClick={() => setEntryModalOpen(true)}
+                className={`flex items-center gap-1.5 rounded-xl px-4 py-2 text-xs font-black shadow-md transition ${
+                  entrySelectedCodes.size > 0
+                    ? 'bg-emerald-600 text-white hover:bg-emerald-700 hover:scale-105 active:scale-95 cursor-pointer'
+                    : 'bg-slate-200 text-slate-400 cursor-not-allowed'
+                }`}
+              >
+                <span>✓</span>
+                <span>
+                  Aceptar Selección ({entrySelectedCodes.size}) y Confirmar Productos →
+                </span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* 3. Official Warehouse 2D Layout Plan */}
       <div className="md:hidden flex items-center justify-between px-2 py-1 text-xs text-slate-500">
@@ -797,7 +1083,8 @@ export function Warehouse2D({ token, onError, onNavigate, onDataChanged, refresh
                           onClick={() => {
                             const locToStore = selected;
                             setSelected(null);
-                            setPreselectedLocation(locToStore);
+                            setEntrySelectedCodes(new Set([locToStore.code]));
+                            setEntryPositionsCount(1);
                             setEntryModalOpen(true);
                           }}
                           className="flex items-center gap-1.5 rounded-xl bg-emerald-600 px-3.5 py-2 text-xs font-bold text-white shadow hover:bg-emerald-700 transition hover:scale-105 active:scale-95"
@@ -983,7 +1270,8 @@ export function Warehouse2D({ token, onError, onNavigate, onDataChanged, refresh
                     onClick={() => {
                       const locToStore = selected;
                       setSelected(null);
-                      setPreselectedLocation(locToStore);
+                      setEntrySelectedCodes(new Set([locToStore.code]));
+                      setEntryPositionsCount(1);
                       setEntryModalOpen(true);
                     }}
                     className="flex items-center gap-1.5 rounded-xl bg-emerald-600 px-3.5 py-2 text-xs font-bold text-white hover:bg-emerald-700 transition shadow-sm hover:scale-105 active:scale-95"
@@ -1008,28 +1296,30 @@ export function Warehouse2D({ token, onError, onNavigate, onDataChanged, refresh
       {/* 4. Entry 2D Merchandise Modal */}
       <Entry2DModal
         isOpen={entryModalOpen}
-        onClose={() => {
-          setEntryModalOpen(false);
-          setPreselectedLocation(null);
-        }}
+        onClose={() => setEntryModalOpen(false)}
         token={token}
-        locations={locations}
-        initialLocation={preselectedLocation}
+        selectedLocations={entrySelectedLocations}
+        onReturnToPlan={() => {
+          setEntryModalOpen(false);
+          setIsEntrySelectionMode(true);
+        }}
         onSuccess={(assigned, mode) => {
-          setPreselectedLocation(null);
+          setIsEntrySelectionMode(false);
+          setEntrySelectedCodes(new Set());
           if (mode === 'TRANSIT') {
-            // Asignar estado temporal en tránsito en memoria para el plano
             const assignedCodes = new Set(assigned.map((a) => a.code));
             setLocations((current) =>
               current.map((loc) =>
                 assignedCodes.has(loc.code) ? { ...loc, status: 'TRANSIT' } : loc
               )
             );
+            setSuccessBanner(`🚚 Se apartaron ${assigned.length} posiciones en estado 'En Tránsito'.`);
           } else {
-            // Confirmado directamente en la base de datos
             refreshLocations();
             onDataChanged?.();
+            setSuccessBanner(`✅ Entrada confirmada exitosamente en ${assigned.length} ubicaciones del almacén.`);
           }
+          setTimeout(() => setSuccessBanner(null), 6000);
         }}
       />
 
