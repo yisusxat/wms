@@ -78,6 +78,7 @@ export function Warehouse2D({ token, onError, onNavigate, onDataChanged, refresh
   const [searchQuery, setSearchQuery] = useState('');
   const [orderAsc, setOrderAsc] = useState(true);
   const [entryModalOpen, setEntryModalOpen] = useState(false);
+  const [preselectedLocation, setPreselectedLocation] = useState<Location | null>(null);
   const [exitModalOpen, setExitModalOpen] = useState(false);
 
   const refreshLocations = () => {
@@ -404,7 +405,10 @@ export function Warehouse2D({ token, onError, onNavigate, onDataChanged, refresh
           </button>
 
           <button
-            onClick={() => setEntryModalOpen(true)}
+            onClick={() => {
+              setPreselectedLocation(null);
+              setEntryModalOpen(true);
+            }}
             className="flex items-center gap-1.5 rounded-xl bg-emerald-600 px-3.5 py-1.5 text-xs font-bold text-white hover:bg-emerald-700 shadow-sm transition hover:scale-105 active:scale-95"
             title="Registrar o apartar entrada de mercancía"
           >
@@ -776,16 +780,32 @@ export function Warehouse2D({ token, onError, onNavigate, onDataChanged, refresh
                 <div className="mt-5">
                   {selected.status === 'AVAILABLE' ? (
                     <div className="rounded-2xl border-2 border-emerald-200 bg-emerald-50 p-4">
-                      <div className="flex items-center gap-3">
-                        <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-500 text-xl text-white shadow-sm">
-                          ✓
-                        </span>
-                        <div>
-                          <h4 className="font-black text-emerald-900">UBICACIÓN DISPONIBLE</h4>
-                          <p className="text-xs text-emerald-700">
-                            Esta posición está 100% vacía y lista para recibir ingresos de mercadería.
-                          </p>
+                      <div className="flex flex-wrap items-center justify-between gap-3">
+                        <div className="flex items-center gap-3">
+                          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-emerald-500 text-xl text-white shadow-sm">
+                            ✓
+                          </span>
+                          <div>
+                            <h4 className="font-black text-emerald-900">UBICACIÓN DISPONIBLE</h4>
+                            <p className="text-xs text-emerald-700">
+                              Esta posición está 100% vacía y lista para recibir ingresos de mercadería.
+                            </p>
+                          </div>
                         </div>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const locToStore = selected;
+                            setSelected(null);
+                            setPreselectedLocation(locToStore);
+                            setEntryModalOpen(true);
+                          }}
+                          className="flex items-center gap-1.5 rounded-xl bg-emerald-600 px-3.5 py-2 text-xs font-bold text-white shadow hover:bg-emerald-700 transition hover:scale-105 active:scale-95"
+                          title={`Almacenar producto en ${selected.code}`}
+                        >
+                          <span>📥</span>
+                          <span>Almacenar aquí</span>
+                        </button>
                       </div>
                     </div>
                   ) : selected.status === 'OCCUPIED' ? (
@@ -940,25 +960,43 @@ export function Warehouse2D({ token, onError, onNavigate, onDataChanged, refresh
             </div>
 
             {/* Modal Footer */}
-            <div className="mt-6 flex items-center justify-between">
-              <button
-                type="button"
-                onClick={() => {
-                  const targetCode = selected?.code ?? null;
-                  setSelected(null);
-                  if (onNavigate) {
-                    onNavigate('mapping', targetCode ?? undefined);
-                  }
-                }}
-                className="flex items-center gap-1.5 rounded-xl border border-indigo-200 bg-indigo-50 px-4 py-2 text-xs font-bold text-indigo-700 hover:bg-indigo-100 transition shadow-sm"
-              >
-                <span>🔍</span>
-                <span>Auditar Posición en Mapeo →</span>
-              </button>
+            <div className="mt-6 flex flex-wrap items-center justify-between gap-2 border-t border-slate-100 pt-4">
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    const targetCode = selected?.code ?? null;
+                    setSelected(null);
+                    if (onNavigate) {
+                      onNavigate('mapping', targetCode ?? undefined);
+                    }
+                  }}
+                  className="flex items-center gap-1.5 rounded-xl border border-indigo-200 bg-indigo-50 px-3.5 py-2 text-xs font-bold text-indigo-700 hover:bg-indigo-100 transition shadow-sm"
+                >
+                  <span>🔍</span>
+                  <span>Auditar Posición en Mapeo →</span>
+                </button>
+
+                {selected.status === 'AVAILABLE' && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const locToStore = selected;
+                      setSelected(null);
+                      setPreselectedLocation(locToStore);
+                      setEntryModalOpen(true);
+                    }}
+                    className="flex items-center gap-1.5 rounded-xl bg-emerald-600 px-3.5 py-2 text-xs font-bold text-white hover:bg-emerald-700 transition shadow-sm hover:scale-105 active:scale-95"
+                  >
+                    <span>📥</span>
+                    <span>Almacenar en {selected.code}</span>
+                  </button>
+                )}
+              </div>
 
               <button
                 onClick={() => setSelected(null)}
-                className="rounded-xl bg-slate-900 px-5 py-2.5 text-xs font-bold text-white shadow hover:bg-slate-800 transition"
+                className="rounded-xl bg-slate-900 px-5 py-2 text-xs font-bold text-white shadow hover:bg-slate-800 transition"
               >
                 Cerrar Inspección
               </button>
@@ -970,10 +1008,15 @@ export function Warehouse2D({ token, onError, onNavigate, onDataChanged, refresh
       {/* 4. Entry 2D Merchandise Modal */}
       <Entry2DModal
         isOpen={entryModalOpen}
-        onClose={() => setEntryModalOpen(false)}
+        onClose={() => {
+          setEntryModalOpen(false);
+          setPreselectedLocation(null);
+        }}
         token={token}
         locations={locations}
+        initialLocation={preselectedLocation}
         onSuccess={(assigned, mode) => {
+          setPreselectedLocation(null);
           if (mode === 'TRANSIT') {
             // Asignar estado temporal en tránsito en memoria para el plano
             const assignedCodes = new Set(assigned.map((a) => a.code));
