@@ -1,13 +1,13 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { apiFetch, Product, Location, resolveLocationUuid } from "../../lib/api";
 
 interface Props {
   isOpen: boolean;
   onClose: () => void;
   token: string;
-  selectedLocations: Location[];
+  selectedLocations?: Location[];
   onReturnToPlan?: () => void;
   onSuccess: (assignedLocations: Location[], mode: "CONFIRMED" | "TRANSIT") => void;
 }
@@ -23,10 +23,14 @@ export function Entry2DModal({
   isOpen,
   onClose,
   token,
-  selectedLocations,
+  selectedLocations = [],
   onReturnToPlan,
   onSuccess,
 }: Props) {
+  const safeLocations = useMemo(() => {
+    return Array.isArray(selectedLocations) ? selectedLocations.filter((l): l is Location => Boolean(l && l.code)) : [];
+  }, [selectedLocations]);
+
   const [assignmentMode, setAssignmentMode] = useState<AssignmentMode>("SAME_PRODUCT");
   const [products, setProducts] = useState<Product[]>([]);
   const [searchProduct, setSearchProduct] = useState("");
@@ -46,12 +50,13 @@ export function Entry2DModal({
       setErrorMsg(null);
       setReference(`ENT-2D-${Date.now().toString().slice(-4)}`);
 
-      const initialQty = Math.max(1, selectedLocations.length * 10);
+      const initialQty = Math.max(1, safeLocations.length * 10);
       setQuantity(initialQty);
 
       apiFetch<{ items: Product[] }>("/products?pageSize=200", token)
         .then((res) => {
-          const list = (res.items || []).filter((p) => p.active !== false);
+          const rawItems = Array.isArray(res?.items) ? res.items : [];
+          const list = rawItems.filter((p): p is Product => Boolean(p && p.id && p.active !== false));
           setProducts(list);
           const firstId = list[0]?.id || "";
           if (firstId) {
@@ -60,11 +65,13 @@ export function Entry2DModal({
 
           // Initialize per-location assignments
           const initialMap: Record<string, LocationAssignment> = {};
-          selectedLocations.forEach((loc) => {
-            initialMap[loc.code] = {
-              productId: firstId,
-              quantity: 10,
-            };
+          safeLocations.forEach((loc) => {
+            if (loc?.code) {
+              initialMap[loc.code] = {
+                productId: firstId,
+                quantity: 10,
+              };
+            }
           });
           setLocationAssignments(initialMap);
         })
@@ -73,67 +80,73 @@ export function Entry2DModal({
         })
         .finally(() => setLoadingProducts(false));
     }
-  }, [isOpen, token, selectedLocations]);
+  }, [isOpen, token, safeLocations.length]);
 
-  // Keep per-location assignments in sync if selectedLocations change
+  // Keep per-location assignments in sync if safeLocations change
   useEffect(() => {
-    if (products.length > 0 && selectedLocations.length > 0) {
+    if (products.length > 0 && safeLocations.length > 0) {
       setLocationAssignments((prev) => {
-        const next = { ...prev };
         const defaultProd = selectedProductId || products[0]?.id || "";
-        for (const loc of selectedLocations) {
-          if (!next[loc.code]) {
+        let hasChanges = false;
+        const next = { ...prev };
+        for (const loc of safeLocations) {
+          if (loc?.code && !next[loc.code]) {
             next[loc.code] = { productId: defaultProd, quantity: 10 };
+            hasChanges = true;
           }
         }
-        return next;
+        return hasChanges ? next : prev;
       });
     }
-  }, [selectedLocations, products, selectedProductId]);
+  }, [safeLocations, products, selectedProductId]);
 
   const filteredProducts = useMemo(() => {
-    if (!searchProduct.trim()) return products;
+    const valid = products.filter((p): p is Product => Boolean(p && p.id));
+    if (!searchProduct.trim()) return valid;
     const q = searchProduct.toLowerCase().trim();
-    return products.filter(
+    return valid.filter(
       (p) =>
-        p.name.toLowerCase().includes(q) ||
-        p.sku.toLowerCase().includes(q) ||
-        (p.barcode && p.barcode.toLowerCase().includes(q))
+        (p.name && String(p.name).toLowerCase().includes(q)) ||
+        (p.sku && String(p.sku).toLowerCase().includes(q)) ||
+        (p.barcode && String(p.barcode).toLowerCase().includes(q))
     );
   }, [products, searchProduct]);
 
   const selectedProduct = useMemo(
-    () => products.find((p) => p.id === selectedProductId),
+    () => products.find((p) => p && p.id === selectedProductId),
     [products, selectedProductId]
   );
 
   const productMap = useMemo(() => {
-    return new Map(products.map((p) => [p.id, p]));
+    const m = new Map<string, Product>();
+    products.forEach((p) => {
+      if (p?.id) m.set(p.id, p);
+    });
+    return m;
   }, [products]);
 
   if (!isOpen) return null;
 
-  const positionsCount = selectedLocations.length;
+  const positionsCount = safeLocations.length;
   const unitsPerLoc = positionsCount > 0 ? Math.floor(quantity / positionsCount) : 0;
   const remainderUnits = positionsCount > 0 ? quantity % positionsCount : 0;
 
   // Total units across all per-location assignments
-  const totalPerLocationUnits = useMemo(() => {
-    return selectedLocations.reduce((acc, loc) => {
-      const item = locationAssignments[loc.code];
-      return acc + (item?.quantity || 0);
-    }, 0);
-  }, [selectedLocations, locationAssignments]);
+  const totalPerLocationUnits = safeLocations.reduce((acc, loc) => {
+    if (!loc?.code) return acc;
+    const item = locationAssignments[loc.code];
+    return acc + (item?.quantity || 0);
+  }, 0);
 
   // Count distinct products in per-location mode
-  const distinctProductCount = useMemo(() => {
+  const distinctProductCount = (() => {
     const ids = new Set(
-      selectedLocations
-        .map((loc) => locationAssignments[loc.code]?.productId)
+      safeLocations
+        .map((loc) => (loc?.code ? locationAssignments[loc.code]?.productId : null))
         .filter(Boolean)
     );
     return ids.size;
-  }, [selectedLocations, locationAssignments]);
+  })();
 
   const updateLocationAssignment = (code: string, updates: Partial<LocationAssignment>) => {
     setLocationAssignments((prev) => ({
@@ -150,15 +163,17 @@ export function Entry2DModal({
     if (!source) return;
     setLocationAssignments((prev) => {
       const next = { ...prev };
-      for (const loc of selectedLocations) {
-        next[loc.code] = { ...source };
+      for (const loc of safeLocations) {
+        if (loc?.code) {
+          next[loc.code] = { ...source };
+        }
       }
       return next;
     });
   };
 
   const handleConfirm = async (submitMode: "CONFIRMED" | "TRANSIT") => {
-    if (selectedLocations.length === 0) {
+    if (safeLocations.length === 0) {
       setErrorMsg("No hay ubicaciones seleccionadas para almacenar.");
       return;
     }
@@ -174,7 +189,7 @@ export function Entry2DModal({
       }
     } else {
       // Validate per-location
-      for (const loc of selectedLocations) {
+      for (const loc of safeLocations) {
         const item = locationAssignments[loc.code];
         if (!item?.productId) {
           setErrorMsg(`Por favor selecciona un producto para la posición ${loc.code}.`);
@@ -194,8 +209,8 @@ export function Entry2DModal({
       if (submitMode === "CONFIRMED") {
         if (assignmentMode === "SAME_PRODUCT") {
           // Distribute single product across the chosen locations
-          for (let i = 0; i < selectedLocations.length; i++) {
-            const loc = selectedLocations[i];
+          for (let i = 0; i < safeLocations.length; i++) {
+            const loc = safeLocations[i];
             const locUuid = resolveLocationUuid(loc.id) || resolveLocationUuid(loc.code) || loc.id;
             const locQty = unitsPerLoc + (i < remainderUnits ? 1 : 0);
             if (locQty <= 0) continue;
@@ -213,7 +228,7 @@ export function Entry2DModal({
           }
         } else {
           // Store distinct product and custom quantity per position
-          for (const loc of selectedLocations) {
+          for (const loc of safeLocations) {
             const item = locationAssignments[loc.code];
             if (!item || item.quantity <= 0) continue;
 
@@ -236,7 +251,7 @@ export function Entry2DModal({
         }
       }
 
-      onSuccess(selectedLocations, submitMode);
+      onSuccess(safeLocations, submitMode);
       onClose();
     } catch (err: any) {
       setErrorMsg(err?.message || "Ocurrió un error al procesar el ingreso de mercadería.");
@@ -292,7 +307,7 @@ export function Entry2DModal({
             <div className="flex items-center justify-between mb-2">
               <span className="text-xs font-extrabold uppercase tracking-wider text-blue-900 flex items-center gap-1.5">
                 <span>📍</span>
-                <span>Posiciones Seleccionadas en el Plano ({selectedLocations.length})</span>
+                <span>Posiciones Seleccionadas en el Plano ({safeLocations.length})</span>
               </span>
               {onReturnToPlan && (
                 <button
@@ -305,13 +320,13 @@ export function Entry2DModal({
               )}
             </div>
 
-            {selectedLocations.length === 0 ? (
+            {safeLocations.length === 0 ? (
               <p className="text-xs text-slate-500 italic">
                 No hay posiciones seleccionadas. Cierra este diálogo y haz clic en los casilleros del plano.
               </p>
             ) : (
               <div className="flex flex-wrap gap-1.5 mt-2">
-                {selectedLocations.map((loc, idx) => (
+                {safeLocations.map((loc, idx) => (
                   <span
                     key={loc.code}
                     className="inline-flex items-center gap-1 rounded-xl bg-blue-600 px-3 py-1 font-mono text-xs font-bold text-white shadow-xs"
@@ -328,7 +343,7 @@ export function Entry2DModal({
           </div>
 
           {/* 2. Assignment Mode Toggle (only when more than 1 location is selected) */}
-          {selectedLocations.length > 1 && (
+          {safeLocations.length > 1 && (
             <div className="space-y-1.5">
               <label className="text-[11px] font-extrabold uppercase tracking-wider text-slate-500">
                 Modalidad de Asignación:
@@ -403,7 +418,7 @@ export function Entry2DModal({
                       ) : (
                         filteredProducts.map((p) => (
                           <option key={p.id} value={p.id}>
-                            {p.sku} - {p.name} ({p.unit || "uds"})
+                            {p.sku || ""} - {p.name || "Sin nombre"} ({p.unit || "uds"})
                           </option>
                         ))
                       )}
@@ -450,14 +465,14 @@ export function Entry2DModal({
                   />
                   <div className="flex items-center gap-1 flex-wrap">
                     {[5, 10, 25, 50, 100].map((add) => (
-                  <button
-                    key={add}
-                    type="button"
-                    onClick={() => setQuantity((q) => q + add)}
-                    className="rounded-lg border border-slate-200 bg-slate-50 px-2 py-1 text-[11px] font-bold text-slate-700 hover:bg-slate-100 transition"
-                  >
-                    +{add}
-                  </button>
+                      <button
+                        key={add}
+                        type="button"
+                        onClick={() => setQuantity((q) => q + add)}
+                        className="rounded-lg border border-slate-200 bg-slate-50 px-2 py-1 text-[11px] font-bold text-slate-700 hover:bg-slate-100 transition"
+                      >
+                        +{add}
+                      </button>
                     ))}
                   </div>
                 </div>
@@ -485,12 +500,12 @@ export function Entry2DModal({
                   Configurar Producto y Unidades por Posición:
                 </label>
                 <span className="text-[11px] font-bold text-slate-500">
-                  {selectedLocations.length} ubicaciones configurables
+                  {safeLocations.length} ubicaciones configurables
                 </span>
               </div>
 
               <div className="space-y-3">
-                {selectedLocations.map((loc, idx) => {
+                {safeLocations.map((loc, idx) => {
                   const assignment = locationAssignments[loc.code] || {
                     productId: selectedProductId || products[0]?.id || "",
                     quantity: 10,
@@ -539,7 +554,7 @@ export function Entry2DModal({
                           >
                             {products.map((p) => (
                               <option key={p.id} value={p.id}>
-                                {p.sku} - {p.name}
+                                {p.sku || ""} - {p.name || "Sin nombre"}
                               </option>
                             ))}
                           </select>
@@ -621,7 +636,7 @@ export function Entry2DModal({
           <div className="flex items-center gap-2">
             <button
               type="button"
-              disabled={submitting || selectedLocations.length === 0}
+              disabled={submitting || safeLocations.length === 0}
               onClick={() => handleConfirm("TRANSIT")}
               className="rounded-xl border border-sky-300 bg-sky-50 px-3.5 py-2 text-xs font-bold text-sky-800 hover:bg-sky-100 transition shadow-xs disabled:opacity-50"
               title="Apartar las posiciones como 'En Tránsito' temporalmente"
@@ -633,7 +648,7 @@ export function Entry2DModal({
               type="button"
               disabled={
                 submitting ||
-                selectedLocations.length === 0 ||
+                safeLocations.length === 0 ||
                 (assignmentMode === "SAME_PRODUCT" && !selectedProductId)
               }
               onClick={() => handleConfirm("CONFIRMED")}

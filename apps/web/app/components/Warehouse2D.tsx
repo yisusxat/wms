@@ -164,7 +164,13 @@ export function Warehouse2D({ token, onError, onNavigate, onDataChanged, refresh
     const map = new Map(locations.map((l) => [l.code, l]));
     const list: Location[] = [];
     for (const code of entrySelectedCodes) {
-      const loc = map.get(code);
+      let loc = map.get(code) || map.get(normalizeLocationCode(code));
+      if (!loc) {
+        const parts = code.split('-');
+        if (parts.length === 4) {
+          loc = getLocation(parts[0], parts[1], parseInt(parts[2], 10), parseInt(parts[3], 10));
+        }
+      }
       if (loc) list.push(loc);
     }
     return list;
@@ -1081,14 +1087,15 @@ export function Warehouse2D({ token, onError, onNavigate, onDataChanged, refresh
                         <button
                           type="button"
                           onClick={() => {
-                            const locToStore = selected;
+                            if (!selected) return;
+                            const targetCode = selected.code;
                             setSelected(null);
-                            setEntrySelectedCodes(new Set([locToStore.code]));
+                            setEntrySelectedCodes(new Set([targetCode]));
                             setEntryPositionsCount(1);
                             setEntryModalOpen(true);
                           }}
                           className="flex items-center gap-1.5 rounded-xl bg-emerald-600 px-3.5 py-2 text-xs font-bold text-white shadow hover:bg-emerald-700 transition hover:scale-105 active:scale-95"
-                          title={`Almacenar producto en ${selected.code}`}
+                          title={`Almacenar producto en ${selected?.code || ''}`}
                         >
                           <span>📥</span>
                           <span>Almacenar aquí</span>
@@ -1264,20 +1271,21 @@ export function Warehouse2D({ token, onError, onNavigate, onDataChanged, refresh
                   <span>Auditar Posición en Mapeo →</span>
                 </button>
 
-                {selected.status === 'AVAILABLE' && (
+                {selected?.status === 'AVAILABLE' && (
                   <button
                     type="button"
                     onClick={() => {
-                      const locToStore = selected;
+                      if (!selected) return;
+                      const targetCode = selected.code;
                       setSelected(null);
-                      setEntrySelectedCodes(new Set([locToStore.code]));
+                      setEntrySelectedCodes(new Set([targetCode]));
                       setEntryPositionsCount(1);
                       setEntryModalOpen(true);
                     }}
                     className="flex items-center gap-1.5 rounded-xl bg-emerald-600 px-3.5 py-2 text-xs font-bold text-white hover:bg-emerald-700 transition shadow-sm hover:scale-105 active:scale-95"
                   >
                     <span>📥</span>
-                    <span>Almacenar en {selected.code}</span>
+                    <span>Almacenar en {selected?.code}</span>
                   </button>
                 )}
               </div>
