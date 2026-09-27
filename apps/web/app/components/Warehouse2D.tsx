@@ -6,38 +6,40 @@ import { Entry2DModal } from './Entry2DModal';
 import { Exit2DModal } from './Exit2DModal';
 import { MappingModal } from './MappingModal';
 
+import Icon from './Icon';
+
 const STATUS_CONFIG: Record<
   string,
   { bg: string; text: string; border: string; label: string; badgeBg: string; badgeText: string }
 > = {
   AVAILABLE: {
-    bg: '#10B981',
+    bg: '#94A3B8',
     text: '#FFFFFF',
-    border: '#059669',
+    border: '#64748B',
     label: 'Disponible',
-    badgeBg: '#D1FAE5',
-    badgeText: '#065F46',
-  },
-  OCCUPIED: {
-    bg: '#EF4444',
-    text: '#FFFFFF',
-    border: '#DC2626',
-    label: 'Ocupada',
-    badgeBg: '#FEE2E2',
-    badgeText: '#991B1B',
-  },
-  BLOCKED: {
-    bg: '#64748B',
-    text: '#FFFFFF',
-    border: '#475569',
-    label: 'Bloqueada',
     badgeBg: '#F1F5F9',
     badgeText: '#334155',
   },
-  MAINTENANCE: {
-    bg: '#F59E0B',
+  OCCUPIED: {
+    bg: '#2563EB',
     text: '#FFFFFF',
-    border: '#D97706',
+    border: '#1D4ED8',
+    label: 'Ocupada',
+    badgeBg: '#DBEAFE',
+    badgeText: '#1E40AF',
+  },
+  BLOCKED: {
+    bg: '#DC2626',
+    text: '#FFFFFF',
+    border: '#B91C1C',
+    label: 'Bloqueada',
+    badgeBg: '#FEE2E2',
+    badgeText: '#991B1B',
+  },
+  MAINTENANCE: {
+    bg: '#D97706',
+    text: '#FFFFFF',
+    border: '#B45309',
     label: 'Mantención',
     badgeBg: '#FEF3C7',
     badgeText: '#92400E',
@@ -534,24 +536,24 @@ export function Warehouse2D({ token, onError, onNavigate, onDataChanged, refresh
               refreshLocations();
               onDataChanged?.();
             }}
-            className="flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs font-bold text-slate-700 hover:bg-slate-50 shadow-sm transition hover:scale-105 active:scale-95"
+            className="flex items-center gap-1.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-1.5 text-xs font-semibold text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 shadow-xs transition"
             title="Sincronizar ubicaciones e inventario físico en tiempo real"
           >
-            <span>🔄</span>
+            <Icon name="refresh" size={14} />
             <span>Actualizar Plano</span>
           </button>
 
           <button
             type="button"
             onClick={() => setHeatmapMode(!heatmapMode)}
-            className={`flex items-center gap-1.5 rounded-xl border px-3 py-1.5 text-xs font-bold shadow-sm transition active:scale-95 ${
+            className={`flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-semibold shadow-xs transition ${
               heatmapMode
-                ? 'bg-rose-50 border-rose-300 text-rose-800 ring-2 ring-rose-200'
-                : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50'
+                ? 'bg-orange-50 border-orange-300 text-orange-800 dark:bg-orange-950/40 dark:border-orange-600 dark:text-orange-200 ring-2 ring-orange-200'
+                : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700'
             }`}
             title="Alternar mapa de calor de ocupación"
           >
-            <span>{heatmapMode ? '🔥' : '🗺️'}</span>
+            <Icon name="layers" size={14} />
             <span>{heatmapMode ? 'Mapa de Calor Activo' : 'Mapa de Calor'}</span>
           </button>
 
@@ -567,23 +569,23 @@ export function Warehouse2D({ token, onError, onNavigate, onDataChanged, refresh
                 }
               }
             }}
-            className={`flex items-center gap-1.5 rounded-xl px-3.5 py-1.5 text-xs font-bold shadow-sm transition hover:scale-105 active:scale-95 ${
+            className={`flex items-center gap-1.5 rounded-lg px-3.5 py-1.5 text-xs font-semibold shadow-xs transition ${
               isEntrySelectionMode
-                ? 'bg-amber-500 text-white ring-2 ring-amber-300'
+                ? 'bg-amber-600 text-white ring-2 ring-amber-300'
                 : 'bg-emerald-600 text-white hover:bg-emerald-700'
             }`}
             title="Seleccionar directamente las posiciones en el plano 2D para registrar entrada"
           >
-            <span>📥</span>
+            <Icon name="plus" size={14} />
             <span>{isEntrySelectionMode ? '✕ Salir Modo Selección' : 'Entrada de Mercancía'}</span>
           </button>
 
           <button
             onClick={() => setExitModalOpen(true)}
-            className="flex items-center gap-1.5 rounded-xl bg-orange-600 px-3.5 py-1.5 text-xs font-bold text-white hover:bg-orange-700 shadow-sm transition hover:scale-105 active:scale-95"
+            className="flex items-center gap-1.5 rounded-lg bg-red-600 px-3.5 py-1.5 text-xs font-semibold text-white hover:bg-red-700 shadow-xs transition"
             title="Seleccionar productos y generar reporte de salida"
           >
-            <span>📤</span>
+            <Icon name="arrow-right" size={14} />
             <span>Salida de Producto</span>
           </button>
 
@@ -593,10 +595,10 @@ export function Warehouse2D({ token, onError, onNavigate, onDataChanged, refresh
                 onNavigate('mapping');
               }
             }}
-            className="flex items-center gap-1.5 rounded-xl bg-indigo-600 px-3.5 py-1.5 text-xs font-bold text-white hover:bg-indigo-700 shadow-sm transition hover:scale-105 active:scale-95"
+            className="flex items-center gap-1.5 rounded-lg bg-blue-600 px-3.5 py-1.5 text-xs font-semibold text-white hover:bg-blue-700 shadow-xs transition"
             title="Ir a la sección de Mapeo y Conciliación Física"
           >
-            <span>🔍</span>
+            <Icon name="mapping" size={14} />
             <span>Mapeo Almacén →</span>
           </button>
         </div>
@@ -604,10 +606,10 @@ export function Warehouse2D({ token, onError, onNavigate, onDataChanged, refresh
 
       {/* Heatmap Legend */}
       {heatmapMode && (
-        <div className="flex flex-wrap items-center justify-between gap-3 p-3.5 rounded-2xl bg-slate-900 text-white shadow-sm border border-slate-800 animate-fadeIn">
+        <div className="flex flex-wrap items-center justify-between gap-3 p-3.5 rounded-xl bg-slate-900 text-white shadow-sm border border-slate-800 animate-fadeIn">
           <div className="flex items-center gap-2">
-            <span className="text-base">🔥</span>
-            <span className="text-xs font-bold uppercase tracking-wider text-slate-300">
+            <Icon name="layers" size={16} className="text-orange-400" />
+            <span className="text-xs font-semibold uppercase tracking-wider text-slate-300">
               Semáforo Térmico de Ocupación:
             </span>
           </div>

@@ -4,6 +4,7 @@ import { useState, useEffect, useMemo, FormEvent } from 'react';
 import { apiFetch, CurrentUser, Page, Product } from '../../lib/api';
 import { ProductImportModal, ProductExportMenu } from './ProductImportExportModal';
 import { TableSkeleton } from './Skeleton';
+import Icon from './Icon';
 
 interface ProductsPanelProps {
   token: string;
@@ -176,33 +177,33 @@ export function ProductsPanel({ token, role, onError, onDataChanged, refreshKey 
   return (
     <section className="space-y-6">
       {/* Header and Quick Stats */}
-      <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between rounded-3xl bg-slate-900 text-white p-4 sm:p-6 shadow-xl">
-        <div className="flex items-center gap-3.5">
-          <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-indigo-500/20 border border-indigo-400/30 text-2xl font-bold">
-            📦
+      <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-4 sm:p-5 shadow-xs">
+        <div className="flex items-center gap-3">
+          <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-blue-50 dark:bg-blue-950/50 border border-blue-200 dark:border-blue-900 text-blue-600 dark:text-blue-400">
+            <Icon name="products" size={20} />
           </div>
           <div>
             <div className="flex items-center gap-2">
-              <h2 className="text-xl font-black tracking-tight">Catálogo de Productos</h2>
-              <span className="rounded-full bg-indigo-500/30 border border-indigo-400/40 px-2.5 py-0.5 text-[11px] font-bold text-indigo-200">
+              <h2 className="text-lg font-semibold tracking-tight text-slate-900 dark:text-white">Catálogo de Productos</h2>
+              <span className="rounded-full bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 px-2 py-0.5 text-[11px] font-medium text-slate-600 dark:text-slate-300">
                 WMS Inventory
               </span>
             </div>
-            <p className="text-xs text-slate-400 mt-0.5">
+            <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
               Gestiona SKUs, nombres, categorías, unidades de medida e importación/exportación masiva.
             </p>
           </div>
         </div>
 
         {/* Global Action Buttons */}
-        <div className="flex flex-wrap items-center gap-2.5">
+        <div className="flex flex-wrap items-center gap-2">
           <button
             type="button"
             onClick={() => setImportModalOpen(true)}
-            className="rounded-xl bg-emerald-600 hover:bg-emerald-500 px-4 py-2.5 text-xs font-bold text-white shadow-md transition flex items-center gap-2 cursor-pointer active:scale-95"
+            className="rounded-lg bg-emerald-600 hover:bg-emerald-500 px-3.5 py-2 text-xs font-semibold text-white shadow-xs transition flex items-center gap-1.5 cursor-pointer active:scale-95"
             title="Importar productos masivamente desde Excel, CSV o JSON"
           >
-            <span className="text-sm">📥</span>
+            <Icon name="upload" size={14} />
             <span>Importar (Excel / CSV / JSON)</span>
           </button>
 
@@ -215,9 +216,19 @@ export function ProductsPanel({ token, role, onError, onDataChanged, refreshKey 
           <button
             type="button"
             onClick={() => setShowAddForm(!showAddForm)}
-            className="rounded-xl bg-blue-600 px-4 py-2.5 text-xs font-bold text-white hover:bg-blue-500 shadow-md transition flex items-center gap-2 cursor-pointer active:scale-95"
+            className="rounded-lg bg-blue-600 px-3.5 py-2 text-xs font-semibold text-white hover:bg-blue-500 shadow-xs transition flex items-center gap-1.5 cursor-pointer active:scale-95"
           >
-            <span>{showAddForm ? '✕ Cerrar' : '➕ Nuevo Producto'}</span>
+            {showAddForm ? (
+              <>
+                <Icon name="close" size={14} />
+                <span>Cerrar</span>
+              </>
+            ) : (
+              <>
+                <Icon name="plus" size={14} />
+                <span>Nuevo Producto</span>
+              </>
+            )}
           </button>
         </div>
       </div>
@@ -226,19 +237,19 @@ export function ProductsPanel({ token, role, onError, onDataChanged, refreshKey 
       {canManage && showAddForm && (
         <form
           onSubmit={submitCreate}
-          className="rounded-3xl bg-white p-6 shadow-md border-2 border-indigo-100 space-y-4 animate-fadeIn"
+          className="rounded-xl bg-white dark:bg-slate-900 p-5 shadow-xs border border-slate-200 dark:border-slate-800 space-y-4 animate-fadeIn"
         >
-          <div className="flex items-center justify-between border-b pb-3">
+          <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
             <div className="flex items-center gap-2">
-              <span className="text-lg">✨</span>
-              <h3 className="font-bold text-sm text-slate-800">Registrar Nuevo Producto</h3>
+              <Icon name="plus" size={16} className="text-orange-500" />
+              <h3 className="font-semibold text-sm text-slate-900 dark:text-white">Registrar Nuevo Producto</h3>
             </div>
             <button
               type="button"
               onClick={() => setShowAddForm(false)}
-              className="text-xs font-bold text-slate-400 hover:text-slate-600"
+              className="text-xs font-semibold text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 cursor-pointer"
             >
-              ✕ Cancelar
+              Cerrar
             </button>
           </div>
 
@@ -344,16 +355,18 @@ export function ProductsPanel({ token, role, onError, onDataChanged, refreshKey 
       )}
 
       {/* Search, Filter Bar and Table */}
-      <div className="rounded-3xl bg-white p-4 sm:p-6 shadow-sm border border-slate-100 space-y-4">
+      <div className="rounded-xl bg-white dark:bg-slate-900 p-4 sm:p-5 shadow-xs border border-slate-200 dark:border-slate-800 space-y-4">
         {/* Filters Row */}
         <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
           {/* Search Box */}
           <div className="flex flex-1 items-center gap-2">
             <div className="relative flex-1">
-              <span className="absolute left-3.5 top-3 text-slate-400 text-xs">🔍</span>
+              <span className="absolute left-3 top-3 text-slate-400">
+                <Icon name="search" size={14} />
+              </span>
               <input
                 placeholder="Buscar por SKU, nombre del producto o categoría..."
-                className="w-full rounded-2xl border border-slate-200 bg-slate-50/70 py-2.5 pl-9 pr-4 text-xs font-semibold focus:bg-white focus:border-indigo-600 focus:outline-none shadow-2xs"
+                className="w-full rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50/70 dark:bg-slate-800 py-2.5 pl-9 pr-4 text-xs font-medium text-slate-900 dark:text-slate-100 focus:bg-white dark:focus:bg-slate-900 focus:border-blue-600 focus:outline-none shadow-2xs"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 onKeyDown={(e) => e.key === 'Enter' && (setPage(1), void load())}
@@ -409,30 +422,32 @@ export function ProductsPanel({ token, role, onError, onDataChanged, refreshKey 
             </select>
 
             {/* Density toggle */}
-            <div className="inline-flex rounded-xl border border-slate-200 bg-slate-50 p-0.5 ml-auto">
+            <div className="inline-flex rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 p-0.5 ml-auto">
               <button
                 type="button"
                 onClick={() => setDensity('comfortable')}
-                className={`px-2.5 py-1 text-xs font-semibold rounded-lg transition ${
+                className={`px-2.5 py-1 text-xs font-semibold rounded-md transition flex items-center gap-1 cursor-pointer ${
                   density === 'comfortable'
-                    ? 'bg-white shadow-xs text-slate-900 font-bold'
-                    : 'text-slate-500 hover:text-slate-800'
+                    ? 'bg-white dark:bg-slate-700 shadow-xs text-slate-900 dark:text-white font-bold'
+                    : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
                 }`}
                 title="Vista Cómoda (Móvil/Táctil)"
               >
-                🔘 Cómoda
+                <Icon name="sliders" size={12} />
+                <span>Cómoda</span>
               </button>
               <button
                 type="button"
                 onClick={() => setDensity('compact')}
-                className={`px-2.5 py-1 text-xs font-semibold rounded-lg transition ${
+                className={`px-2.5 py-1 text-xs font-semibold rounded-md transition flex items-center gap-1 cursor-pointer ${
                   density === 'compact'
-                    ? 'bg-white shadow-xs text-slate-900 font-bold'
-                    : 'text-slate-500 hover:text-slate-800'
+                    ? 'bg-white dark:bg-slate-700 shadow-xs text-slate-900 dark:text-white font-bold'
+                    : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
                 }`}
                 title="Vista Compacta (Alta Densidad)"
               >
-                ≡ Compacta
+                <Icon name="filter" size={12} />
+                <span>Compacta</span>
               </button>
             </div>
           </div>

@@ -7,6 +7,7 @@ import { LabelModal, LabelModalData } from "./LabelModal";
 import { PickingModal } from "./PickingModal";
 import { queueOfflineMovement, getPendingMovements, syncOfflineMovements, PendingMovement } from "../../lib/offlineSync";
 import { playSuccessSound, playErrorSound, playClickSound } from "../../lib/audioCues";
+import Icon from "./Icon";
 
 type Mode = "entry" | "exit" | "transfer" | "adjustment";
 
@@ -396,43 +397,69 @@ export function MovementsPanel({
   return (
     <section className="space-y-5">
       {/* Action Toolbar */}
-      <div className="flex flex-wrap items-center justify-between gap-3 bg-white p-4 rounded-xl shadow-sm border border-slate-100">
+      <div className="flex flex-wrap items-center justify-between gap-3 bg-white dark:bg-slate-900 p-4 rounded-xl shadow-xs border border-slate-200 dark:border-slate-800">
         <div className="flex flex-wrap gap-2">
-          {availableModes.map((item) => (
-            <button
-              type="button"
-              key={item}
-              onClick={() => setMode(item)}
-              className={`rounded-xl px-4 py-2.5 min-h-[44px] text-xs sm:text-sm font-bold transition flex items-center justify-center active:scale-95 cursor-pointer ${
-                mode === item ? "bg-brand text-white shadow-sm" : "border border-slate-200 bg-white text-gray-700 hover:bg-slate-50"
-              }`}
-            >
-              {(
-                {
-                  entry: "📥 Entrada",
-                  exit: "📤 Salida",
-                  transfer: "🔀 Transferencia",
-                  adjustment: "⚖️ Ajuste",
-                } as Record<Mode, string>
-              )[item]}
-            </button>
-          ))}
+          {availableModes.map((item) => {
+            const activeColor =
+              item === "entry"
+                ? "bg-emerald-600 text-white"
+                : item === "exit"
+                ? "bg-red-600 text-white"
+                : item === "transfer"
+                ? "bg-blue-600 text-white"
+                : "bg-slate-800 text-white";
+
+            const iconName =
+              item === "entry"
+                ? "plus"
+                : item === "exit"
+                ? "arrow-right"
+                : item === "transfer"
+                ? "movements"
+                : "sliders";
+
+            const label =
+              item === "entry"
+                ? "Entrada"
+                : item === "exit"
+                ? "Salida"
+                : item === "transfer"
+                ? "Transferencia"
+                : "Ajuste";
+
+            return (
+              <button
+                type="button"
+                key={item}
+                onClick={() => setMode(item)}
+                className={`rounded-lg px-3.5 py-2 min-h-[40px] text-xs sm:text-sm font-semibold transition flex items-center justify-center gap-1.5 active:scale-95 cursor-pointer ${
+                  mode === item
+                    ? `${activeColor} shadow-xs`
+                    : "border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700"
+                }`}
+              >
+                <Icon name={iconName as any} size={15} />
+                <span>{label}</span>
+              </button>
+            );
+          })}
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
           {/* Quick vs Guided Mode Toggle */}
-          <div className="inline-flex rounded-xl border border-slate-200 bg-slate-50 p-0.5">
+          <div className="inline-flex rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 p-0.5">
             <button
               type="button"
               onClick={() => {
                 setIsGuidedMode(false);
                 playClickSound();
               }}
-              className={`px-3 py-1.5 text-xs font-bold rounded-lg transition ${
-                !isGuidedMode ? "bg-white shadow-xs text-slate-900" : "text-slate-500 hover:text-slate-800"
+              className={`px-3 py-1.5 text-xs font-semibold rounded-md transition flex items-center gap-1 cursor-pointer ${
+                !isGuidedMode ? "bg-white dark:bg-slate-700 shadow-xs text-slate-900 dark:text-white" : "text-slate-500 hover:text-slate-800 dark:hover:text-slate-200"
               }`}
             >
-              ⚡ Rápido
+              <Icon name="refresh" size={13} />
+              <span>Rápido</span>
             </button>
             <button
               type="button"
@@ -441,11 +468,12 @@ export function MovementsPanel({
                 setGuidedStep(1);
                 playClickSound();
               }}
-              className={`px-3 py-1.5 text-xs font-bold rounded-lg transition ${
-                isGuidedMode ? "bg-white shadow-xs text-slate-900" : "text-slate-500 hover:text-slate-800"
+              className={`px-3 py-1.5 text-xs font-semibold rounded-md transition flex items-center gap-1 cursor-pointer ${
+                isGuidedMode ? "bg-white dark:bg-slate-700 shadow-xs text-slate-900 dark:text-white" : "text-slate-500 hover:text-slate-800 dark:hover:text-slate-200"
               }`}
             >
-              🚶 Modo Guiado
+              <Icon name="arrow-right" size={13} />
+              <span>Modo Guiado</span>
             </button>
           </div>
 
@@ -454,34 +482,38 @@ export function MovementsPanel({
               type="button"
               onClick={handleSyncOffline}
               disabled={isSyncing}
-              className="flex items-center gap-1.5 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-xs font-bold text-amber-900 hover:bg-amber-100 transition animate-pulse"
+              className="flex items-center gap-1.5 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-xs font-bold text-amber-900 hover:bg-amber-100 transition animate-pulse cursor-pointer"
               title="Movimientos guardados en IndexedDB pendientes de subir"
             >
-              {isSyncing ? "⏳ Sincronizando..." : `📶 Sincronizar (${pendingOffline.length} offline)`}
+              <Icon name="refresh" size={14} className={isSyncing ? "animate-spin" : ""} />
+              <span>{isSyncing ? "Sincronizando..." : `Sincronizar (${pendingOffline.length} offline)`}</span>
             </button>
           )}
           <button
             type="button"
             onClick={() => setPickingOpen(true)}
-            className="flex items-center gap-1.5 rounded-lg border border-purple-200 bg-purple-50 px-3 py-2 text-xs font-semibold text-purple-900 hover:bg-purple-100 transition"
+            className="flex items-center gap-1.5 rounded-lg border border-purple-200 dark:border-purple-900 bg-purple-50 dark:bg-purple-950/40 px-3 py-2 text-xs font-semibold text-purple-900 dark:text-purple-300 hover:bg-purple-100 transition cursor-pointer"
           >
-            🚶 Ola de Picking (S-Shape)
+            <Icon name="boxes" size={14} />
+            <span>Ola de Picking (S-Shape)</span>
           </button>
           <button
             type="button"
             onClick={() => showProductLabel(form.productId)}
             disabled={!form.productId}
-            className="flex items-center gap-1.5 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-100 transition disabled:opacity-50"
+            className="flex items-center gap-1.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-3 py-2 text-xs font-semibold text-slate-700 dark:text-slate-300 hover:bg-slate-100 transition disabled:opacity-50 cursor-pointer"
           >
-            🏷️ Etiqueta Producto
+            <Icon name="print" size={14} />
+            <span>Etiqueta Producto</span>
           </button>
           <button
             type="button"
             onClick={() => showLocationLabel(form.locationId)}
             disabled={!form.locationId}
-            className="flex items-center gap-1.5 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-100 transition disabled:opacity-50"
+            className="flex items-center gap-1.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-3 py-2 text-xs font-semibold text-slate-700 dark:text-slate-300 hover:bg-slate-100 transition disabled:opacity-50 cursor-pointer"
           >
-            📍 Etiqueta Posición
+            <Icon name="print" size={14} />
+            <span>Etiqueta Posición</span>
           </button>
         </div>
       </div>
@@ -898,14 +930,15 @@ export function MovementsPanel({
                 setTableDensity("comfortable");
                 playClickSound();
               }}
-              className={`px-2.5 py-1 text-xs font-semibold rounded-lg transition ${
+              className={`px-2.5 py-1 text-xs font-semibold rounded-md transition flex items-center gap-1 cursor-pointer ${
                 tableDensity === "comfortable"
-                  ? "bg-white shadow-xs text-slate-900 font-bold"
-                  : "text-slate-500 hover:text-slate-800"
+                  ? "bg-white dark:bg-slate-700 shadow-xs text-slate-900 dark:text-white font-bold"
+                  : "text-slate-500 hover:text-slate-800 dark:hover:text-slate-200"
               }`}
               title="Vista Cómoda"
             >
-              🔘 Cómoda
+              <Icon name="sliders" size={12} />
+              <span>Cómoda</span>
             </button>
             <button
               type="button"
@@ -913,14 +946,15 @@ export function MovementsPanel({
                 setTableDensity("compact");
                 playClickSound();
               }}
-              className={`px-2.5 py-1 text-xs font-semibold rounded-lg transition ${
+              className={`px-2.5 py-1 text-xs font-semibold rounded-md transition flex items-center gap-1 cursor-pointer ${
                 tableDensity === "compact"
-                  ? "bg-white shadow-xs text-slate-900 font-bold"
-                  : "text-slate-500 hover:text-slate-800"
+                  ? "bg-white dark:bg-slate-700 shadow-xs text-slate-900 dark:text-white font-bold"
+                  : "text-slate-500 hover:text-slate-800 dark:hover:text-slate-200"
               }`}
               title="Vista Compacta"
             >
-              ≡ Compacta
+              <Icon name="filter" size={12} />
+              <span>Compacta</span>
             </button>
           </div>
         </div>

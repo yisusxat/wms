@@ -1,6 +1,29 @@
 "use client";
 
 import React, { useState, useEffect, useRef, useMemo, useCallback } from "react";
+import type { LucideIcon } from "lucide-react";
+import {
+  ArrowDownToLine,
+  ArrowLeftRight,
+  Box,
+  FileBarChart,
+  FileText,
+  Gauge,
+  Grid3x3,
+  LayoutDashboard,
+  LifeBuoy,
+  Moon,
+  Package,
+  Scale,
+  ScanBarcode,
+  ScrollText,
+  Search,
+  ShieldCheck,
+  Sun,
+  Users,
+  Volume2,
+  VolumeX,
+} from "lucide-react";
 import { playClickSound } from "../../lib/audioCues";
 
 export interface CommandItem {
@@ -8,7 +31,7 @@ export interface CommandItem {
   title: string;
   subtitle?: string;
   category: "Navegación" | "Acción Operativa" | "Ajustes";
-  icon: string;
+  icon: LucideIcon;
   shortcut?: string;
   action: () => void;
 }
@@ -55,7 +78,7 @@ export default function CommandPalette({
         title: "Ir a Dashboard Principal",
         subtitle: "Resumen ejecutivo y KPIs en tiempo real",
         category: "Navegación",
-        icon: "📊",
+        icon: LayoutDashboard,
         shortcut: "G D",
         action: () => {
           onNavigate("dashboard");
@@ -67,7 +90,7 @@ export default function CommandPalette({
         title: "Ir a Catálogo de Productos",
         subtitle: "Listado de SKUs, stock actual y precios",
         category: "Navegación",
-        icon: "🏷️",
+        icon: Package,
         shortcut: "G P",
         action: () => {
           onNavigate("products");
@@ -79,7 +102,7 @@ export default function CommandPalette({
         title: "Ir a Movimientos y Kardex",
         subtitle: "Entradas, salidas, traslados y ajustes",
         category: "Navegación",
-        icon: "📦",
+        icon: ArrowLeftRight,
         shortcut: "G M",
         action: () => {
           onNavigate("movements");
@@ -91,7 +114,7 @@ export default function CommandPalette({
         title: "Ir a Plano 2D de Bodega",
         subtitle: "Visualización esquemática de pasillos y casilleros",
         category: "Navegación",
-        icon: "🗺️",
+        icon: Grid3x3,
         shortcut: "G 2",
         action: () => {
           onNavigate("warehouse2d");
@@ -103,7 +126,7 @@ export default function CommandPalette({
         title: "Ir a Gemelo Digital 3D",
         subtitle: "Exploración tridimensional inmersiva de estanterías",
         category: "Navegación",
-        icon: "🧊",
+        icon: Box,
         shortcut: "G 3",
         action: () => {
           onNavigate("warehouse3d");
@@ -115,10 +138,10 @@ export default function CommandPalette({
         title: "Ir a Centro de Mando / KPIs",
         subtitle: "Rotación, ocupación, OTIF y exactitud de inventario",
         category: "Navegación",
-        icon: "📈",
+        icon: Gauge,
         shortcut: "G K",
         action: () => {
-          onNavigate("kpi");
+          onNavigate("kpis");
           onClose();
         },
       },
@@ -127,7 +150,7 @@ export default function CommandPalette({
         title: "Ir a Módulo de Reportes",
         subtitle: "Exportación de datos a Excel, CSV y PDF",
         category: "Navegación",
-        icon: "📄",
+        icon: FileBarChart,
         shortcut: "G R",
         action: () => {
           onNavigate("reports");
@@ -139,7 +162,7 @@ export default function CommandPalette({
         title: "Ir a Gestión de Equipo",
         subtitle: "Usuarios, roles y matriz de permisos RBAC",
         category: "Navegación",
-        icon: "👥",
+        icon: Users,
         shortcut: "G T",
         action: () => {
           onNavigate("team");
@@ -153,7 +176,7 @@ export default function CommandPalette({
         title: "Abrir Escáner de Código de Barras / QR",
         subtitle: "Lectura óptica con cámara del dispositivo",
         category: "Acción Operativa",
-        icon: "📷",
+        icon: ScanBarcode,
         shortcut: "Scan",
         action: () => {
           onOpenScanner?.();
@@ -165,7 +188,7 @@ export default function CommandPalette({
         title: "Registrar Entrada de Mercadería",
         subtitle: "Recepción de artículos en bodega",
         category: "Acción Operativa",
-        icon: "📥",
+        icon: ArrowDownToLine,
         action: () => {
           onNavigate("movements");
           onClose();
@@ -178,7 +201,7 @@ export default function CommandPalette({
         title: "Configurar Autenticación 2FA",
         subtitle: "Seguridad de cuenta con código TOTP",
         category: "Ajustes",
-        icon: "🔐",
+        icon: ShieldCheck,
         action: () => {
           onOpen2FA?.();
           onClose();
@@ -189,7 +212,7 @@ export default function CommandPalette({
         title: "Ver Bitácora de Auditoría",
         subtitle: "Historial inmutable de eventos del sistema",
         category: "Ajustes",
-        icon: "📜",
+        icon: ScrollText,
         action: () => {
           onOpenAudit?.();
           onClose();
@@ -200,7 +223,7 @@ export default function CommandPalette({
         title: "Mesa de Ayuda & Soporte Técnico",
         subtitle: "Reportar incidencias operativas",
         category: "Ajustes",
-        icon: "⚠",
+        icon: LifeBuoy,
         action: () => {
           onOpenSupport?.();
           onClose();
@@ -211,7 +234,7 @@ export default function CommandPalette({
         title: "Marco Legal, SLA y Privacidad",
         subtitle: "Acuerdo de 99.5% de disponibilidad y RGPD",
         category: "Ajustes",
-        icon: "⚖️",
+        icon: Scale,
         action: () => {
           onOpenLegal?.();
           onClose();
@@ -222,7 +245,7 @@ export default function CommandPalette({
         title: isDark ? "Cambiar a Modo Claro" : "Cambiar a Modo Industrial Oscuro",
         subtitle: "Alternar paleta visual de alto contraste",
         category: "Ajustes",
-        icon: isDark ? "☀️" : "🌙",
+        icon: isDark ? Sun : Moon,
         action: () => {
           onToggleTheme?.();
           onClose();
@@ -233,7 +256,7 @@ export default function CommandPalette({
         title: isSoundOn ? "Silenciar Efectos de Sonido" : "Activar Efectos de Sonido",
         subtitle: "Audio cues de confirmación y advertencia",
         category: "Ajustes",
-        icon: isSoundOn ? "🔊" : "🔇",
+        icon: isSoundOn ? VolumeX : Volume2,
         action: () => {
           onToggleSound?.();
           onClose();
@@ -366,13 +389,14 @@ export default function CommandPalette({
         <div ref={listRef} className="overflow-y-auto p-2 divide-y divide-slate-100 dark:divide-slate-800">
           {filteredCommands.length === 0 ? (
             <div className="py-12 text-center text-slate-400 dark:text-slate-500">
-              <p className="text-2xl mb-1">🔍</p>
+              <Search size={28} className="mx-auto mb-2 opacity-60" />
               <p className="text-sm font-medium">No se encontraron comandos para &quot;{query}&quot;</p>
               <p className="text-xs mt-1">Prueba con palabras como &quot;2D&quot;, &quot;SKU&quot;, &quot;kardex&quot; o &quot;reporte&quot;</p>
             </div>
           ) : (
             filteredCommands.map((item, index) => {
               const isSelected = index === selectedIndex;
+              const IconComponent = item.icon;
               return (
                 <button
                   key={item.id}
@@ -386,7 +410,7 @@ export default function CommandPalette({
                   }`}
                 >
                   <div className="flex items-center gap-3 min-w-0">
-                    <span className="text-xl shrink-0">{item.icon}</span>
+                    <IconComponent size={18} className="shrink-0 text-slate-500 dark:text-slate-400" />
                     <div className="min-w-0">
                       <p className="text-sm font-semibold truncate leading-tight">{item.title}</p>
                       {item.subtitle && (

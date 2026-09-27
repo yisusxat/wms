@@ -1,11 +1,43 @@
 'use client';
 
 import { FormEvent, useCallback, useEffect, useMemo, useState } from 'react';
+import type { LucideIcon } from 'lucide-react';
+import {
+  ArrowLeftRight,
+  Boxes,
+  Box,
+  Check,
+  Eye,
+  EyeOff,
+  FileBarChart,
+  Gauge,
+  Grid3x3,
+  LayoutDashboard,
+  LifeBuoy,
+  Loader2,
+  MapPin,
+  Menu,
+  Package,
+  RefreshCw,
+  Scale,
+  ScanBarcode,
+  ScanSearch,
+  ScrollText,
+  Search,
+  ShieldCheck,
+  Users,
+  Warehouse,
+  Wifi,
+  WifiOff,
+  X,
+} from 'lucide-react';
 import { insforge } from '../lib/insforge';
 import dynamic from 'next/dynamic';
 import { apiFetch, CurrentUser, InventoryItem, Location, Page, Product } from '../lib/api';
+import { locationStatusClass, locationStatusLabel } from '../lib/locationStatus';
 import { MovementsPanel } from './components/MovementsPanel';
 import { ProductsPanel } from './components/ProductsPanel';
+import { RoleBadge, UserMenu } from './components/UserMenu';
 
 const Warehouse3D = dynamic(
   () => import('./components/Warehouse3D').then((m) => m.Warehouse3D),
@@ -88,7 +120,7 @@ const BarcodeScanner = dynamic(
 );
 
 import { ToastProvider, useToast } from './components/Toast';
-import { ThemeProvider, ThemeToggle, useTheme } from './components/ThemeContext';
+import { ThemeProvider, useTheme, ThemeToggle } from './components/ThemeContext';
 import CommandPalette from './components/CommandPalette';
 import { DashboardSkeleton } from './components/Skeleton';
 import { isSoundEnabled, setSoundEnabled } from '../lib/audioCues';
@@ -116,18 +148,28 @@ type Tab =
   | 'mapping'
   | 'team';
 
-const baseTabs: { id: Tab; label: string; icon?: string }[] = [
-  { id: 'dashboard', label: 'Dashboard', icon: '🏠' },
-  { id: 'kpis', label: 'Centro de Mando', icon: '🎯' },
-  { id: 'reports', label: 'Reportes', icon: '📑' },
-  { id: 'products', label: 'Productos', icon: '📦' },
-  { id: 'locations', label: 'Ubicaciones', icon: '📍' },
-  { id: 'inventory', label: 'Inventario', icon: '🗂️' },
-  { id: 'movements', label: 'Movimientos', icon: '🔄' },
-  { id: 'warehouse3d', label: 'Vista 3D', icon: '🧊' },
-  { id: 'warehouse2d', label: 'Vista 2D', icon: '🗺️' },
-  { id: 'mapping', label: 'Mapeo Almacén', icon: '🔍' },
+const baseTabs: { id: Tab; label: string; icon: LucideIcon }[] = [
+  { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
+  { id: 'kpis', label: 'Centro de mando', icon: Gauge },
+  { id: 'reports', label: 'Reportes', icon: FileBarChart },
+  { id: 'products', label: 'Productos', icon: Package },
+  { id: 'locations', label: 'Ubicaciones', icon: MapPin },
+  { id: 'inventory', label: 'Inventario', icon: Boxes },
+  { id: 'movements', label: 'Movimientos', icon: ArrowLeftRight },
+  { id: 'warehouse3d', label: 'Vista 3D', icon: Box },
+  { id: 'warehouse2d', label: 'Vista 2D', icon: Grid3x3 },
+  { id: 'mapping', label: 'Mapeo', icon: ScanSearch },
 ];
+
+const NAV_GROUPS: { id: string; label: string; items: Tab[] }[] = [
+  { id: 'operate', label: 'Operar', items: ['movements', 'inventory'] },
+  { id: 'consult', label: 'Consultar', items: ['dashboard', 'kpis', 'reports'] },
+  { id: 'masters', label: 'Maestros', items: ['products', 'locations'] },
+  { id: 'floor', label: 'Plano', items: ['warehouse2d', 'warehouse3d', 'mapping'] },
+  { id: 'admin', label: 'Administración', items: ['team'] },
+];
+
+const FLOOR_TABS: Tab[] = ['warehouse2d', 'warehouse3d', 'mapping'];
 
 function isTokenValid(jwt: string): boolean {
   try {
@@ -394,10 +436,21 @@ function HomePageContent() {
     return [
       ...baseTabs,
       ...(profile?.role === 'ADMIN' || userPerms?.canManageTeam
-        ? [{ id: 'team' as Tab, label: 'Equipo', icon: '👥' }]
+        ? [{ id: 'team' as Tab, label: 'Equipo', icon: Users }]
         : []),
     ].filter((t) => isTabVisible(t.id));
   }, [profile?.role, userPerms, isTabVisible]);
+
+  const groupedNav = useMemo(
+    () =>
+      NAV_GROUPS.map((group) => ({
+        ...group,
+        tabs: group.items
+          .map((id) => visibleTabs.find((t) => t.id === id))
+          .filter((t): t is (typeof visibleTabs)[number] => Boolean(t)),
+      })).filter((group) => group.tabs.length > 0),
+    [visibleTabs],
+  );
 
   // Fallback to first available tab if current tab is restricted
   useEffect(() => {
@@ -463,9 +516,9 @@ function HomePageContent() {
 
   if (loading) {
     return (
-      <main className="grid min-h-screen place-items-center bg-slate-50 text-slate-600">
+      <main className="grid min-h-screen place-items-center bg-surface text-slate-600 dark:text-slate-300">
         <div className="flex flex-col items-center gap-3">
-          <div className="h-8 w-8 animate-spin rounded-full border-4 border-blue-600 border-t-transparent"></div>
+          <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
           <span className="text-sm font-medium">Cargando WMS…</span>
         </div>
       </main>
@@ -474,21 +527,26 @@ function HomePageContent() {
 
   if (!user || !token) {
     return (
-      <main className="grid min-h-screen place-items-center bg-slate-50 p-4 sm:p-6">
+      <main className="grid min-h-screen place-items-center bg-surface p-4 sm:p-6 dark:bg-slate-950">
         <div className="w-full max-w-md space-y-4">
-          <form onSubmit={signIn} className="rounded-2xl bg-white p-5 sm:p-8 shadow-sm border border-slate-100 space-y-4">
+          <form onSubmit={signIn} className="space-y-4 rounded-xl border border-slate-200 bg-white p-5 shadow-sm sm:p-8 dark:border-slate-800 dark:bg-slate-900">
             <div className="flex items-center gap-2">
-              <span className="rounded bg-blue-100 px-2 py-0.5 text-xs font-bold tracking-wider text-blue-800">WMS</span>
-              <p className="text-sm font-semibold uppercase tracking-widest text-brand">Logística</p>
+              <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-600 text-white">
+                <Warehouse className="h-4 w-4" />
+              </span>
+              <div>
+                <p className="text-sm font-semibold text-slate-900 dark:text-white">WMS Enterprise</p>
+                <p className="text-[11px] font-medium uppercase tracking-widest text-blue-700 dark:text-blue-300">Logística</p>
+              </div>
             </div>
-            <h1 className="text-3xl font-bold text-slate-900">Iniciar sesión</h1>
+            <h1 className="text-2xl font-semibold text-slate-900 dark:text-white">Iniciar sesión</h1>
 
-            <label className="block text-sm font-medium text-slate-700">
+            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300">
               Correo electrónico
               <input
                 name="email"
                 autoComplete="username"
-                className="mt-1.5 w-full rounded-lg border p-3 outline-blue-600 focus:ring-2 focus:ring-blue-500"
+                className="mt-1.5 w-full rounded-lg border border-slate-300 bg-white p-3 text-slate-900 outline-none focus:border-blue-600 focus:ring-2 focus:ring-blue-500/30 dark:border-slate-600 dark:bg-slate-800 dark:text-white"
                 type="email"
                 required
                 placeholder="usuario@bodega.com"
@@ -497,13 +555,13 @@ function HomePageContent() {
               />
             </label>
 
-            <label className="block text-sm font-medium text-slate-700">
+            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300">
               Contraseña
               <div className="relative mt-1.5">
                 <input
                   name="password"
                   autoComplete="current-password"
-                  className="w-full rounded-lg border p-3 pr-10 outline-blue-600 focus:ring-2 focus:ring-blue-500"
+                  className="w-full rounded-lg border border-slate-300 bg-white p-3 pr-11 text-slate-900 outline-none focus:border-blue-600 focus:ring-2 focus:ring-blue-500/30 dark:border-slate-600 dark:bg-slate-800 dark:text-white"
                   type={showPassword ? "text" : "password"}
                   required
                   placeholder="••••••••"
@@ -513,22 +571,22 @@ function HomePageContent() {
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-3 top-3.5 text-slate-400 hover:text-slate-600 text-sm cursor-pointer select-none"
+                  className="absolute right-3 top-3 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
                   tabIndex={-1}
                   title={showPassword ? "Ocultar contraseña" : "Ver contraseña"}
                 >
-                  {showPassword ? "👁️" : "👁️‍🗨️"}
+                  {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                 </button>
               </div>
             </label>
 
             <div className="flex items-center justify-between pt-1">
-              <label className="flex items-center gap-2 cursor-pointer text-xs font-semibold text-slate-700 select-none">
+              <label className="flex items-center gap-2 text-xs font-medium text-slate-700 select-none dark:text-slate-300">
                 <input
                   type="checkbox"
                   checked={rememberPassword}
                   onChange={(e) => setRememberPassword(e.target.checked)}
-                  className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
+                  className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
                 />
                 <span>Recordar contraseña</span>
               </label>
@@ -536,25 +594,25 @@ function HomePageContent() {
               <button
                 type="button"
                 onClick={() => setForgotOpen(true)}
-                className="text-xs font-semibold text-blue-600 hover:text-blue-800 transition cursor-pointer"
+                className="text-xs font-semibold text-blue-600 hover:text-blue-800 dark:text-blue-400"
               >
                 ¿Olvidaste tu contraseña?
               </button>
             </div>
 
-            {error && <p className="rounded-lg bg-red-50 p-3 text-sm text-danger">{error}</p>}
+            {error && <p className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-danger dark:border-red-900 dark:bg-red-950/40">{error}</p>}
 
-            <button className="w-full rounded-lg bg-brand p-3 font-semibold text-white transition hover:bg-blue-800 cursor-pointer shadow-sm">
-              Entrar al Sistema
+            <button className="w-full rounded-lg bg-blue-600 p-3 font-semibold text-white shadow-sm transition hover:bg-blue-700">
+              Entrar al sistema
             </button>
           </form>
 
           <div className="text-center">
             <button
               onClick={() => setLegalOpen(true)}
-              className="text-xs text-slate-400 hover:text-slate-600 transition"
+              className="inline-flex items-center gap-1.5 text-xs text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
             >
-              ⚖️ Términos de Servicio · SLA · Privacidad & RGPD
+              <Scale className="h-3.5 w-3.5" /> Términos · SLA · Privacidad
             </button>
           </div>
         </div>
@@ -566,133 +624,195 @@ function HomePageContent() {
   }
 
   return (
-    <div className="min-h-screen lg:flex bg-slate-50">
-      {/* Mobile Top Navigation Bar */}
-      <div className="lg:hidden sticky top-0 z-40 flex items-center justify-between bg-[#1E3A8A] px-3.5 py-2.5 text-white shadow-md">
-        <div className="flex items-center gap-2 min-w-0">
-          <span className="rounded bg-white/20 px-2 py-0.5 text-xs font-bold tracking-wider shrink-0">WMS</span>
-          <span className="text-sm font-semibold tracking-wide text-blue-100 shrink-0">Logística</span>
-          <span className="text-[11px] bg-blue-800/80 px-2 py-0.5 rounded-full font-medium text-blue-100 truncate max-w-[140px]">
+    <div className="min-h-screen bg-surface lg:flex dark:bg-slate-950">
+      <div className="sticky top-0 z-40 flex items-center justify-between bg-[var(--color-sidebar)] px-3.5 py-2.5 text-white shadow-md lg:hidden">
+        <div className="flex min-w-0 items-center gap-2">
+          <Warehouse className="h-4 w-4 shrink-0" />
+          <span className="text-sm font-semibold tracking-wide text-blue-100">WMS</span>
+          <span className="max-w-[140px] truncate rounded-full bg-blue-800/80 px-2 py-0.5 text-[11px] font-medium text-blue-100">
             {visibleTabs.find(item => item.id === tab)?.label}
           </span>
         </div>
         <button
           onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-          className="flex items-center gap-1.5 rounded-lg bg-white/10 px-3 py-1.5 text-xs font-medium text-white hover:bg-white/20 transition active:scale-95 shrink-0"
+          className="flex shrink-0 items-center gap-1.5 rounded-lg bg-white/10 px-3 py-1.5 text-xs font-medium text-white hover:bg-white/20"
           aria-label="Abrir menú"
         >
-          {mobileMenuOpen ? '✕ Cerrar' : '☰ Menú'}
+          {mobileMenuOpen ? <X className="h-4 w-4" /> : <Menu className="h-4 w-4" />}
+          {mobileMenuOpen ? 'Cerrar' : 'Menú'}
         </button>
       </div>
 
-      {/* Mobile Backdrop Overlay */}
       {mobileMenuOpen && (
         <div
           onClick={() => setMobileMenuOpen(false)}
-          className="lg:hidden fixed inset-0 z-40 bg-slate-900/60 backdrop-blur-xs transition-opacity"
+          className="fixed inset-0 z-40 bg-slate-900/60 lg:hidden"
         />
       )}
 
-      {/* Responsive Sidebar (Mobile Drawer + Desktop Sticky) */}
       <aside
-        className={`fixed inset-y-0 left-0 z-50 w-72 bg-[#1E3A8A] p-6 text-white flex flex-col justify-between overflow-y-auto transform transition-transform duration-300 ease-in-out lg:static lg:h-screen lg:w-64 lg:sticky lg:top-0 lg:translate-x-0 shrink-0 ${
+        className={`fixed inset-y-0 left-0 z-50 flex w-72 shrink-0 flex-col justify-between overflow-y-auto bg-[var(--color-sidebar)] p-5 text-white transition-transform duration-300 ease-in-out lg:static lg:sticky lg:top-0 lg:h-screen lg:w-64 lg:translate-x-0 ${
           mobileMenuOpen ? 'translate-x-0 shadow-2xl' : '-translate-x-full'
         }`}
       >
         <div>
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
-              <span className="rounded bg-white/20 px-2 py-0.5 text-xs font-bold tracking-wider">WMS</span>
-              <span className="text-sm font-semibold uppercase tracking-widest text-blue-100">Logística</span>
+              <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-white/15">
+                <Warehouse className="h-4 w-4" />
+              </span>
+              <div>
+                <p className="text-sm font-semibold">WMS Enterprise</p>
+                <p className="text-[10px] uppercase tracking-widest text-blue-200">Logística</p>
+              </div>
             </div>
             <button
               onClick={() => setMobileMenuOpen(false)}
-              className="lg:hidden rounded-lg p-1 text-blue-200 hover:bg-white/10 hover:text-white"
+              className="rounded-lg p-1 text-blue-200 hover:bg-white/10 hover:text-white lg:hidden"
             >
-              ✕
+              <X className="h-4 w-4" />
             </button>
           </div>
-          <p className="mt-2 text-xs text-blue-200">Operaciones de bodega</p>
-          <nav className="mt-8 space-y-1">
-            {visibleTabs.map(item => (
-              <button
-                key={item.id}
-                onClick={() => {
-                  changeTab(item.id);
-                  setMobileMenuOpen(false);
-                }}
-                className={"flex items-center gap-2.5 w-full rounded-lg px-3 py-2.5 text-left text-sm transition " + (tab === item.id ? "bg-white/20 font-semibold text-white shadow-xs" : "text-blue-100 hover:bg-white/10")}
-              >
-                {item.icon && <span className="text-base">{item.icon}</span>}
-                {item.label}
-              </button>
+          <p className="mt-3 text-xs text-blue-200">Operaciones de bodega</p>
+          <nav className="mt-6 space-y-4">
+            {groupedNav.map((group) => (
+              <div key={group.id}>
+                <p className="mb-1 px-3 text-[10px] font-semibold uppercase tracking-wider text-blue-300/80">
+                  {group.label}
+                </p>
+                <div className="space-y-0.5">
+                  {group.tabs.map((item) => {
+                    const Icon = item.icon;
+                    return (
+                      <button
+                        key={item.id}
+                        onClick={() => {
+                          changeTab(item.id);
+                          setMobileMenuOpen(false);
+                        }}
+                        className={
+                          'flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-left text-sm transition ' +
+                          (tab === item.id ? 'bg-white/20 font-semibold text-white' : 'text-blue-100 hover:bg-white/10')
+                        }
+                      >
+                        <Icon className="h-4 w-4 shrink-0" />
+                        {item.label}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
             ))}
           </nav>
         </div>
 
-        <div className="mt-8 pt-6 border-t border-blue-700/50 text-xs text-blue-200 space-y-3">
+        <div className="mt-8 space-y-2.5 border-t border-blue-700/50 pt-5 text-xs text-blue-200">
           <div>
-            <p className="font-medium text-white truncate">{user.email}</p>
-            <p className="text-[11px] capitalize text-blue-300">Rol: {profile?.role ?? 'Usuario'}</p>
+            <p className="truncate font-medium text-white">{user.email}</p>
+            <div className="mt-1">
+              <RoleBadge role={profile?.role} />
+            </div>
           </div>
-          <button
-            onClick={() => {
-              setLegalOpen(true);
-              setMobileMenuOpen(false);
-            }}
-            className="text-[11px] text-blue-300 hover:text-white flex items-center gap-1 transition"
-          >
-            ⚖️ Términos, SLA y Privacidad
-          </button>
+          <div className="space-y-1.5 pt-1">
+            {profile?.role === 'ADMIN' && (
+              <button
+                type="button"
+                onClick={() => {
+                  setAuditOpen(true);
+                  setMobileMenuOpen(false);
+                }}
+                className="flex items-center gap-2 text-xs text-blue-200 transition hover:text-white cursor-pointer"
+              >
+                <ScrollText className="h-3.5 w-3.5" /> Auditoría
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={() => {
+                setTwoFactorOpen(true);
+                setMobileMenuOpen(false);
+              }}
+              className="flex items-center gap-2 text-xs text-blue-200 transition hover:text-white cursor-pointer"
+            >
+              <ShieldCheck className="h-3.5 w-3.5" /> 2FA
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setSupportOpen(true);
+                setMobileMenuOpen(false);
+              }}
+              className="flex items-center gap-2 text-xs text-blue-200 transition hover:text-white cursor-pointer"
+            >
+              <LifeBuoy className="h-3.5 w-3.5" /> Soporte
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setLegalOpen(true);
+                setMobileMenuOpen(false);
+              }}
+              className="flex items-center gap-2 text-xs text-blue-200 transition hover:text-white cursor-pointer"
+            >
+              <Scale className="h-3.5 w-3.5" /> Términos, SLA y Privacidad
+            </button>
+          </div>
         </div>
       </aside>
 
-      {/* Floating Offline / Online Status Indicator */}
       {!isOnline && (
-        <div className="fixed top-2 left-1/2 -translate-x-1/2 z-50 rounded-full bg-amber-600 px-4 py-1.5 text-xs font-bold text-white shadow-lg flex items-center gap-2 animate-bounce">
-          <span>📶</span>
-          <span>Modo Offline: Operando con almacenamiento local</span>
+        <div className="fixed left-1/2 top-2 z-50 flex -translate-x-1/2 items-center gap-2 rounded-full bg-amber-600 px-4 py-1.5 text-xs font-semibold text-white shadow-lg">
+          <WifiOff className="h-3.5 w-3.5" />
+          <span>Modo offline: operando con almacenamiento local</span>
         </div>
       )}
       {showReconnected && (
-        <div className="fixed top-2 left-1/2 -translate-x-1/2 z-50 rounded-full bg-emerald-600 px-4 py-1.5 text-xs font-bold text-white shadow-lg flex items-center gap-2 animate-fadeIn">
-          <span>✓</span>
+        <div className="fixed left-1/2 top-2 z-50 flex -translate-x-1/2 items-center gap-2 rounded-full bg-emerald-600 px-4 py-1.5 text-xs font-semibold text-white shadow-lg animate-fadeIn">
+          <Wifi className="h-3.5 w-3.5" />
           <span>Conexión restablecida con el servidor</span>
         </div>
       )}
 
-      <section className="flex-1 p-3 sm:p-6 lg:p-10 min-w-0 pb-28 lg:pb-10">
-        <header className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4 border-b border-slate-200 pb-4 sm:pb-5">
+      <section className="min-w-0 flex-1 p-3 pb-28 sm:p-6 lg:p-8 lg:pb-8">
+        <header className="flex flex-col justify-between gap-3 border-b border-slate-200 pb-4 sm:flex-row sm:items-center dark:border-slate-800">
           <div>
             <div className="flex items-center gap-2">
-              <span className="inline-flex items-center gap-1 rounded-full bg-blue-100 px-2.5 py-0.5 text-xs font-semibold text-blue-800">
-                🏢 Bodega Central
+              <span className="inline-flex items-center gap-1.5 rounded-full bg-blue-100 px-2.5 py-0.5 text-xs font-semibold text-blue-800 dark:bg-blue-950 dark:text-blue-200">
+                <Warehouse className="h-3.5 w-3.5" /> Bodega Central
               </span>
-              <span className="text-xs text-slate-400">· Multi-Tenant</span>
             </div>
-            <h1 className="mt-1 text-2xl sm:text-3xl font-bold text-gray-900">{visibleTabs.find(item => item.id === tab)?.label ?? 'Dashboard'}</h1>
+            <h1 className="mt-1 text-2xl font-semibold text-slate-900 sm:text-3xl dark:text-white">
+              {visibleTabs.find(item => item.id === tab)?.label ?? 'Dashboard'}
+            </h1>
           </div>
 
-          <div className="flex flex-wrap items-center gap-1.5 sm:gap-2.5">
-            {/* Quick Command Palette Launcher */}
+          <div className="flex flex-wrap items-center gap-2">
             <button
               onClick={() => setCommandPaletteOpen(true)}
-              className="flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 px-2.5 sm:px-3 py-1.5 sm:py-2 text-xs sm:text-sm font-medium text-slate-700 transition shadow-xs active:scale-95 cursor-pointer"
-              title="Abrir paleta de comandos rápida (Ctrl+K)"
+              className="flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-sm font-medium text-slate-700 shadow-sm transition hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700"
+              title="Abrir paleta de comandos (Ctrl+K)"
             >
-              <span>🔍</span>
+              <Search className="h-4 w-4" />
               <span className="hidden md:inline">Comandos</span>
-              <kbd className="hidden sm:inline-flex items-center font-mono text-[10px] bg-slate-100 border border-slate-300 px-1 py-0.5 rounded text-slate-500">
-                ⌘K
+              <kbd className="hidden items-center rounded border border-slate-300 bg-slate-100 px-1 py-0.5 font-mono text-[10px] text-slate-500 sm:inline-flex dark:border-slate-600 dark:bg-slate-900">
+                Ctrl K
               </kbd>
             </button>
-
-            {/* Theme Toggle (Light / Dark) */}
-            <ThemeToggle />
-
-            {/* Sound Toggle */}
             <button
-              onClick={() => {
+              onClick={() => setGlobalScannerOpen(true)}
+              className="hidden items-center gap-1.5 rounded-lg bg-accent px-3 py-1.5 text-sm font-semibold text-white shadow-sm transition hover:opacity-90 lg:flex cursor-pointer"
+              title="Escanear código de barras o QR"
+            >
+              <ScanBarcode className="h-4 w-4" /> Escanear
+            </button>
+            <ThemeToggle />
+            <UserMenu
+              email={user.email}
+              role={profile?.role}
+              isDark={isDark}
+              soundOn={soundOn}
+              onToggleTheme={toggleTheme}
+              onToggleSound={() => {
                 const next = !soundOn;
                 setSoundOn(next);
                 setSoundEnabled(next);
@@ -701,62 +821,44 @@ function HomePageContent() {
                   type: 'info',
                 });
               }}
-              className="p-1.5 sm:p-2 rounded-lg border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 transition text-xs sm:text-sm shadow-xs flex items-center justify-center min-w-[36px] min-h-[36px] cursor-pointer active:scale-95"
-              title={soundOn ? 'Silenciar efectos de sonido' : 'Activar efectos de sonido'}
-              aria-label="Alternar sonido"
-            >
-              {soundOn ? '🔊' : '🔇'}
-            </button>
-
-            {profile?.role === 'ADMIN' && (
-              <button
-                onClick={() => setAuditOpen(true)}
-                className="flex items-center gap-1.5 rounded-lg border border-indigo-200 bg-indigo-50 px-2.5 sm:px-3 py-1.5 sm:py-2 text-xs sm:text-sm font-medium text-indigo-900 transition hover:bg-indigo-100 shadow-xs active:scale-95"
-                title="Ver bitácora de auditoría"
-              >
-                📜 Auditoría
-              </button>
-            )}
-            <button
-              onClick={() => setGlobalScannerOpen(true)}
-              className="flex items-center gap-1.5 rounded-lg border border-blue-200 bg-blue-50 px-2.5 sm:px-3 py-1.5 sm:py-2 text-xs sm:text-sm font-medium text-blue-900 transition hover:bg-blue-100 shadow-xs active:scale-95"
-              title="Escanear código de barras o QR"
-            >
-              📷 Escanear
-            </button>
-            <button
-              onClick={() => setTwoFactorOpen(true)}
-              className="flex items-center gap-1.5 rounded-lg border border-purple-200 bg-purple-50 px-2.5 sm:px-3 py-1.5 sm:py-2 text-xs sm:text-sm font-medium text-purple-900 transition hover:bg-purple-100 shadow-xs active:scale-95"
-              title="Configurar 2FA"
-            >
-              🔐 2FA
-            </button>
-            <button
-              onClick={() => setSupportOpen(true)}
-              className="flex items-center gap-1.5 rounded-lg border border-amber-300 bg-amber-50 px-2.5 sm:px-3 py-1.5 sm:py-2 text-xs sm:text-sm font-medium text-amber-900 transition hover:bg-amber-100 shadow-xs active:scale-95"
-              title="Reportar problema técnico"
-            >
-              <span className="text-amber-600 font-bold">⚠</span> Soporte
-            </button>
-            <button
-              onClick={revokeAll}
-              className="rounded-lg border border-slate-200 bg-white px-2.5 sm:px-3 py-1.5 sm:py-2 text-xs font-medium text-slate-600 hover:bg-slate-50 transition shadow-xs active:scale-95"
-              title="Cerrar sesión en todos los dispositivos"
-            >
-              Cerrar en todos
-            </button>
-            <button
-              onClick={signOut}
-              className="rounded-lg border bg-white px-3 sm:px-3.5 py-1.5 sm:py-2 text-xs sm:text-sm font-medium text-gray-700 transition hover:bg-gray-100 shadow-xs active:scale-95"
-            >
-              Cerrar sesión
-            </button>
+              onOpenAudit={profile?.role === 'ADMIN' ? () => setAuditOpen(true) : undefined}
+              onOpen2FA={() => setTwoFactorOpen(true)}
+              onOpenSupport={() => setSupportOpen(true)}
+              onOpenLegal={() => setLegalOpen(true)}
+              onRevokeAll={revokeAll}
+              onSignOut={signOut}
+            />
           </div>
         </header>
 
-        {error && <p className="mt-6 rounded-lg bg-red-50 p-3 text-sm text-danger">{error}</p>}
+        {error && <p className="mt-6 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-danger dark:border-red-900 dark:bg-red-950/40">{error}</p>}
 
-        <div className="mt-8">
+        {FLOOR_TABS.includes(tab) ? (
+          <div className="mt-4 inline-flex rounded-lg border border-slate-200 bg-white p-1 dark:border-slate-700 dark:bg-slate-900">
+            {FLOOR_TABS.filter((id) => visibleTabs.some((t) => t.id === id)).map((id) => {
+              const item = visibleTabs.find((t) => t.id === id);
+              if (!item) return null;
+              const Icon = item.icon;
+              return (
+                <button
+                  key={id}
+                  type="button"
+                  onClick={() => changeTab(id)}
+                  className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-semibold transition ${
+                    tab === id
+                      ? 'bg-blue-600 text-white'
+                      : 'text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800'
+                  }`}
+                >
+                  <Icon className="h-3.5 w-3.5" />
+                  {item.label}
+                </button>
+              );
+            })}
+          </div>
+        ) : null}
+
+        <div className="mt-6">
           {tab === 'dashboard' ? <Dashboard summary={summary} onNavigate={changeTab} role={profile?.role} /> : null}
           {tab === 'kpis' ? <KPIPanel token={token} organizationId={profile?.organizationId} refreshKey={dataVersion} /> : null}
           {tab === 'reports' ? <ReportsPanel token={token} organizationId={profile?.organizationId} onDataChanged={refreshSummary} refreshKey={dataVersion} /> : null}
@@ -801,62 +903,63 @@ function HomePageContent() {
       <div
         role="region"
         aria-label="Barra de acciones móviles"
-        className="lg:hidden fixed bottom-0 left-0 right-0 z-40 bg-white/95 backdrop-blur-md border-t border-slate-200 px-2 py-1 shadow-lg pb-[max(0.5rem,env(safe-area-inset-bottom))]"
+        className="fixed bottom-0 left-0 right-0 z-40 border-t border-slate-200 bg-white/95 px-2 py-1 pb-[max(0.5rem,env(safe-area-inset-bottom))] shadow-lg backdrop-blur-md lg:hidden dark:border-slate-800 dark:bg-slate-900/95"
       >
-        <div className="flex items-center justify-around relative">
+        <div className="relative flex items-center justify-around">
           <button
             type="button"
             onClick={() => changeTab('dashboard')}
-            className={`flex flex-col items-center justify-center py-1 px-2 min-h-[48px] min-w-[56px] text-xs transition ${
-              tab === 'dashboard' ? 'text-blue-900 font-bold' : 'text-slate-500 hover:text-slate-800'
+            className={`flex min-h-[48px] min-w-[56px] flex-col items-center justify-center px-2 py-1 text-xs transition ${
+              tab === 'dashboard' ? 'font-semibold text-blue-700 dark:text-blue-300' : 'text-slate-500 hover:text-slate-800 dark:text-slate-400'
             }`}
           >
-            <span className="text-xl">📊</span>
+            <LayoutDashboard className="h-5 w-5" />
             <span className="text-[10px] tracking-tight">Dashboard</span>
           </button>
 
           <button
             type="button"
             onClick={() => changeTab('movements')}
-            className={`flex flex-col items-center justify-center py-1 px-2 min-h-[48px] min-w-[56px] text-xs transition ${
-              tab === 'movements' ? 'text-blue-900 font-bold' : 'text-slate-500 hover:text-slate-800'
+            className={`flex min-h-[48px] min-w-[56px] flex-col items-center justify-center px-2 py-1 text-xs transition ${
+              tab === 'movements' ? 'font-semibold text-blue-700 dark:text-blue-300' : 'text-slate-500 hover:text-slate-800 dark:text-slate-400'
             }`}
           >
-            <span className="text-xl">📦</span>
+            <ArrowLeftRight className="h-5 w-5" />
             <span className="text-[10px] tracking-tight">Movimientos</span>
           </button>
 
-          {/* Central Elevated Floating Action Button (FAB) for Instant Barcode Scan */}
           <div className="relative -top-5 flex flex-col items-center">
             <button
               type="button"
               onClick={() => setGlobalScannerOpen(true)}
-              className="flex h-14 w-14 items-center justify-center rounded-full bg-gradient-to-tr from-blue-700 to-indigo-600 text-white shadow-xl shadow-blue-500/40 ring-4 ring-white active:scale-95 transition-transform cursor-pointer"
-              aria-label="Escanear Código de Barras o QR"
-              title="Escanear Código de Barras o QR"
+              className="flex h-14 w-14 items-center justify-center rounded-full bg-accent text-white shadow-xl shadow-orange-500/30 ring-4 ring-white transition-transform active:scale-95 dark:ring-slate-900"
+              aria-label="Escanear código de barras o QR"
+              title="Escanear código de barras o QR"
             >
-              <span className="text-2xl drop-shadow-sm">📷</span>
+              <ScanBarcode className="h-6 w-6" />
             </button>
-            <span className="text-[9px] font-black text-blue-900 uppercase tracking-tighter mt-1">Escanear</span>
+            <span className="mt-1 text-[9px] font-semibold uppercase tracking-tight text-orange-700 dark:text-orange-300">Escanear</span>
           </div>
 
           <button
             type="button"
             onClick={() => changeTab('warehouse2d')}
-            className={`flex flex-col items-center justify-center py-1 px-2 min-h-[48px] min-w-[56px] text-xs transition ${
-              tab === 'warehouse2d' ? 'text-blue-900 font-bold' : 'text-slate-500 hover:text-slate-800'
+            className={`flex min-h-[48px] min-w-[56px] flex-col items-center justify-center px-2 py-1 text-xs transition ${
+              tab === 'warehouse2d' || tab === 'warehouse3d' || tab === 'mapping'
+                ? 'font-semibold text-blue-700 dark:text-blue-300'
+                : 'text-slate-500 hover:text-slate-800 dark:text-slate-400'
             }`}
           >
-            <span className="text-xl">🗺️</span>
-            <span className="text-[10px] tracking-tight">Plano 2D</span>
+            <Grid3x3 className="h-5 w-5" />
+            <span className="text-[10px] tracking-tight">Plano</span>
           </button>
 
           <button
             type="button"
             onClick={() => setMobileMenuOpen(true)}
-            className="flex flex-col items-center justify-center py-1 px-2 min-h-[48px] min-w-[56px] text-xs font-semibold text-slate-500 hover:text-slate-800 transition cursor-pointer"
+            className="flex min-h-[48px] min-w-[56px] flex-col items-center justify-center px-2 py-1 text-xs font-medium text-slate-500 transition hover:text-slate-800 dark:text-slate-400"
           >
-            <span className="text-xl">☰</span>
+            <Menu className="h-5 w-5" />
             <span className="text-[10px] tracking-tight">Más</span>
           </button>
         </div>
@@ -951,23 +1054,23 @@ function Dashboard({
   return (
     <div className="space-y-6">
       {!dismissed && (
-        <div className="relative overflow-hidden rounded-2xl border border-blue-100 bg-gradient-to-r from-blue-50 via-indigo-50 to-white p-6 shadow-sm">
+        <div className="relative overflow-hidden rounded-xl border border-blue-100 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
           <div className="flex items-start justify-between">
             <div>
-              <span className="inline-flex items-center gap-1.5 rounded-full bg-blue-100 px-3 py-1 text-xs font-semibold text-blue-800">
-                🚀 Guía de Puesta en Marcha (Onboarding)
+              <span className="inline-flex items-center gap-1.5 rounded-full bg-blue-100 px-3 py-1 text-xs font-semibold text-blue-800 dark:bg-blue-950 dark:text-blue-200">
+                Guía de puesta en marcha
               </span>
-              <h2 className="mt-2 text-lg font-bold text-gray-900">Bienvenido al Sistema WMS</h2>
-              <p className="mt-1 text-sm text-gray-600">
+              <h2 className="mt-2 text-lg font-semibold text-slate-900 dark:text-white">Bienvenido al sistema WMS</h2>
+              <p className="mt-1 text-sm text-slate-600 dark:text-slate-400">
                 Sigue estos pasos esenciales para operar la bodega de forma eficiente y segura:
               </p>
             </div>
             <button
               onClick={() => setDismissed(true)}
-              className="text-xs text-gray-400 hover:text-gray-600"
+              className="inline-flex items-center gap-1 text-xs text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
               title="Ocultar guía"
             >
-              ✕ Ocultar
+              <X className="h-3.5 w-3.5" /> Ocultar
             </button>
           </div>
 
@@ -1028,7 +1131,7 @@ function Dashboard({
                   Panel de Equipo →
                 </button>
               ) : (
-                <span className="mt-3 text-xs text-emerald-600 font-medium">✓ Rol verificado</span>
+                <span className="mt-3 text-xs font-medium text-emerald-600">Rol verificado</span>
               )}
             </div>
 
@@ -1053,11 +1156,11 @@ function Dashboard({
         </div>
       )}
 
-      <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 sm:gap-4">
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-2 sm:gap-4 lg:grid-cols-3 xl:grid-cols-4">
         {cards.map(([label, value]) => (
-          <article key={label} className="rounded-xl bg-white p-3.5 sm:p-5 shadow-sm border border-slate-100">
-            <p className="text-xs sm:text-sm text-gray-500">{label}</p>
-            <p className="mt-1 sm:mt-2 text-2xl sm:text-3xl font-bold text-gray-900">{value}</p>
+          <article key={label} className="rounded-xl border border-slate-200 bg-white p-3.5 shadow-sm sm:p-5 dark:border-slate-800 dark:bg-slate-900">
+            <p className="text-xs text-slate-500 sm:text-sm dark:text-slate-400">{label}</p>
+            <p className="mt-1 text-2xl font-semibold text-slate-900 sm:mt-2 sm:text-3xl dark:text-white">{value}</p>
           </article>
         ))}
       </div>
@@ -1087,18 +1190,22 @@ function Locations({ token, onError, refreshKey }: { token: string; onError: (va
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
-        <h2 className="text-base font-bold text-slate-800">Ubicaciones del Almacén</h2>
+        <h2 className="text-base font-semibold text-slate-800 dark:text-slate-100">Ubicaciones del almacén</h2>
         <button
           onClick={load}
           disabled={loading}
-          className="rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 transition shadow-xs flex items-center gap-1.5"
+          className="flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50 disabled:opacity-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200"
         >
-          <span>{loading ? '⏳' : '🔄'}</span>
+          {loading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
           <span>Actualizar</span>
         </button>
       </div>
-      <div className="rounded-xl bg-white p-3.5 sm:p-5 shadow-sm border border-slate-100">
-        <Table headers={['Código', 'Nivel', 'Posición', 'Estado']} rows={(data?.items ?? []).map(item => [item.code, item.level, item.position, item.status])} />
+      <div className="rounded-xl border border-slate-200 bg-white p-3.5 shadow-sm sm:p-5 dark:border-slate-800 dark:bg-slate-900">
+        <Table
+          headers={['Código', 'Nivel', 'Posición', 'Estado']}
+          rows={(data?.items ?? []).map(item => [item.code, item.level, item.position, item.status])}
+          statusColumn={3}
+        />
       </div>
     </div>
   );
@@ -1123,42 +1230,57 @@ function Inventory({ token, onError, refreshKey }: { token: string; onError: (va
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
-        <h2 className="text-base font-bold text-slate-800">Inventario Consolidado</h2>
+        <h2 className="text-base font-semibold text-slate-800 dark:text-slate-100">Inventario consolidado</h2>
         <button
           onClick={load}
           disabled={loading}
-          className="rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 transition shadow-xs flex items-center gap-1.5"
+          className="flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50 disabled:opacity-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200"
         >
-          <span>{loading ? '⏳' : '🔄'}</span>
+          {loading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
           <span>Actualizar</span>
         </button>
       </div>
-      <div className="rounded-xl bg-white p-3.5 sm:p-5 shadow-sm border border-slate-100">
+      <div className="rounded-xl border border-slate-200 bg-white p-3.5 shadow-sm sm:p-5 dark:border-slate-800 dark:bg-slate-900">
         <Table headers={['SKU', 'Producto', 'Ubicación', 'Cantidad', 'Reservado']} rows={(data?.items ?? []).map(item => [item.product?.sku ?? 'N/A', item.product?.name ?? 'N/A', item.location?.code ?? 'N/A', item.quantity, item.reservedQuantity])} />
       </div>
     </div>
   );
 }
 
-function Table({ headers, rows }: { headers: (string | number)[]; rows: (string | number)[][] }) {
+function Table({ headers, rows, statusColumn }: { headers: (string | number)[]; rows: (string | number)[][]; statusColumn?: number }) {
   return (
     <div className="overflow-x-auto">
-      <table className="w-full text-left text-xs sm:text-sm min-w-[500px]">
+      <table className="w-full min-w-[500px] text-left text-xs sm:text-sm">
         <thead>
-          <tr className="border-b text-[10px] sm:text-xs uppercase text-gray-500">
+          <tr className="border-b border-slate-200 text-[10px] uppercase text-slate-500 sm:text-xs dark:border-slate-700">
             {headers.map(header => (
-              <th key={header} className="px-3 py-2.5 sm:py-3 font-semibold whitespace-nowrap">{header}</th>
+              <th key={header} className="whitespace-nowrap px-3 py-2.5 font-semibold sm:py-3">{header}</th>
             ))}
           </tr>
         </thead>
         <tbody>
           {rows.length === 0 ? (
-            <tr><td colSpan={headers.length} className="px-3 py-8 text-center text-gray-500">Sin registros</td></tr>
+            <tr>
+              <td colSpan={headers.length} className="px-3 py-10 text-center text-slate-500">
+                <p className="font-medium text-slate-700 dark:text-slate-200">Sin registros</p>
+                <p className="mt-1 text-xs">Cuando existan datos, aparecerán en esta tabla.</p>
+              </td>
+            </tr>
           ) : (
             rows.map((row, index) => (
-              <tr key={index} className="border-b last:border-0 hover:bg-slate-50/50">
+              <tr key={index} className="border-b border-slate-100 last:border-0 hover:bg-slate-50/80 dark:border-slate-800 dark:hover:bg-slate-800/50">
                 {row.map((cell, cellIndex) => (
-                  <td key={cellIndex} className="px-3 py-2.5 sm:py-3 whitespace-nowrap">{cell}</td>
+                  <td key={cellIndex} className="whitespace-nowrap px-3 py-2.5 sm:py-3">
+                    {statusColumn === cellIndex ? (
+                      <span className={`inline-flex rounded-full border px-2 py-0.5 text-[10px] font-semibold ${locationStatusClass(String(cell))}`}>
+                        {locationStatusLabel(String(cell))}
+                      </span>
+                    ) : cellIndex === 0 ? (
+                      <span className="font-mono text-xs">{cell}</span>
+                    ) : (
+                      cell
+                    )}
+                  </td>
                 ))}
               </tr>
             ))

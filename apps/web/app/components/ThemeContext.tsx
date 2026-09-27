@@ -1,6 +1,7 @@
 "use client";
 
-import React, { createContext, useContext, useEffect, useState, useCallback } from "react";
+import React, { createContext, useContext, useState, useEffect, useCallback } from "react";
+import { Sun, Moon } from "lucide-react";
 
 type Theme = "light" | "dark";
 
@@ -8,28 +9,28 @@ interface ThemeContextValue {
   theme: Theme;
   isDark: boolean;
   toggleTheme: () => void;
-  setTheme: (t: Theme) => void;
+  setTheme: (theme: Theme) => void;
 }
 
 const ThemeContext = createContext<ThemeContextValue | null>(null);
 
-const STORAGE_KEY = "wms_theme";
+const STORAGE_KEY = "wms_theme_preference";
 
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
   const [theme, setThemeState] = useState<Theme>("light");
-  const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
-    setMounted(true);
-    const stored = localStorage.getItem(STORAGE_KEY) as Theme | null;
-    if (stored === "dark" || stored === "light") {
-      setThemeState(stored);
-      applyTheme(stored);
-    } else if (window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches) {
-      setThemeState("dark");
-      applyTheme("dark");
-    } else {
-      applyTheme("light");
+    try {
+      const stored = localStorage.getItem(STORAGE_KEY) as Theme | null;
+      if (stored === "dark" || stored === "light") {
+        setThemeState(stored);
+        applyTheme(stored);
+      } else if (window.matchMedia("(prefers-color-scheme: dark)").matches) {
+        setThemeState("dark");
+        applyTheme("dark");
+      }
+    } catch {
+      // Fallback default
     }
   }, []);
 
@@ -80,15 +81,19 @@ export function ThemeToggle({ className = "" }: { className?: string }) {
     <button
       type="button"
       onClick={toggleTheme}
-      className={`flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs sm:text-sm font-medium transition active:scale-95 shadow-xs ${
+      className={`flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs sm:text-sm font-medium transition shadow-xs cursor-pointer ${
         isDark
-          ? "border-amber-400/40 bg-amber-950/40 text-amber-300 hover:bg-amber-900/50"
-          : "border-slate-300 bg-white text-slate-700 hover:bg-slate-100"
+          ? "border-slate-700 bg-slate-800 text-slate-200 hover:bg-slate-700"
+          : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
       } ${className}`}
       title={isDark ? "Cambiar a Modo Claro" : "Cambiar a Modo Industrial Oscuro"}
       aria-label="Alternar tema visual"
     >
-      <span className="text-sm">{isDark ? "☀️" : "🌙"}</span>
+      {isDark ? (
+        <Sun size={15} className="text-amber-400" />
+      ) : (
+        <Moon size={15} className="text-slate-600" />
+      )}
       <span className="hidden sm:inline">{isDark ? "Claro" : "Oscuro"}</span>
     </button>
   );

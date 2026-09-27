@@ -251,7 +251,7 @@ async function loginAndNavigate(page: Page, targetTabLabel?: string) {
   );
 
   await page.goto('/');
-  await expect(page.getByText('Rol: ADMIN')).toBeVisible();
+  await expect(page.getByText('Rol: ADMIN').first()).toBeVisible();
 
   if (targetTabLabel) {
     const nav = page.locator('nav');
@@ -283,14 +283,14 @@ test.describe('1. Autenticación, Dashboard y Navegación Principal', () => {
     await loginAndNavigate(page);
 
     // Verify main header and profile email
-    await expect(page.getByText('admin.operativo@wms.com')).toBeVisible();
+    await expect(page.getByText('admin.operativo@wms.com').first()).toBeVisible();
 
     // Verify Dashboard Summary cards
-    await expect(page.getByText('Productos', { exact: true })).toBeVisible();
-    await expect(page.getByText('Ubicaciones', { exact: true })).toBeVisible();
-    await expect(page.getByText('Stock total', { exact: true })).toBeVisible();
-    await expect(page.getByText('Ocupadas', { exact: true })).toBeVisible();
-    await expect(page.getByText('Disponibles', { exact: true })).toBeVisible();
+    await expect(page.locator('article').filter({ hasText: 'Productos' })).toBeVisible();
+    await expect(page.locator('article').filter({ hasText: 'Ubicaciones' })).toBeVisible();
+    await expect(page.locator('article').filter({ hasText: 'Stock total' })).toBeVisible();
+    await expect(page.locator('article').filter({ hasText: 'Ocupadas' })).toBeVisible();
+    await expect(page.locator('article').filter({ hasText: 'Disponibles' })).toBeVisible();
 
     // Verify Onboarding Guide
     await expect(page.getByText('Bienvenido al Sistema WMS')).toBeVisible();
@@ -299,7 +299,7 @@ test.describe('1. Autenticación, Dashboard y Navegación Principal', () => {
     await expect(page.getByText('Gestión de Equipo')).toBeVisible();
 
     // Test dismissing onboarding guide
-    await page.getByRole('button', { name: '✕ Ocultar' }).click();
+    await page.getByRole('button', { name: /Ocultar/i }).click();
     await expect(page.getByText('Bienvenido al Sistema WMS')).not.toBeVisible();
   });
 });
@@ -332,7 +332,7 @@ test.describe('2. Componentes de Vista de Bodega (2D y 3D)', () => {
   });
 
   test('WarehouseMappingView & MappingModal: Auditoría física de casilleros', async ({ page }) => {
-    await loginAndNavigate(page, 'Mapeo Almacén');
+    await loginAndNavigate(page, 'Mapeo');
 
     await expect(page.getByRole('heading', { name: 'Mapeo y Conciliación Física de Almacén' })).toBeVisible();
     await expect(page.getByText('Total Posiciones')).toBeVisible();
@@ -523,11 +523,12 @@ test.describe('7. Modales de Soporte, Legal, Auditoría y Seguridad', () => {
 
     await page.getByRole('button', { name: /Escanear/i }).first().click();
     await expect(page.getByText('Escáner de Código')).toBeVisible();
-    await expect(page.getByRole('button', { name: '📷 Cámara' })).toBeVisible();
-    await expect(page.getByRole('button', { name: '⌨️ Manual' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Cámara', exact: true })).toBeVisible();
+    await expect(page.getByRole('button', { name: /Visión OCR/i })).toBeVisible();
+    await expect(page.getByRole('button', { name: /Manual/i })).toBeVisible();
 
     // Switch to manual mode
-    await page.getByRole('button', { name: '⌨️ Manual' }).click();
+    await page.getByRole('button', { name: /Manual/i }).click();
     await expect(page.getByPlaceholder('Escribe o pega el código...')).toBeVisible();
 
     // Enter a code and submit
@@ -554,7 +555,7 @@ test.describe('7. Modales de Soporte, Legal, Auditoría y Seguridad', () => {
     await expect(page.getByRole('dialog', { name: 'Paleta de comandos' })).not.toBeVisible();
 
     // 3. Warehouse 2D Heatmap Mode
-    await page.getByRole('button', { name: '🗺️ Vista 2D' }).click();
+    await page.getByRole('button', { name: /Vista 2D/i }).first().click();
     const heatmapBtn = page.getByRole('button', { name: /Mapa de Calor/i });
     await expect(heatmapBtn).toBeVisible();
     await heatmapBtn.click();
@@ -562,15 +563,15 @@ test.describe('7. Modales de Soporte, Legal, Auditoría y Seguridad', () => {
     await heatmapBtn.click();
 
     // 4. Movements Guided Stepper & Table Density
-    await page.getByRole('button', { name: '🔄 Movimientos' }).click();
-    await page.getByRole('button', { name: '🚶 Modo Guiado' }).click();
+    await page.getByRole('button', { name: /Movimientos/i }).first().click();
+    await page.getByRole('button', { name: /Modo Guiado/i }).click();
     await expect(page.getByText('Paso 1 de 3')).toBeVisible();
 
     // Table density toggle
-    const compactBtn = page.getByRole('button', { name: '≡ Compacta' });
+    const compactBtn = page.getByRole('button', { name: /Compacta/i }).first();
     await expect(compactBtn).toBeVisible();
     await compactBtn.click();
-    await page.getByRole('button', { name: '🔘 Cómoda' }).click();
+    await page.getByRole('button', { name: /Cómoda/i }).first().click();
   });
 });
 

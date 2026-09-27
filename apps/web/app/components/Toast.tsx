@@ -1,6 +1,7 @@
 "use client";
 
 import React, { createContext, useContext, useState, useCallback, useRef, useEffect } from "react";
+import { CheckCircle2, XCircle, AlertTriangle, Info, X } from "lucide-react";
 import { playSuccessSound, playErrorSound } from "../../lib/audioCues";
 
 export type ToastType = "success" | "error" | "warning" | "info";
@@ -35,7 +36,6 @@ const ToastContext = createContext<ToastContextValue | null>(null);
 export function useToast() {
   const ctx = useContext(ToastContext);
   if (!ctx) {
-    // Fallback if rendered outside provider
     return {
       showToast: (opts: ToastOptions) => {
         if (opts.type === "error") {
@@ -85,7 +85,7 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
         playErrorSound();
       }
 
-      setToasts((prev) => [...prev.slice(-3), newToast]); // Keep max 4 visible at once
+      setToasts((prev) => [...prev.slice(-3), newToast]);
 
       return id;
     },
@@ -129,7 +129,6 @@ function ToastCard({
   onDismiss: () => void;
 }) {
   const [progress, setProgress] = useState(100);
-  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const startTimeRef = useRef(Date.now());
 
   useEffect(() => {
@@ -152,44 +151,46 @@ function ToastCard({
 
   const typeConfig = {
     success: {
-      bg: "bg-emerald-950/90 dark:bg-emerald-950/95 border-emerald-600/50 text-emerald-100",
-      icon: "✓",
-      iconBg: "bg-emerald-500/20 text-emerald-400",
-      barBg: "bg-emerald-400",
+      card: "bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 border-l-4 border-l-emerald-600 text-slate-800 dark:text-slate-100",
+      icon: CheckCircle2,
+      iconColor: "text-emerald-600 dark:text-emerald-400",
+      barBg: "bg-emerald-600",
     },
     error: {
-      bg: "bg-rose-950/90 dark:bg-rose-950/95 border-rose-600/50 text-rose-100",
-      icon: "✕",
-      iconBg: "bg-rose-500/20 text-rose-400",
-      barBg: "bg-rose-500",
+      card: "bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 border-l-4 border-l-red-600 text-slate-800 dark:text-slate-100",
+      icon: XCircle,
+      iconColor: "text-red-600 dark:text-red-400",
+      barBg: "bg-red-600",
     },
     warning: {
-      bg: "bg-amber-950/90 dark:bg-amber-950/95 border-amber-600/50 text-amber-100",
-      icon: "⚠",
-      iconBg: "bg-amber-500/20 text-amber-400",
-      barBg: "bg-amber-400",
+      card: "bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 border-l-4 border-l-amber-500 text-slate-800 dark:text-slate-100",
+      icon: AlertTriangle,
+      iconColor: "text-amber-500",
+      barBg: "bg-amber-500",
     },
     info: {
-      bg: "bg-slate-900/90 dark:bg-slate-900/95 border-slate-700/60 text-slate-100",
-      icon: "ℹ",
-      iconBg: "bg-blue-500/20 text-blue-400",
-      barBg: "bg-blue-400",
+      card: "bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 border-l-4 border-l-blue-600 text-slate-800 dark:text-slate-100",
+      icon: Info,
+      iconColor: "text-blue-600 dark:text-blue-400",
+      barBg: "bg-blue-600",
     },
   }[toast.type];
+
+  const IconComponent = typeConfig.icon;
 
   return (
     <div
       role="status"
-      className={`pointer-events-auto relative overflow-hidden rounded-2xl border backdrop-blur-md shadow-2xl transition-all duration-300 transform translate-y-0 opacity-100 ${typeConfig.bg}`}
+      className={`pointer-events-auto relative overflow-hidden rounded-xl border shadow-lg transition-all duration-300 transform translate-y-0 opacity-100 ${typeConfig.card}`}
     >
       <div className="p-3.5 flex items-start gap-3">
-        <div
-          className={`w-7 h-7 rounded-xl flex items-center justify-center shrink-0 font-bold text-sm ${typeConfig.iconBg}`}
-        >
-          {typeConfig.icon}
-        </div>
+        <IconComponent size={20} className={`shrink-0 mt-0.5 ${typeConfig.iconColor}`} />
         <div className="flex-1 min-w-0 pr-1">
-          {toast.title && <p className="font-bold text-xs uppercase tracking-wider mb-0.5 opacity-90">{toast.title}</p>}
+          {toast.title && (
+            <p className="font-semibold text-xs uppercase tracking-wider mb-0.5 text-slate-500 dark:text-slate-400">
+              {toast.title}
+            </p>
+          )}
           <p className="text-xs sm:text-sm font-medium leading-snug break-words">{toast.message}</p>
         </div>
 
@@ -200,7 +201,7 @@ function ToastCard({
               toast.undoAction?.();
               onDismiss();
             }}
-            className="shrink-0 px-2.5 py-1 text-xs font-bold uppercase tracking-wider bg-white/10 hover:bg-white/20 active:scale-95 rounded-lg transition-colors text-white border border-white/20"
+            className="shrink-0 px-2.5 py-1 text-xs font-semibold bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 active:scale-95 rounded-lg transition-colors text-slate-800 dark:text-slate-200 border border-slate-200 dark:border-slate-700 cursor-pointer"
           >
             {toast.undoLabel || "Deshacer"}
           </button>
@@ -209,15 +210,15 @@ function ToastCard({
         <button
           type="button"
           onClick={onDismiss}
-          className="text-white/60 hover:text-white shrink-0 p-1 text-xs font-bold rounded-lg transition"
+          className="text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 shrink-0 p-1 rounded-lg transition cursor-pointer"
           aria-label="Cerrar notificación"
         >
-          ✕
+          <X size={16} />
         </button>
       </div>
 
       {/* Progress countdown bar */}
-      <div className="h-1 w-full bg-white/10">
+      <div className="h-0.5 w-full bg-slate-100 dark:bg-slate-800">
         <div
           className={`h-full transition-all duration-75 ease-linear ${typeConfig.barBg}`}
           style={{ width: `${progress}%` }}

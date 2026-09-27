@@ -13,14 +13,14 @@ const STATUS_LABELS: Record<string, string> = {
 };
 
 function colorFor(status: string) {
-  if (status === 'OCCUPIED') return '#EF4444';
-  if (status === 'BLOCKED') return '#64748B';
-  if (status === 'MAINTENANCE') return '#F59E0B';
-  return '#22C55E';
+  if (status === 'OCCUPIED') return '#2563EB';
+  if (status === 'BLOCKED') return '#DC2626';
+  if (status === 'MAINTENANCE') return '#D97706';
+  return '#94A3B8';
 }
 
-function textColorFor(status: string) {
-  return status === 'AVAILABLE' || status === 'MAINTENANCE' ? '#052E16' : '#FFFFFF';
+function textColorFor(_status: string) {
+  return '#FFFFFF';
 }
 
 type RackGroup = {
@@ -200,12 +200,12 @@ export function Warehouse3D({
         </div>
       </div>
 
-      <div className="flex flex-wrap gap-2.5 sm:gap-4 rounded-xl bg-white px-3 sm:px-4 py-2.5 sm:py-3 text-xs sm:text-sm shadow-sm border border-slate-100 items-center">
-        <span className="font-semibold text-slate-700">Leyenda:</span>
-        <span className="inline-flex items-center gap-1.5 sm:gap-2 text-[11px] sm:text-xs text-slate-600"><i className="h-2.5 w-2.5 sm:h-3 sm:w-3 rounded-full bg-green-500" />Vacía / disponible</span>
-        <span className="inline-flex items-center gap-1.5 sm:gap-2 text-[11px] sm:text-xs text-slate-600"><i className="h-2.5 w-2.5 sm:h-3 sm:w-3 rounded-full bg-red-500" />Ocupada (con stock)</span>
-        <span className="inline-flex items-center gap-1.5 sm:gap-2 text-[11px] sm:text-xs text-slate-600"><i className="h-2.5 w-2.5 sm:h-3 sm:w-3 rounded-full bg-slate-500" />Bloqueada</span>
-        <span className="inline-flex items-center gap-1.5 sm:gap-2 text-[11px] sm:text-xs text-slate-600"><i className="h-2.5 w-2.5 sm:h-3 sm:w-3 rounded-full bg-amber-500" />Mantención</span>
+      <div className="flex flex-wrap gap-2.5 sm:gap-4 rounded-xl bg-white dark:bg-slate-900 px-3 sm:px-4 py-2.5 sm:py-3 text-xs sm:text-sm shadow-xs border border-slate-200 dark:border-slate-800 items-center">
+        <span className="font-semibold text-slate-700 dark:text-slate-300">Leyenda:</span>
+        <span className="inline-flex items-center gap-1.5 sm:gap-2 text-[11px] sm:text-xs text-slate-600 dark:text-slate-400"><i className="h-2.5 w-2.5 sm:h-3 sm:w-3 rounded-full bg-slate-400" />Disponible</span>
+        <span className="inline-flex items-center gap-1.5 sm:gap-2 text-[11px] sm:text-xs text-slate-600 dark:text-slate-400"><i className="h-2.5 w-2.5 sm:h-3 sm:w-3 rounded-full bg-blue-600" />Ocupada</span>
+        <span className="inline-flex items-center gap-1.5 sm:gap-2 text-[11px] sm:text-xs text-slate-600 dark:text-slate-400"><i className="h-2.5 w-2.5 sm:h-3 sm:w-3 rounded-full bg-red-600" />Bloqueada</span>
+        <span className="inline-flex items-center gap-1.5 sm:gap-2 text-[11px] sm:text-xs text-slate-600 dark:text-slate-400"><i className="h-2.5 w-2.5 sm:h-3 sm:w-3 rounded-full bg-amber-500" />Mantención</span>
       </div>
 
       <div className="md:hidden flex items-center justify-between text-[11px] text-slate-500 px-1">

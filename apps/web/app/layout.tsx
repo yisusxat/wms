@@ -17,11 +17,11 @@ export const metadata = {
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
-    <html lang="es">
+    <html lang="es" className="font-sans">
       <head>
         <link rel="manifest" href="/manifest.json" />
       </head>
-      <body>
+      <body className="bg-surface text-ink antialiased">
         {children}
         <script
           dangerouslySetInnerHTML={{
