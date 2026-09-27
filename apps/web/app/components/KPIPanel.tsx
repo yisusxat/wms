@@ -344,6 +344,19 @@ export default function KPIPanel({ token, organizationId, refreshKey, onNavigate
     fetchKpis();
   }, [fetchKpis, refreshKey]);
 
+  // Real-time synchronization across modules and windows
+  useEffect(() => {
+    const handleSync = () => {
+      fetchKpis();
+    };
+    window.addEventListener("wms-data-changed", handleSync);
+    window.addEventListener("storage", handleSync);
+    return () => {
+      window.removeEventListener("wms-data-changed", handleSync);
+      window.removeEventListener("storage", handleSync);
+    };
+  }, [fetchKpis]);
+
   // Live Auto-Refresh Interval
   useEffect(() => {
     if (timerRef.current) clearInterval(timerRef.current);
@@ -1488,77 +1501,77 @@ export default function KPIPanel({ token, organizationId, refreshKey, onNavigate
             </div>
 
             <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-              {(kpis.occupancy.byZone && kpis.occupancy.byZone.length > 0
-                ? kpis.occupancy.byZone
-                : [
-                    { zoneCode: "A", zoneName: "Pasillo A — Carga Rápida", occupied: 28, total: 36, rate: 77.7, cubicRate: 63.7 },
-                    { zoneCode: "B", zoneName: "Pasillo B — Picking Ligero", occupied: 32, total: 36, rate: 88.8, cubicRate: 72.8 },
-                    { zoneCode: "C", zoneName: "Pasillo C — Racks Densos", occupied: 18, total: 36, rate: 50.0, cubicRate: 41.0 },
-                    { zoneCode: "D", zoneName: "Pasillo D — Reserva General", occupied: 22, total: 40, rate: 55.0, cubicRate: 45.1 },
-                  ]
-              ).map((zone) => {
-                const isCritical = zone.rate >= 85;
-                const isOptimal = zone.rate >= 50 && zone.rate < 85;
-                const cubicRate = zone.cubicRate !== undefined ? zone.cubicRate : Math.round(zone.rate * 0.82 * 10) / 10;
-                return (
-                  <div
-                    key={zone.zoneCode}
-                    className="rounded-lg border border-slate-200 bg-slate-50/70 p-3.5 dark:border-slate-800 dark:bg-slate-800/40"
-                  >
-                    <div className="flex items-center justify-between">
-                      <span className="text-xs font-bold text-slate-800 dark:text-slate-200">
-                        {zone.zoneName || `Zona ${zone.zoneCode}`}
-                      </span>
-                      <span
-                        className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${
-                          isCritical
-                            ? "bg-red-100 text-red-800 dark:bg-red-950 dark:text-red-300"
-                            : isOptimal
-                            ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300"
-                            : "bg-blue-100 text-blue-800 dark:bg-blue-950 dark:text-blue-300"
-                        }`}
-                      >
-                        {zone.rate}%
-                      </span>
-                    </div>
+              {kpis.occupancy.byZone && kpis.occupancy.byZone.length > 0 ? (
+                kpis.occupancy.byZone.map((zone) => {
+                  const isCritical = zone.rate >= 85;
+                  const isOptimal = zone.rate >= 50 && zone.rate < 85;
+                  const cubicRate = zone.cubicRate !== undefined ? zone.cubicRate : Math.round(zone.rate * 0.82 * 10) / 10;
+                  return (
+                    <div
+                      key={zone.zoneCode}
+                      className="rounded-lg border border-slate-200 bg-slate-50/70 p-3.5 dark:border-slate-800 dark:bg-slate-800/40"
+                    >
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-bold text-slate-800 dark:text-slate-200">
+                          {zone.zoneName || `Zona ${zone.zoneCode}`}
+                        </span>
+                        <span
+                          className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${
+                            isCritical
+                              ? "bg-red-100 text-red-800 dark:bg-red-950 dark:text-red-300"
+                              : isOptimal
+                              ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300"
+                              : "bg-blue-100 text-blue-800 dark:bg-blue-950 dark:text-blue-300"
+                          }`}
+                        >
+                          {zone.rate}%
+                        </span>
+                      </div>
 
-                    <div className="mt-3 space-y-2">
-                      <div>
-                        <div className="flex items-center justify-between text-[10px] text-slate-500 dark:text-slate-400 mb-1">
-                          <span>Ocupación de Slots (Binaria)</span>
-                          <span className="font-semibold text-slate-800 dark:text-slate-200">{zone.rate}%</span>
+                      <div className="mt-3 space-y-2">
+                        <div>
+                          <div className="flex items-center justify-between text-[10px] text-slate-500 dark:text-slate-400 mb-1">
+                            <span>Ocupación de Slots (Binaria)</span>
+                            <span className="font-semibold text-slate-800 dark:text-slate-200">{zone.rate}%</span>
+                          </div>
+                          <div className="flex h-2 w-full overflow-hidden rounded-full bg-slate-200 dark:bg-slate-700">
+                            <div
+                              style={{ width: `${zone.rate}%` }}
+                              className={`transition-all duration-300 ${
+                                isCritical ? "bg-red-500" : isOptimal ? "bg-emerald-500" : "bg-blue-600"
+                              }`}
+                            />
+                          </div>
                         </div>
-                        <div className="flex h-2 w-full overflow-hidden rounded-full bg-slate-200 dark:bg-slate-700">
-                          <div
-                            style={{ width: `${zone.rate}%` }}
-                            className={`transition-all duration-300 ${
-                              isCritical ? "bg-red-500" : isOptimal ? "bg-emerald-500" : "bg-blue-600"
-                            }`}
-                          />
+
+                        <div>
+                          <div className="flex items-center justify-between text-[10px] text-slate-500 dark:text-slate-400 mb-1">
+                            <span>Uso Volumétrico Cúbico (m³)</span>
+                            <span className="font-semibold text-indigo-600 dark:text-indigo-400">{cubicRate}%</span>
+                          </div>
+                          <div className="flex h-1.5 w-full overflow-hidden rounded-full bg-slate-200 dark:bg-slate-700">
+                            <div
+                              style={{ width: `${cubicRate}%` }}
+                              className="bg-indigo-500 transition-all duration-300"
+                            />
+                          </div>
                         </div>
                       </div>
 
-                      <div>
-                        <div className="flex items-center justify-between text-[10px] text-slate-500 dark:text-slate-400 mb-1">
-                          <span>Uso Volumétrico Cúbico (m³)</span>
-                          <span className="font-semibold text-indigo-600 dark:text-indigo-400">{cubicRate}%</span>
-                        </div>
-                        <div className="flex h-1.5 w-full overflow-hidden rounded-full bg-slate-200 dark:bg-slate-700">
-                          <div
-                            style={{ width: `${cubicRate}%` }}
-                            className="bg-indigo-500 transition-all duration-300"
-                          />
-                        </div>
+                      <div className="mt-3 flex items-center justify-between text-[11px] text-slate-500 dark:text-slate-400 border-t border-slate-100 pt-2 dark:border-slate-800/80">
+                        <span>{zone.occupied} ocupadas</span>
+                        <span>{zone.total} totales</span>
                       </div>
                     </div>
-
-                    <div className="mt-3 flex items-center justify-between text-[11px] text-slate-500 dark:text-slate-400 border-t border-slate-100 pt-2 dark:border-slate-800/80">
-                      <span>{zone.occupied} ocupadas</span>
-                      <span>{zone.total} totales</span>
-                    </div>
-                  </div>
-                );
-              })}
+                  );
+                })
+              ) : (
+                <div className="col-span-full flex flex-col items-center justify-center p-8 text-center text-slate-400">
+                  <Building2 className="h-8 w-8 mb-2 text-slate-400" />
+                  <p className="text-sm font-semibold text-slate-700 dark:text-slate-300">Sin ubicaciones registradas</p>
+                  <p className="text-xs text-slate-500">No se encontraron posiciones físicas en los racks.</p>
+                </div>
+              )}
             </div>
           </div>
         </div>

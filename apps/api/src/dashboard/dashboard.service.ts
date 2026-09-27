@@ -124,13 +124,28 @@ export class DashboardService {
         distinct: ['category'],
       }),
       this.prisma.location.count(),
-      this.prisma.location.count({ where: { status: 'OCCUPIED' } }),
+      this.prisma.location.count({
+        where: {
+          OR: [
+            { status: 'OCCUPIED' },
+            { inventory: { some: { quantity: { gt: 0 } } } },
+          ],
+        },
+      }),
       this.prisma.zone.findMany({
         include: {
           aisles: {
             include: {
               racks: {
-                include: { locations: { select: { status: true } } },
+                include: {
+                  locations: {
+                    select: {
+                      id: true,
+                      status: true,
+                      inventory: { select: { quantity: true } },
+                    },
+                  },
+                },
               },
             },
           },
@@ -157,19 +172,59 @@ export class DashboardService {
     const occupancyRate =
       totalLocations > 0 ? Math.round((occupiedLocations / totalLocations) * 1000) / 10 : 0;
 
-    const byZone = allZones.map((zone) => {
-      const locs = zone.aisles.flatMap((a) => a.racks.flatMap((r) => r.locations));
-      const occ = locs.filter((l) => l.status === 'OCCUPIED').length;
-      const rate = locs.length > 0 ? Math.round((occ / locs.length) * 1000) / 10 : 0;
-      return {
-        zoneCode: zone.code,
-        zoneName: zone.name,
-        occupied: occ,
-        total: locs.length,
-        rate,
-        cubicRate: Math.round(rate * 0.82 * 10) / 10,
-      };
-    });
+    const allRacks = allZones.flatMap((zone) =>
+      zone.aisles.flatMap((aisle) =>
+        aisle.racks.map((rack) => {
+          const locs = rack.locations;
+          const occ = locs.filter(
+            (l) => l.status === 'OCCUPIED' || (l.inventory && l.inventory.some((i) => i.quantity > 0))
+          ).length;
+          const rate = locs.length > 0 ? Math.round((occ / locs.length) * 1000) / 10 : 0;
+          return {
+            zoneCode: `${aisle.code}-${rack.code}`,
+            zoneName: `Pasillo ${aisle.code} — ${rack.name} (${aisle.code}-${rack.code})`,
+            occupied: occ,
+            total: locs.length,
+            rate,
+            cubicRate: Math.round(rate * 0.82 * 10) / 10,
+          };
+        })
+      )
+    );
+
+    const byZone = allZones.length > 1
+      ? allZones.map((zone) => {
+          const locs = zone.aisles.flatMap((a) => a.racks.flatMap((r) => r.locations));
+          const occ = locs.filter(
+            (l) => l.status === 'OCCUPIED' || (l.inventory && l.inventory.some((i) => i.quantity > 0))
+          ).length;
+          const rate = locs.length > 0 ? Math.round((occ / locs.length) * 1000) / 10 : 0;
+          return {
+            zoneCode: zone.code,
+            zoneName: zone.name,
+            occupied: occ,
+            total: locs.length,
+            rate,
+            cubicRate: Math.round(rate * 0.82 * 10) / 10,
+          };
+        })
+      : allRacks.length > 0
+      ? allRacks
+      : allZones.map((zone) => {
+          const locs = zone.aisles.flatMap((a) => a.racks.flatMap((r) => r.locations));
+          const occ = locs.filter(
+            (l) => l.status === 'OCCUPIED' || (l.inventory && l.inventory.some((i) => i.quantity > 0))
+          ).length;
+          const rate = locs.length > 0 ? Math.round((occ / locs.length) * 1000) / 10 : 0;
+          return {
+            zoneCode: zone.code,
+            zoneName: zone.name,
+            occupied: occ,
+            total: locs.length,
+            rate,
+            cubicRate: Math.round(rate * 0.82 * 10) / 10,
+          };
+        });
 
     // ── 2. ABC CLASSIFICATION (ISSUE movements last 30d) ──
     const issueMovements = await this.prisma.movement.groupBy({

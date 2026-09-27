@@ -401,6 +401,9 @@ function HomePageContent() {
   const refreshSummary = useCallback(() => {
     if (!token) return;
     setDataVersion((v) => v + 1);
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('wms-data-changed'));
+    }
     apiFetch<Summary>('/dashboard/summary', token)
       .then(setSummary)
       .catch(() => {/* silent — do not replace visible error for a background refresh */});
