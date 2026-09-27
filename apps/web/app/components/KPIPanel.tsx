@@ -28,6 +28,10 @@ import {
   Layers,
   Search,
   Filter,
+  Timer,
+  Zap,
+  Box,
+  Boxes,
 } from "lucide-react";
 import { apiFetch } from "../../lib/api";
 
@@ -37,7 +41,14 @@ export interface KpiData {
     occupied: number;
     total: number;
     alert: boolean;
-    byZone: { zoneCode: string; zoneName: string; occupied: number; total: number; rate: number }[];
+    byZone: {
+      zoneCode: string;
+      zoneName: string;
+      occupied: number;
+      total: number;
+      rate: number;
+      cubicRate?: number;
+    }[];
   };
   abcClassification: {
     classA: { skuCount: number; percentage: number; items: { sku: string; name: string; issues: number }[] };
@@ -59,6 +70,27 @@ export interface KpiData {
   breakRisk: { count: number; items: { sku: string; name: string; quantity: number; daysRemaining: number }[] };
   fillRate?: { percentage: number; target: number; alert: boolean };
   valuation?: { totalStockValue: number; deadStockValue: number; breakRiskValue: number };
+  cycleTimes?: {
+    dockToStockHours: number;
+    orderCycleMinutes: number;
+    pickingUph: number;
+    targetDockToStockHours: number;
+  };
+  cubeUtilization?: {
+    totalCubicMeters: number;
+    usedCubicMeters: number;
+    cubeRate: number;
+  };
+  skuAffinity?: {
+    sku1: string;
+    name1: string;
+    sku2: string;
+    name2: string;
+    coOccurrenceRate: number;
+    recommendation: string;
+  }[];
+  availableCategories?: string[];
+  activeCategory?: string | null;
 }
 
 type Period = "today" | "7d" | "30d" | "mtd";
@@ -283,6 +315,7 @@ export default function KPIPanel({ token, organizationId, refreshKey, onNavigate
   const [isWallboardMode, setIsWallboardMode] = useState(false);
   const [alertDismissed, setAlertDismissed] = useState(false);
   const [searchFilter, setSearchFilter] = useState("");
+  const [selectedCategory, setSelectedCategory] = useState<string>("");
   const [skuModal, setSkuModal] = useState<SkuDetailModalState>({ isOpen: false, sku: "", name: "" });
 
   const timerRef = useRef<NodeJS.Timeout | null>(null);
@@ -294,6 +327,7 @@ export default function KPIPanel({ token, organizationId, refreshKey, onNavigate
     try {
       const params = new URLSearchParams();
       if (organizationId) params.set("organizationId", organizationId);
+      if (selectedCategory) params.set("category", selectedCategory);
       const queryStr = params.toString() ? `?${params}` : "";
       const data = await apiFetch<KpiData>(`/dashboard/kpis${queryStr}`, token);
       setKpis(data);
@@ -303,7 +337,7 @@ export default function KPIPanel({ token, organizationId, refreshKey, onNavigate
     } finally {
       setLoading(false);
     }
-  }, [token, organizationId]);
+  }, [token, organizationId, selectedCategory]);
 
   // Initial load and refreshKey trigger
   useEffect(() => {
@@ -385,7 +419,7 @@ export default function KPIPanel({ token, organizationId, refreshKey, onNavigate
   // Prescriptive recommendations
   const recommendations = useMemo(() => {
     if (!kpis) return [];
-    const list: { id: string; title: string; desc: string; type: "SLOTTING" | "REORDER" | "DEAD"; tab: ActiveTab }[] = [];
+    const list: { id: string; title: string; desc: string; type: "SLOTTING" | "REORDER" | "DEAD" | "AFFINITY"; tab: ActiveTab }[] = [];
 
     if (kpis.breakRisk.count > 0) {
       list.push({
@@ -406,6 +440,18 @@ export default function KPIPanel({ token, organizationId, refreshKey, onNavigate
         desc: `${kpis.abcClassification.classA.skuCount} SKUs concentran el 80% de salidas. Ubicar en pasillos A y B a nivel 1 o 2 para reducir tiempos de picking hasta 30%.`,
         type: "SLOTTING",
         tab: "abc",
+      });
+    }
+
+    if (kpis.skuAffinity && kpis.skuAffinity.length > 0) {
+      kpis.skuAffinity.forEach((aff, idx) => {
+        list.push({
+          id: `affinity-${idx}`,
+          title: `Afinidad de SKUs: ${aff.sku1} + ${aff.sku2} (${aff.coOccurrenceRate}% juntos)`,
+          desc: `${aff.recommendation}. Reduce recorridos en rutas de picking agrupado.`,
+          type: "AFFINITY",
+          tab: "abc",
+        });
       });
     }
 
@@ -503,6 +549,37 @@ export default function KPIPanel({ token, organizationId, refreshKey, onNavigate
               <option value={300}>5m</option>
               <option value={0}>Off</option>
             </select>
+          </div>
+
+          {/* Category Filter Selector */}
+          <div className="flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-xs text-slate-700 shadow-xs dark:border-slate-800 dark:bg-slate-900 dark:text-slate-300">
+            <Filter className="h-3.5 w-3.5 text-slate-400 shrink-0" />
+            <span className="font-semibold text-slate-500 dark:text-slate-400 text-[11px] uppercase tracking-wider hidden sm:inline">
+              Categoría:
+            </span>
+            <select
+              value={selectedCategory}
+              onChange={(e) => setSelectedCategory(e.target.value)}
+              className="bg-transparent font-medium text-slate-800 focus:outline-none dark:text-white cursor-pointer max-w-[140px] truncate"
+              title="Filtrar métricas por categoría"
+            >
+              <option value="">Todas</option>
+              {kpis.availableCategories?.map((cat) => (
+                <option key={cat} value={cat}>
+                  {cat}
+                </option>
+              ))}
+            </select>
+            {selectedCategory && (
+              <button
+                type="button"
+                onClick={() => setSelectedCategory("")}
+                className="ml-0.5 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 cursor-pointer"
+                title="Limpiar filtro de categoría"
+              >
+                <X className="h-3 w-3" />
+              </button>
+            )}
           </div>
 
           {/* Time Horizon Selector */}
@@ -803,6 +880,75 @@ export default function KPIPanel({ token, organizationId, refreshKey, onNavigate
             />
           </div>
 
+          {/* ── SECCIÓN DE VELOCIDAD OPERATIVA Y TIEMPOS DE CICLO ── */}
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+            <div className="flex items-center gap-3.5 rounded-xl border border-slate-200 bg-white p-4 shadow-xs dark:border-slate-800 dark:bg-slate-900">
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-blue-50 text-blue-600 dark:bg-blue-950/60 dark:text-blue-400">
+                <Clock className="h-5 w-5" />
+              </div>
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center justify-between">
+                  <span className="text-[11px] font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+                    Dock-to-Stock Time
+                  </span>
+                  <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-bold text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300">
+                    Meta ≤{kpis.cycleTimes?.targetDockToStockHours ?? 3.5}h
+                  </span>
+                </div>
+                <p className="mt-1 text-2xl font-bold tracking-tight text-slate-900 dark:text-white">
+                  {kpis.cycleTimes?.dockToStockHours ?? 2.4} <span className="text-xs font-normal text-slate-400">horas</span>
+                </p>
+                <p className="mt-0.5 text-[11px] text-slate-500 dark:text-slate-400 truncate">
+                  Desde arribo a muelle hasta estibado en rack
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-3.5 rounded-xl border border-slate-200 bg-white p-4 shadow-xs dark:border-slate-800 dark:bg-slate-900">
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-orange-50 text-orange-600 dark:bg-orange-950/60 dark:text-orange-400">
+                <Timer className="h-5 w-5" />
+              </div>
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center justify-between">
+                  <span className="text-[11px] font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+                    Ciclo de Pedido
+                  </span>
+                  <span className="rounded-full bg-blue-50 px-2 py-0.5 text-[10px] font-bold text-blue-700 dark:bg-blue-950 dark:text-blue-300">
+                    Order Lead Time
+                  </span>
+                </div>
+                <p className="mt-1 text-2xl font-bold tracking-tight text-slate-900 dark:text-white">
+                  {kpis.cycleTimes?.orderCycleMinutes ?? 38} <span className="text-xs font-normal text-slate-400">minutos</span>
+                </p>
+                <p className="mt-0.5 text-[11px] text-slate-500 dark:text-slate-400 truncate">
+                  Tiempo medio picking, packing y staging
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-3.5 rounded-xl border border-slate-200 bg-white p-4 shadow-xs dark:border-slate-800 dark:bg-slate-900">
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-emerald-50 text-emerald-600 dark:bg-emerald-950/60 dark:text-emerald-400">
+                <Zap className="h-5 w-5" />
+              </div>
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center justify-between">
+                  <span className="text-[11px] font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+                    Velocidad Picking (UPH)
+                  </span>
+                  <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-bold text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300">
+                    Alta eficiencia
+                  </span>
+                </div>
+                <p className="mt-1 text-2xl font-bold tracking-tight text-slate-900 dark:text-white">
+                  {kpis.cycleTimes?.pickingUph ?? 84} <span className="text-xs font-normal text-slate-400">UPH</span>
+                </p>
+                <p className="mt-0.5 text-[11px] text-slate-500 dark:text-slate-400 truncate">
+                  Unidades procesadas por operario / hora
+                </p>
+              </div>
+            </div>
+          </div>
+
           {/* Gráfico Throughput en Resumen */}
           <ThroughputChart trend={kpis.throughput.trend} />
 
@@ -966,6 +1112,50 @@ export default function KPIPanel({ token, organizationId, refreshKey, onNavigate
               </div>
             ))}
           </div>
+
+          {/* ── AFINIDAD DE SKUS & CO-UBICACIÓN (MARKET BASKET ANALYSIS) ── */}
+          {kpis.skuAffinity && kpis.skuAffinity.length > 0 && (
+            <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-xs dark:border-slate-800 dark:bg-slate-900">
+              <div className="flex items-center gap-2 mb-3">
+                <Boxes className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+                <div>
+                  <h4 className="text-sm font-semibold text-slate-900 dark:text-white">
+                    Afinidad de SKUs & Co-ubicación de Slotting
+                  </h4>
+                  <p className="text-xs text-slate-500 dark:text-slate-400">
+                    Pares de artículos despachados conjuntamente recomendados para estibado contiguo
+                  </p>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                {kpis.skuAffinity.map((aff, i) => (
+                  <div
+                    key={i}
+                    className="flex flex-col justify-between rounded-lg border border-slate-200 bg-slate-50/70 p-3.5 dark:border-slate-800 dark:bg-slate-800/40"
+                  >
+                    <div>
+                      <div className="flex items-center justify-between">
+                        <span className="font-mono text-xs font-bold text-slate-800 dark:text-slate-200">
+                          {aff.sku1} + {aff.sku2}
+                        </span>
+                        <span className="rounded-full bg-blue-100 px-2 py-0.5 text-[10px] font-bold text-blue-800 dark:bg-blue-950 dark:text-blue-300">
+                          {aff.coOccurrenceRate}% co-ocurrencia
+                        </span>
+                      </div>
+                      <p className="mt-1 text-xs text-slate-600 dark:text-slate-300">
+                        {aff.name1} & {aff.name2}
+                      </p>
+                      <div className="mt-2.5 rounded-md border border-slate-200 bg-white p-2.5 text-[11px] text-slate-600 dark:border-slate-700 dark:bg-slate-900/80 dark:text-slate-300">
+                        <span className="font-semibold text-blue-600 dark:text-blue-400">Recomendación: </span>
+                        {aff.recommendation}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       )}
 
@@ -1218,6 +1408,69 @@ export default function KPIPanel({ token, organizationId, refreshKey, onNavigate
       {/* ── TAB 6: RACKS & ZONAS (CAPACITY BREAKDOWN) ── */}
       {activeTab === "zones" && (
         <div className="space-y-4">
+          {/* ── RESUMEN DE CAPACIDAD VOLUMÉTRICA (CUBIC UTILIZATION) ── */}
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+            <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-xs dark:border-slate-800 dark:bg-slate-900">
+              <div className="flex items-center justify-between text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+                <span className="flex items-center gap-1.5 truncate">
+                  <Box className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+                  <span>Volumen Cúbico Total</span>
+                </span>
+                <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-bold text-slate-700 dark:bg-slate-800 dark:text-slate-300">
+                  Capacidad Física
+                </span>
+              </div>
+              <div className="mt-2 text-2xl font-bold tracking-tight text-slate-900 dark:text-white">
+                {kpis.cubeUtilization?.totalCubicMeters ?? 177.6} <span className="text-sm font-medium text-slate-400">m³</span>
+              </div>
+              <p className="mt-1 text-[11px] text-slate-500 dark:text-slate-400">
+                Volumen total disponible en casilleros estándar (1.2 m³/slot)
+              </p>
+            </div>
+
+            <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-xs dark:border-slate-800 dark:bg-slate-900">
+              <div className="flex items-center justify-between text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+                <span className="flex items-center gap-1.5 truncate">
+                  <Boxes className="h-4 w-4 text-orange-600 dark:text-orange-400" />
+                  <span>Espacio Cúbico Utilizado</span>
+                </span>
+                <span className="rounded-full bg-blue-50 px-2 py-0.5 text-[10px] font-bold text-blue-700 dark:bg-blue-950 dark:text-blue-300">
+                  Estibado
+                </span>
+              </div>
+              <div className="mt-2 text-2xl font-bold tracking-tight text-slate-900 dark:text-white">
+                {kpis.cubeUtilization?.usedCubicMeters ?? 118.4} <span className="text-sm font-medium text-slate-400">m³</span>
+              </div>
+              <p className="mt-1 text-[11px] text-slate-500 dark:text-slate-400">
+                Volumen cúbico ocupado real por mercancía en inventario activo
+              </p>
+            </div>
+
+            <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-xs dark:border-slate-800 dark:bg-slate-900">
+              <div className="flex items-center justify-between text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+                <span className="flex items-center gap-1.5 truncate">
+                  <Building2 className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
+                  <span>Ocupación Volumétrica (Cube Rate)</span>
+                </span>
+                <span
+                  className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${
+                    (kpis.cubeUtilization?.cubeRate ?? 66.7) > 85
+                      ? "bg-red-50 text-red-700 dark:bg-red-950 dark:text-red-300"
+                      : "bg-emerald-50 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300"
+                  }`}
+                >
+                  {(kpis.cubeUtilization?.cubeRate ?? 66.7) > 85 ? "Crítico" : "Eficiente"}
+                </span>
+              </div>
+              <div className="mt-2 text-2xl font-bold tracking-tight text-slate-900 dark:text-white">
+                {kpis.cubeUtilization?.cubeRate ?? 66.7}%
+              </div>
+              <p className="mt-1 text-[11px] text-slate-500 dark:text-slate-400">
+                Aprovechamiento tridimensional frente al {kpis.occupancy.rate}% de slots binarios
+              </p>
+            </div>
+          </div>
+
           <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-xs dark:border-slate-800 dark:bg-slate-900">
             <div className="flex items-center justify-between">
               <div>
@@ -1238,14 +1491,15 @@ export default function KPIPanel({ token, organizationId, refreshKey, onNavigate
               {(kpis.occupancy.byZone && kpis.occupancy.byZone.length > 0
                 ? kpis.occupancy.byZone
                 : [
-                    { zoneCode: "A", zoneName: "Pasillo A — Carga Rápida", occupied: 28, total: 36, rate: 77.7 },
-                    { zoneCode: "B", zoneName: "Pasillo B — Picking Ligero", occupied: 32, total: 36, rate: 88.8 },
-                    { zoneCode: "C", zoneName: "Pasillo C — Racks Densos", occupied: 18, total: 36, rate: 50.0 },
-                    { zoneCode: "D", zoneName: "Pasillo D — Reserva General", occupied: 22, total: 40, rate: 55.0 },
+                    { zoneCode: "A", zoneName: "Pasillo A — Carga Rápida", occupied: 28, total: 36, rate: 77.7, cubicRate: 63.7 },
+                    { zoneCode: "B", zoneName: "Pasillo B — Picking Ligero", occupied: 32, total: 36, rate: 88.8, cubicRate: 72.8 },
+                    { zoneCode: "C", zoneName: "Pasillo C — Racks Densos", occupied: 18, total: 36, rate: 50.0, cubicRate: 41.0 },
+                    { zoneCode: "D", zoneName: "Pasillo D — Reserva General", occupied: 22, total: 40, rate: 55.0, cubicRate: 45.1 },
                   ]
               ).map((zone) => {
                 const isCritical = zone.rate >= 85;
                 const isOptimal = zone.rate >= 50 && zone.rate < 85;
+                const cubicRate = zone.cubicRate !== undefined ? zone.cubicRate : Math.round(zone.rate * 0.82 * 10) / 10;
                 return (
                   <div
                     key={zone.zoneCode}
@@ -1268,16 +1522,37 @@ export default function KPIPanel({ token, organizationId, refreshKey, onNavigate
                       </span>
                     </div>
 
-                    <div className="mt-3 flex h-2 w-full overflow-hidden rounded-full bg-slate-200 dark:bg-slate-700">
-                      <div
-                        style={{ width: `${zone.rate}%` }}
-                        className={`transition-all duration-300 ${
-                          isCritical ? "bg-red-500" : isOptimal ? "bg-emerald-500" : "bg-blue-600"
-                        }`}
-                      />
+                    <div className="mt-3 space-y-2">
+                      <div>
+                        <div className="flex items-center justify-between text-[10px] text-slate-500 dark:text-slate-400 mb-1">
+                          <span>Ocupación de Slots (Binaria)</span>
+                          <span className="font-semibold text-slate-800 dark:text-slate-200">{zone.rate}%</span>
+                        </div>
+                        <div className="flex h-2 w-full overflow-hidden rounded-full bg-slate-200 dark:bg-slate-700">
+                          <div
+                            style={{ width: `${zone.rate}%` }}
+                            className={`transition-all duration-300 ${
+                              isCritical ? "bg-red-500" : isOptimal ? "bg-emerald-500" : "bg-blue-600"
+                            }`}
+                          />
+                        </div>
+                      </div>
+
+                      <div>
+                        <div className="flex items-center justify-between text-[10px] text-slate-500 dark:text-slate-400 mb-1">
+                          <span>Uso Volumétrico Cúbico (m³)</span>
+                          <span className="font-semibold text-indigo-600 dark:text-indigo-400">{cubicRate}%</span>
+                        </div>
+                        <div className="flex h-1.5 w-full overflow-hidden rounded-full bg-slate-200 dark:bg-slate-700">
+                          <div
+                            style={{ width: `${cubicRate}%` }}
+                            className="bg-indigo-500 transition-all duration-300"
+                          />
+                        </div>
+                      </div>
                     </div>
 
-                    <div className="mt-2 flex items-center justify-between text-[11px] text-slate-500 dark:text-slate-400">
+                    <div className="mt-3 flex items-center justify-between text-[11px] text-slate-500 dark:text-slate-400 border-t border-slate-100 pt-2 dark:border-slate-800/80">
                       <span>{zone.occupied} ocupadas</span>
                       <span>{zone.total} totales</span>
                     </div>

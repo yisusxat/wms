@@ -307,7 +307,7 @@ async function setupStatefulMockApi(page: Page) {
   );
 
   await page.goto('/');
-  await expect(page.getByText('Rol: ADMIN')).toBeVisible();
+  await expect(page.getByText('Rol: ADMIN').first()).toBeVisible();
 }
 
 async function navigateTo(page: Page, tabLabel: string) {
@@ -356,9 +356,9 @@ test.describe('Pruebas de Integración Exhaustivas entre Componentes WMS', () =>
 
     // 8. Regresar al Dashboard y verificar reactividad del resumen
     await navigateTo(page, 'Dashboard');
-    await expect(page.getByText('admin.operativo@wms.com')).toBeVisible();
-    await expect(page.getByText('Productos', { exact: true })).toBeVisible();
-    await expect(page.getByText('Ubicaciones', { exact: true })).toBeVisible();
+    await expect(page.getByText('admin.operativo@wms.com').first()).toBeVisible();
+    await expect(page.locator('article').filter({ hasText: 'Productos' })).toBeVisible();
+    await expect(page.locator('article').filter({ hasText: 'Ubicaciones' })).toBeVisible();
   });
 
   test('Integración 2: Vista 2D de Bodega -> Selección de Ubicación -> Navegación Guiada a Mapeo de Casilleros', async ({ page }) => {

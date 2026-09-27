@@ -14,7 +14,10 @@ export class DashboardController {
   }
 
   @Get('kpis')
-  kpis(@Query('organizationId') organizationId?: string) {
-    return this.dashboard.getKpis(organizationId);
+  kpis(
+    @Query('organizationId') organizationId?: string,
+    @Query('category') category?: string,
+  ) {
+    return this.dashboard.getKpis(organizationId, category);
   }
 }

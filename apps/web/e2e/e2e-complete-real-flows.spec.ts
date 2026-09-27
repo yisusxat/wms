@@ -324,7 +324,7 @@ async function setupE2EMockEnvironment(page: Page) {
   );
 
   await page.goto('/');
-  await expect(page.getByText('Rol: ADMIN')).toBeVisible();
+  await expect(page.getByText('Rol: ADMIN').first()).toBeVisible();
 }
 
 async function navigateTo(page: Page, tabLabel: string) {
@@ -351,8 +351,8 @@ test.describe('Flujos Operativos Reales E2E de Principio a Fin (Full Lifecycle W
 
     // 3. Iniciar sesión como Jefe de Operaciones (ADMIN)
     await setupE2EMockEnvironment(page);
-    await expect(page.getByText('jefe.operaciones@wms-logistica.com')).toBeVisible();
-    await expect(page.getByText('Rol: ADMIN')).toBeVisible();
+    await expect(page.getByText('jefe.operaciones@wms-logistica.com').first()).toBeVisible();
+    await expect(page.getByText('Rol: ADMIN').first()).toBeVisible();
 
     // 4. Verificar Onboarding Operativo "Guía de Puesta en Marcha"
     await expect(page.getByRole('heading', { name: 'Bienvenido al Sistema WMS' })).toBeVisible();
