@@ -558,7 +558,7 @@ export default function BarcodeScanner({
                     }}
                     className="flex-1 py-2 px-3 bg-blue-600 hover:bg-blue-700 rounded-lg text-xs font-medium text-white transition-colors min-h-[40px] flex items-center justify-center gap-1.5 cursor-pointer"
                   >
-                    <Icon name="keyboard" size={14} /> Modo manual
+                    <Icon name="keyboard" size={14} /> Digitar código
                   </button>
                 </div>
               </div>

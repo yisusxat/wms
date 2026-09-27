@@ -526,10 +526,10 @@ test.describe('7. Modales de Soporte, Legal, Auditoría y Seguridad', () => {
     await expect(page.getByText('Escáner de Código')).toBeVisible();
     await expect(page.getByRole('button', { name: 'Cámara', exact: true })).toBeVisible();
     await expect(page.getByRole('button', { name: /Visión OCR/i })).toBeVisible();
-    await expect(page.getByRole('button', { name: /Manual/i })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Manual', exact: true })).toBeVisible();
 
     // Switch to manual mode
-    await page.getByRole('button', { name: /Manual/i }).click();
+    await page.getByRole('button', { name: 'Manual', exact: true }).click();
     await expect(page.getByPlaceholder('Escribe o pega el código...')).toBeVisible();
 
     // Enter a code and submit
