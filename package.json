@@ -29,6 +29,7 @@
     "test:integration": "npm --workspace apps/api run test -- --runInBand --runTestsByPath test/integration.database.spec.ts"
   },
   "devDependencies": {
+    "@insforge/cli": "^0.2.8",
     "@playwright/test": "^1.63.0"
   }
 }
