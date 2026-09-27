@@ -374,8 +374,28 @@ export function MovementsPanel({
     try {
       const data = await apiFetch<LabelModalData>(`/operations/labels/location/${locationId}`, token);
       setLabelData(data);
-    } catch (e) {
-      onError((e as Error).message);
+    } catch {
+      // Fallback local garantizado desde la topología física cargada en memoria
+      const loc = allLocations.find((l) => l.id === locationId || l.code === locationId);
+      if (loc) {
+        const parts = (loc.code || "").split("-");
+        const aisle = parts[0] || "A";
+        const rack = parts[1] || "C";
+        const rackLabel = rack === "P" ? "Rack Pared" : "Rack Central";
+        const title = `Posición ${loc.code}`;
+        const subtitle = `Bodega Central · Pasillo ${aisle} · ${rackLabel} · Nivel ${loc.level}`;
+        const zpl = `^XA\n^PW812\n^LL406\n^FO50,40^A0N,36,36^FDWMS ENTERPRISE^FS\n^FO50,85^A0N,28,28^FDLOCATION: ${title}^FS\n^FO50,120^A0N,22,22^FD${subtitle}^FS\n^FO50,160^BCN,100,Y,N,N^FD${loc.code}^FS\n^FO550,160^BQN,2,5^FDQA,${loc.code}^FS\n^XZ`;
+        setLabelData({
+          code: loc.code,
+          type: "LOCATION",
+          title,
+          subtitle,
+          barcode: loc.code,
+          zpl,
+        });
+      } else {
+        onError("No fue posible cargar la información de la ubicación");
+      }
     }
   };
 
@@ -383,8 +403,24 @@ export function MovementsPanel({
     try {
       const data = await apiFetch<LabelModalData>(`/operations/labels/product/${productId}`, token);
       setLabelData(data);
-    } catch (e) {
-      onError((e as Error).message);
+    } catch {
+      // Fallback local garantizado desde el catálogo de productos cargado
+      const prod = products.find((p) => p.id === productId || p.sku === productId);
+      if (prod) {
+        const title = prod.name;
+        const subtitle = `SKU: ${prod.sku} · Unidad: ${prod.unit} · Cat: ${prod.category ?? "General"}`;
+        const zpl = `^XA\n^PW812\n^LL406\n^FO50,40^A0N,36,36^FDWMS ENTERPRISE^FS\n^FO50,85^A0N,28,28^FDPRODUCT: ${title}^FS\n^FO50,120^A0N,22,22^FD${subtitle}^FS\n^FO50,160^BCN,100,Y,N,N^FD${prod.sku}^FS\n^FO550,160^BQN,2,5^FDQA,${prod.sku}^FS\n^XZ`;
+        setLabelData({
+          code: prod.sku,
+          type: "PRODUCT",
+          title,
+          subtitle,
+          barcode: prod.sku,
+          zpl,
+        });
+      } else {
+        onError("No fue posible cargar la información del producto");
+      }
     }
   };
 

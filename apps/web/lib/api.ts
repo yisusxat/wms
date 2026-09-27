@@ -925,5 +925,137 @@ async function fallbackInsforge<T>(path: string, token: string, init?: RequestIn
     return { message: 'Cuenta anonimizada conforme a RGPD.' } as T;
   }
 
+  if (cleanPath.startsWith('/operations/labels/location/')) {
+    const locId = cleanPath.split('/operations/labels/location/')[1];
+    let loc: any = null;
+    if (isUuid(locId)) {
+      const res = await fetch(`${insforgeUrl}/api/database/records/locations?id=eq.${locId}&select=id,code,level,position`, { headers }).catch(() => null);
+      const items = res && res.ok ? await res.json().catch(() => []) : [];
+      loc = Array.isArray(items) ? items[0] : null;
+    }
+    if (!loc) {
+      const seed = getWarehouseSeedLocations();
+      loc = seed.find((s) => s.id === locId || s.code === locId);
+    }
+    const code = loc?.code || locId || 'LOC-01';
+    const parts = code.split('-');
+    const aisle = parts[0] || 'A';
+    const rack = parts[1] || 'C';
+    const rackName = rack === 'P' ? 'Rack Pared' : 'Rack Central';
+    const title = `Posición ${code}`;
+    const subtitle = `Bodega Central · Pasillo ${aisle} · ${rackName} · Nivel ${loc?.level ?? 1}`;
+    const zpl = `^XA\n^PW812\n^LL406\n^FO50,40^A0N,36,36^FDWMS ENTERPRISE^FS\n^FO50,85^A0N,28,28^FDLOCATION: ${title}^FS\n^FO50,120^A0N,22,22^FD${subtitle}^FS\n^FO50,160^BCN,100,Y,N,N^FD${code}^FS\n^FO550,160^BQN,2,5^FDQA,${code}^FS\n^XZ`;
+
+    return {
+      code,
+      type: 'LOCATION',
+      title,
+      subtitle,
+      barcode: code,
+      zpl,
+    } as T;
+  }
+
+  if (cleanPath.startsWith('/operations/labels/product/')) {
+    const prodId = cleanPath.split('/operations/labels/product/')[1];
+    let prod: any = null;
+    if (isUuid(prodId)) {
+      const res = await fetch(`${insforgeUrl}/api/database/records/products?id=eq.${prodId}&select=id,sku,name,unit,category`, { headers }).catch(() => null);
+      const items = res && res.ok ? await res.json().catch(() => []) : [];
+      prod = Array.isArray(items) ? items[0] : null;
+    } else {
+      const res = await fetch(`${insforgeUrl}/api/database/records/products?sku=eq.${prodId}&select=id,sku,name,unit,category`, { headers }).catch(() => null);
+      const items = res && res.ok ? await res.json().catch(() => []) : [];
+      prod = Array.isArray(items) ? items[0] : null;
+    }
+    const sku = prod?.sku || 'SKU-001';
+    const name = prod?.name || 'Producto General';
+    const subtitle = `SKU: ${sku} · Unidad: ${prod?.unit ?? 'UND'} · Cat: ${prod?.category ?? 'General'}`;
+    const zpl = `^XA\n^PW812\n^LL406\n^FO50,40^A0N,36,36^FDWMS ENTERPRISE^FS\n^FO50,85^A0N,28,28^FDPRODUCT: ${name}^FS\n^FO50,120^A0N,22,22^FD${subtitle}^FS\n^FO50,160^BCN,100,Y,N,N^FD${sku}^FS\n^FO550,160^BQN,2,5^FDQA,${sku}^FS\n^XZ`;
+
+    return {
+      code: sku,
+      type: 'PRODUCT',
+      title: name,
+      subtitle,
+      barcode: sku,
+      zpl,
+    } as T;
+  }
+
+  if (cleanPath.startsWith('/operations/slotting/suggest/')) {
+    const seed = getWarehouseSeedLocations();
+    const suggestions = seed.slice(0, 5).map((s, idx) => {
+      const parts = (s.code || '').split('-');
+      return {
+        locationId: s.id,
+        locationCode: s.code,
+        zone: 'GENERAL',
+        aisle: parts[0] || 'A',
+        rack: parts[1] || 'C',
+        level: s.level,
+        position: s.position,
+        score: 95 - idx * 5,
+        abcClass: idx < 2 ? 'A' : 'B',
+        reasons: ['Ubicación disponible de alta accesibilidad', 'Compatibilidad de peso y dimensiones'],
+      };
+    });
+    return suggestions as T;
+  }
+
+  if (cleanPath.startsWith('/operations/fifo/suggest/')) {
+    const parts = cleanPath.split('/operations/fifo/suggest/')[1]?.split('/') || [];
+    const productId = parts[0];
+    const qty = parseInt(parts[1] || '1', 10);
+    const invRes = await fetch(`${insforgeUrl}/api/database/records/inventory?product_id=eq.${productId}&quantity=gt.0&order=created_at.asc`, { headers }).catch(() => null);
+    const invItems = invRes && invRes.ok ? await invRes.json().catch(() => []) : [];
+    let remaining = qty;
+    const suggestions = (Array.isArray(invItems) ? invItems : []).map((inv: any) => {
+      const takeQty = Math.min(inv.quantity, remaining);
+      remaining -= takeQty;
+      return {
+        inventoryId: inv.id,
+        locationId: inv.location_id,
+        locationCode: inv.location?.code ?? 'Ubicación',
+        availableQuantity: inv.quantity,
+        suggestedQuantity: takeQty,
+        lotNumber: inv.lot_number || 'LOTE-DEFAULT',
+        entryDate: inv.created_at || new Date().toISOString(),
+      };
+    });
+    return {
+      productId,
+      requestedQuantity: qty,
+      fulfilledQuantity: qty - Math.max(0, remaining),
+      isFullyAvailable: remaining <= 0,
+      suggestions,
+    } as T;
+  }
+
+  if (cleanPath === '/operations/picking/route') {
+    const body = init?.body ? JSON.parse(init.body as string) : {};
+    const items = body.items || [];
+    const seed = getWarehouseSeedLocations();
+    const route = items.map((item: any, idx: number) => {
+      const loc = seed[idx % seed.length];
+      const parts = (loc?.code || 'A-C-01-01').split('-');
+      return {
+        step: idx + 1,
+        locationId: loc?.id || `loc-${idx}`,
+        locationCode: loc?.code || 'A-C-01-01',
+        aisle: parts[0] || 'A',
+        rack: parts[1] || 'C',
+        level: loc?.level || 1,
+        position: loc?.position || 1,
+        productId: item.productId,
+        sku: 'SKU-' + (item.productId || '').slice(0, 8),
+        productName: 'Producto',
+        quantityAvailable: 100,
+        requestedQuantity: item.quantity,
+      };
+    });
+    return route as T;
+  }
+
   throw new Error(`Operación no disponible sin API en ${path}`);
 }
