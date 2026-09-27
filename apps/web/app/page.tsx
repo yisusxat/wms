@@ -658,6 +658,13 @@ export default function HomePage() {
               </button>
             )}
             <button
+              onClick={() => setGlobalScannerOpen(true)}
+              className="flex items-center gap-1.5 rounded-lg border border-blue-200 bg-blue-50 px-2.5 sm:px-3 py-1.5 sm:py-2 text-xs sm:text-sm font-medium text-blue-900 transition hover:bg-blue-100 shadow-xs active:scale-95"
+              title="Escanear código de barras o QR"
+            >
+              📷 Escanear
+            </button>
+            <button
               onClick={() => setTwoFactorOpen(true)}
               className="flex items-center gap-1.5 rounded-lg border border-purple-200 bg-purple-50 px-2.5 sm:px-3 py-1.5 sm:py-2 text-xs sm:text-sm font-medium text-purple-900 transition hover:bg-purple-100 shadow-xs active:scale-95"
               title="Configurar 2FA"

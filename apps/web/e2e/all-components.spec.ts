@@ -517,4 +517,25 @@ test.describe('7. Modales de Soporte, Legal, Auditoría y Seguridad', () => {
     await expect(page.getByText('Ya escaneé el código → Continuar')).toBeVisible();
     await page.locator('.fixed').getByRole('button', { name: '✕', exact: true }).click();
   });
+
+  test('BarcodeScanner: Escáner universal con fallback y conmutación a modo manual', async ({ page }) => {
+    await loginAndNavigate(page);
+
+    await page.getByRole('button', { name: /Escanear/i }).first().click();
+    await expect(page.getByText('Escáner de Código')).toBeVisible();
+    await expect(page.getByRole('button', { name: '📷 Cámara' })).toBeVisible();
+    await expect(page.getByRole('button', { name: '⌨️ Manual' })).toBeVisible();
+
+    // Switch to manual mode
+    await page.getByRole('button', { name: '⌨️ Manual' }).click();
+    await expect(page.getByPlaceholder('Escribe o pega el código...')).toBeVisible();
+
+    // Enter a code and submit
+    await page.getByPlaceholder('Escribe o pega el código...').fill('SKU-TEST-999');
+    await page.getByRole('button', { name: 'Confirmar código' }).click();
+
+    // Scanner closes and routes appropriately
+    await expect(page.getByText('Escáner de Código')).not.toBeVisible();
+  });
 });
+

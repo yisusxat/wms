@@ -13,6 +13,8 @@
     "@react-three/drei": "^10.7.0",
     "@react-three/fiber": "^9.6.0",
     "@sentry/nextjs": "^10.75.0",
+    "@zxing/browser": "^0.2.1",
+    "@zxing/library": "^0.23.0",
     "next": "15.5.25",
     "react": "19.2.0",
     "react-dom": "19.2.0",
