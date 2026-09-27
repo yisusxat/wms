@@ -883,7 +883,7 @@ function HomePageContent() {
 
         <div className="mt-6">
           {tab === 'dashboard' ? <Dashboard summary={summary} onNavigate={changeTab} role={profile?.role} /> : null}
-          {tab === 'kpis' ? <KPIPanel token={token} organizationId={profile?.organizationId} refreshKey={dataVersion} /> : null}
+          {tab === 'kpis' ? <KPIPanel token={token} organizationId={profile?.organizationId} refreshKey={dataVersion} onNavigate={(nextTab) => changeTab(nextTab as Tab)} /> : null}
           {tab === 'reports' ? <ReportsPanel token={token} organizationId={profile?.organizationId} onDataChanged={refreshSummary} refreshKey={dataVersion} /> : null}
           {tab === 'products' ? <ProductsPanel token={token} role={profile?.role} onError={setError} onDataChanged={refreshSummary} refreshKey={dataVersion} /> : null}
           {tab === 'locations' ? <Locations token={token} onError={setError} refreshKey={dataVersion} /> : null}
