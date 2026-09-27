@@ -317,8 +317,9 @@ export function PermissionsModal({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 p-2 sm:p-5 backdrop-blur-sm animate-fadeIn">
-      <div className="w-full max-w-4xl max-h-[96vh] sm:max-h-[94vh] flex flex-col rounded-2xl sm:rounded-3xl bg-white shadow-2xl border border-slate-200 overflow-hidden">
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-slate-900/60 p-0 sm:p-5 backdrop-blur-sm animate-fadeIn">
+      <div className="w-full max-w-4xl max-h-[96vh] sm:max-h-[94vh] flex flex-col rounded-t-3xl sm:rounded-3xl bg-white shadow-2xl border border-slate-200 overflow-hidden">
+        <div className="mx-auto w-12 h-1.5 rounded-full bg-slate-300 mt-2.5 mb-1 sm:hidden" />
         {/* Header */}
         <div className="flex items-center justify-between border-b px-3.5 sm:px-6 py-3 sm:py-4 bg-gradient-to-r from-slate-50 via-white to-slate-50">
           <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">

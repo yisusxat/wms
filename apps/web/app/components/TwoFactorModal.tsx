@@ -32,8 +32,9 @@ export function TwoFactorModal({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-3 sm:p-4 backdrop-blur-xs">
-      <div className="w-full max-w-md max-h-[92vh] sm:max-h-[90vh] overflow-y-auto rounded-2xl bg-white p-4 sm:p-6 shadow-2xl space-y-4">
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60 p-0 sm:p-4 backdrop-blur-xs">
+      <div className="w-full max-w-md max-h-[92vh] sm:max-h-[90vh] overflow-y-auto rounded-t-3xl sm:rounded-2xl bg-white p-5 sm:p-6 shadow-2xl space-y-4">
+        <div className="mx-auto w-12 h-1.5 rounded-full bg-slate-200 mb-2 sm:hidden" />
         <div className="flex items-center justify-between border-b pb-3">
           <div className="flex items-center gap-2">
             <span className="text-2xl">🔐</span>
@@ -81,9 +82,11 @@ export function TwoFactorModal({
             </p>
             <input
               type="text"
+              inputMode="numeric"
+              pattern="[0-9]*"
               maxLength={6}
               autoFocus
-              className="w-full rounded-xl border p-3 text-center font-mono text-2xl tracking-widest font-bold focus:ring-2 focus:ring-blue-500"
+              className="w-full rounded-xl border p-3 min-h-[52px] text-center font-mono text-2xl tracking-widest font-bold focus:ring-2 focus:ring-blue-500"
               placeholder="000000"
               value={code}
               onChange={(e) => setCode(e.target.value.replace(/\D/g, ""))}

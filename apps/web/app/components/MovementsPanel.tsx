@@ -396,8 +396,8 @@ export function MovementsPanel({
               type="button"
               key={item}
               onClick={() => setMode(item)}
-              className={`rounded-lg px-3.5 py-2 text-sm font-semibold transition ${
-                mode === item ? "bg-brand text-white shadow-xs" : "border bg-white text-gray-700 hover:bg-slate-50"
+              className={`rounded-xl px-4 py-2.5 min-h-[44px] text-xs sm:text-sm font-bold transition flex items-center justify-center active:scale-95 cursor-pointer ${
+                mode === item ? "bg-brand text-white shadow-sm" : "border border-slate-200 bg-white text-gray-700 hover:bg-slate-50"
               }`}
             >
               {(
@@ -646,44 +646,48 @@ export function MovementsPanel({
           )}
 
           {mode === "adjustment" ? (
-            <label className="text-sm font-medium">
+            <label className="text-sm font-semibold text-slate-700">
               Delta (+/-)
               <input
                 required
                 type="number"
-                className="mt-1 w-full rounded-lg border p-3 text-sm"
+                inputMode="numeric"
+                pattern="-?[0-9]*"
+                className="mt-1.5 w-full rounded-xl border border-slate-300 p-3 min-h-[48px] text-base font-semibold focus:border-blue-600 focus:outline-none"
                 value={form.delta}
                 onChange={(e) => setForm({ ...form, delta: Number(e.target.value) })}
               />
             </label>
           ) : (
-            <label className="text-sm font-medium">
+            <label className="text-sm font-semibold text-slate-700">
               Cantidad
               <input
                 required
                 min="1"
                 type="number"
-                className="mt-1 w-full rounded-lg border p-3 text-sm"
+                inputMode="numeric"
+                pattern="[0-9]*"
+                className="mt-1.5 w-full rounded-xl border border-slate-300 p-3 min-h-[48px] text-base font-semibold focus:border-blue-600 focus:outline-none"
                 value={form.quantity}
                 onChange={(e) => setForm({ ...form, quantity: Number(e.target.value) })}
               />
             </label>
           )}
 
-          <label className="text-sm font-medium">
+          <label className="text-sm font-semibold text-slate-700">
             Referencia
             <input
-              className="mt-1 w-full rounded-lg border p-3 text-sm"
+              className="mt-1.5 w-full rounded-xl border border-slate-300 p-3 min-h-[48px] text-sm sm:text-base focus:border-blue-600 focus:outline-none"
               value={form.reference}
               onChange={(e) => setForm({ ...form, reference: e.target.value })}
               placeholder="Ej. Guía de Despacho #4092"
             />
           </label>
 
-          <label className="text-sm font-medium md:col-span-2">
+          <label className="text-sm font-semibold text-slate-700 md:col-span-2">
             Motivo
             <input
-              className="mt-1 w-full rounded-lg border p-3 text-sm"
+              className="mt-1.5 w-full rounded-xl border border-slate-300 p-3 min-h-[48px] text-sm sm:text-base focus:border-blue-600 focus:outline-none"
               value={form.reason}
               onChange={(e) => setForm({ ...form, reason: e.target.value })}
               placeholder="Ej. Recepción de proveedor o preparación de pedido"
@@ -742,7 +746,7 @@ export function MovementsPanel({
           <button
             type="submit"
             disabled={isSubmitting}
-            className="w-full sm:w-auto rounded-lg bg-brand px-6 py-3 font-semibold text-white shadow hover:opacity-95 transition disabled:opacity-60 flex items-center justify-center gap-2 cursor-pointer disabled:cursor-not-allowed"
+            className="w-full sm:w-auto rounded-xl bg-brand px-8 py-3.5 min-h-[48px] font-bold text-white shadow-md hover:opacity-95 transition active:scale-98 disabled:opacity-60 flex items-center justify-center gap-2 cursor-pointer disabled:cursor-not-allowed"
           >
             {isSubmitting ? (
               <>

@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 import { useRef, useState, useEffect, useCallback } from "react";
 
 interface Props {
@@ -113,8 +113,13 @@ export default function BarcodeScanner({ onScan, onClose, label = "SKU / Código
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
-      <div className="bg-white rounded-2xl w-full max-w-sm shadow-2xl overflow-hidden">
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/70 p-0 sm:p-4 backdrop-blur-xs">
+      <div className="bg-white rounded-t-3xl sm:rounded-2xl w-full max-w-sm shadow-2xl overflow-hidden animate-fadeIn">
+        {/* Mobile handle indicator */}
+        <div className="pt-2 pb-1 flex justify-center sm:hidden bg-slate-900">
+          <div className="w-10 h-1 rounded-full bg-slate-600" />
+        </div>
+
         {/* Header */}
         <div className="flex items-center justify-between px-4 py-3 bg-slate-900 text-white">
           <div className="flex items-center gap-2">
@@ -126,25 +131,25 @@ export default function BarcodeScanner({ onScan, onClose, label = "SKU / Código
           </div>
           <div className="flex items-center gap-2">
             {hasTorch && mode === "camera" && (
-              <button onClick={toggleTorch} className={`p-1.5 rounded-lg transition-colors ${torchOn ? "bg-yellow-400 text-slate-900" : "bg-slate-700 text-white"}`} title="Linterna">
+              <button onClick={toggleTorch} className={`p-2 rounded-xl transition-colors min-h-[40px] min-w-[40px] flex items-center justify-center ${torchOn ? "bg-yellow-400 text-slate-900" : "bg-slate-700 text-white"}`} title="Linterna">
                 🔦
               </button>
             )}
-            <button onClick={onClose} className="p-1.5 bg-slate-700 hover:bg-slate-600 rounded-lg text-white">✕</button>
+            <button onClick={onClose} className="p-2 bg-slate-700 hover:bg-slate-600 rounded-xl text-white min-h-[40px] min-w-[40px] flex items-center justify-center text-sm font-bold">✕</button>
           </div>
         </div>
 
         {/* Mode toggle */}
-        <div className="flex bg-slate-100">
+        <div className="flex bg-slate-100 p-1 border-b border-slate-200">
           <button
             onClick={() => setMode("camera")}
-            className={`flex-1 py-2 text-sm font-medium transition-colors ${mode === "camera" ? "bg-white text-slate-800 shadow-sm" : "text-slate-500"}`}
+            className={`flex-1 py-2.5 rounded-lg text-sm font-semibold transition-colors min-h-[44px] flex items-center justify-center gap-1.5 ${mode === "camera" ? "bg-white text-slate-900 shadow-sm" : "text-slate-600 hover:text-slate-900"}`}
           >
             📷 Cámara
           </button>
           <button
             onClick={() => { stopCamera(); setMode("manual"); }}
-            className={`flex-1 py-2 text-sm font-medium transition-colors ${mode === "manual" ? "bg-white text-slate-800 shadow-sm" : "text-slate-500"}`}
+            className={`flex-1 py-2.5 rounded-lg text-sm font-semibold transition-colors min-h-[44px] flex items-center justify-center gap-1.5 ${mode === "manual" ? "bg-white text-slate-900 shadow-sm" : "text-slate-600 hover:text-slate-900"}`}
           >
             ⌨️ Manual
           </button>
@@ -153,41 +158,41 @@ export default function BarcodeScanner({ onScan, onClose, label = "SKU / Código
         {/* Camera view */}
         {mode === "camera" && (
           <div className="relative bg-black">
-            <video ref={videoRef} className="w-full h-56 object-cover" playsInline muted />
+            <video ref={videoRef} className="w-full h-64 sm:h-56 object-cover" playsInline muted />
             {/* Scan overlay */}
             <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-              <div className="w-52 h-32 border-2 border-white/80 rounded-lg relative">
-                <div className="absolute top-0 left-0 w-5 h-5 border-t-4 border-l-4 border-blue-400 rounded-tl" />
-                <div className="absolute top-0 right-0 w-5 h-5 border-t-4 border-r-4 border-blue-400 rounded-tr" />
-                <div className="absolute bottom-0 left-0 w-5 h-5 border-b-4 border-l-4 border-blue-400 rounded-bl" />
-                <div className="absolute bottom-0 right-0 w-5 h-5 border-b-4 border-r-4 border-blue-400 rounded-br" />
+              <div className="w-56 h-36 border-2 border-white/80 rounded-xl relative shadow-2xl">
+                <div className="absolute top-0 left-0 w-6 h-6 border-t-4 border-l-4 border-blue-400 rounded-tl-lg" />
+                <div className="absolute top-0 right-0 w-6 h-6 border-t-4 border-r-4 border-blue-400 rounded-tr-lg" />
+                <div className="absolute bottom-0 left-0 w-6 h-6 border-b-4 border-l-4 border-blue-400 rounded-bl-lg" />
+                <div className="absolute bottom-0 right-0 w-6 h-6 border-b-4 border-r-4 border-blue-400 rounded-br-lg" />
                 {status === "scanning" && (
                   <div className="absolute inset-x-0 top-0 h-0.5 bg-blue-400 animate-[scan-line_2s_linear_infinite]" />
                 )}
               </div>
             </div>
-            <div className="absolute bottom-2 inset-x-0 text-center">
-              {status === "starting" && <span className="text-white text-xs bg-black/50 px-3 py-1 rounded-full">Iniciando cámara...</span>}
-              {status === "scanning" && <span className="text-white text-xs bg-black/50 px-3 py-1 rounded-full">Apunta al código de barras o QR</span>}
-              {status === "error" && <span className="text-red-300 text-xs bg-black/50 px-3 py-1 rounded-full">{errorMsg}</span>}
+            <div className="absolute bottom-3 inset-x-0 text-center px-4">
+              {status === "starting" && <span className="text-white text-xs bg-black/70 backdrop-blur-xs px-3.5 py-1.5 rounded-full font-medium">Iniciando cámara...</span>}
+              {status === "scanning" && <span className="text-white text-xs bg-black/70 backdrop-blur-xs px-3.5 py-1.5 rounded-full font-medium">Apunta al código de barras o QR</span>}
+              {status === "error" && <span className="text-red-300 text-xs bg-black/70 backdrop-blur-xs px-3.5 py-1.5 rounded-full font-medium">{errorMsg}</span>}
             </div>
           </div>
         )}
 
         {/* Manual input */}
         {mode === "manual" && (
-          <form onSubmit={handleManualSubmit} className="p-4 space-y-3">
+          <form onSubmit={handleManualSubmit} className="p-4 sm:p-5 space-y-4">
             <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">{label}</label>
+              <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-1.5">{label}</label>
               <input
                 autoFocus
                 value={manualValue}
                 onChange={(e) => setManualValue(e.target.value)}
                 placeholder="Escribe o pega el código..."
-                className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full border border-slate-300 rounded-xl px-4 py-3 min-h-[48px] text-base focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono"
               />
             </div>
-            <button type="submit" className="w-full bg-blue-600 hover:bg-blue-700 text-white py-2 rounded-lg text-sm font-medium transition-colors">
+            <button type="submit" className="w-full bg-blue-600 hover:bg-blue-700 text-white min-h-[48px] py-3 rounded-xl text-base font-bold shadow-md transition-all active:scale-98">
               Confirmar código
             </button>
           </form>
@@ -195,16 +200,16 @@ export default function BarcodeScanner({ onScan, onClose, label = "SKU / Código
 
         {/* Last scanned */}
         {lastScanned && (
-          <div className="px-4 pb-3 text-center">
-            <p className="text-xs text-slate-500">Último escaneado:</p>
-            <p className="font-mono font-semibold text-blue-700 text-sm">{lastScanned}</p>
+          <div className="px-4 py-3 bg-blue-50/70 border-t border-blue-100 text-center">
+            <p className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">Último escaneado:</p>
+            <p className="font-mono font-bold text-blue-800 text-base mt-0.5">{lastScanned}</p>
           </div>
         )}
       </div>
       <style>{`
         @keyframes scan-line {
           0% { transform: translateY(0); }
-          100% { transform: translateY(calc(8rem - 2px)); }
+          100% { transform: translateY(calc(9rem - 2px)); }
         }
       `}</style>
     </div>

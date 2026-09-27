@@ -32,8 +32,9 @@ export function LabelModal({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-3 sm:p-4 backdrop-blur-xs">
-      <div className="w-full max-w-md max-h-[92vh] sm:max-h-[90vh] overflow-y-auto rounded-2xl bg-white p-4 sm:p-6 shadow-2xl space-y-4">
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60 p-0 sm:p-4 backdrop-blur-xs">
+      <div className="w-full max-w-md max-h-[92vh] sm:max-h-[90vh] overflow-y-auto rounded-t-3xl sm:rounded-2xl bg-white p-5 sm:p-6 shadow-2xl space-y-4">
+        <div className="mx-auto w-12 h-1.5 rounded-full bg-slate-200 mb-2 sm:hidden" />
         <div className="flex items-center justify-between border-b pb-3">
           <div className="flex items-center gap-2">
             <span className="text-2xl">🏷️</span>
@@ -78,16 +79,16 @@ export function LabelModal({
         </div>
 
         {/* Actions */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-2">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-2">
           <button
             onClick={handlePrint}
-            className="flex items-center justify-center gap-1.5 rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-blue-700 transition shadow-sm cursor-pointer"
+            className="flex items-center justify-center gap-1.5 rounded-xl bg-blue-600 px-4 py-3 min-h-[48px] text-sm font-bold text-white hover:bg-blue-700 transition shadow-sm cursor-pointer active:scale-98"
           >
             🖨️ Imprimir
           </button>
           <button
             onClick={copyZpl}
-            className="flex items-center justify-center gap-1.5 rounded-xl border border-gray-300 bg-white px-4 py-2.5 text-sm font-semibold text-gray-700 hover:bg-gray-50 transition cursor-pointer"
+            className="flex items-center justify-center gap-1.5 rounded-xl border border-gray-300 bg-white px-4 py-3 min-h-[48px] text-sm font-bold text-gray-700 hover:bg-gray-50 transition cursor-pointer active:scale-98"
           >
             {copiedZpl ? "✓ ¡Copiado!" : "📋 Copiar ZPL (Zebra)"}
           </button>

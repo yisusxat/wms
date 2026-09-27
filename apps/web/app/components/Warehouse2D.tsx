@@ -733,8 +733,43 @@ export function Warehouse2D({ token, onError, onNavigate, onDataChanged, refresh
       )}
 
       {/* 3. Official Warehouse 2D Layout Plan */}
-      <div className="md:hidden flex items-center justify-between px-2 py-1 text-xs text-slate-500">
-        <span>↔ Desliza horizontalmente para explorar los pasillos</span>
+      <div className="md:hidden flex flex-col gap-2 p-2 bg-slate-200/70 rounded-2xl mb-3">
+        <div className="flex items-center justify-between text-xs text-slate-600">
+          <span className="font-semibold">↔ Vista Móvil de Pasillos:</span>
+          <span className="text-[11px] text-slate-500">Toca para enfocar</span>
+        </div>
+        <div className="grid grid-cols-3 gap-1.5">
+          <button
+            type="button"
+            onClick={() => {
+              const el = document.getElementById('aisle-a-section');
+              el?.scrollIntoView({ behavior: 'smooth', inline: 'center' });
+            }}
+            className="py-2 bg-white rounded-xl shadow-2xs text-xs font-bold text-blue-900 border border-slate-200 active:scale-95 text-center min-h-[40px] flex items-center justify-center cursor-pointer"
+          >
+            Pasillo A
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              const el = document.getElementById('rack-central-section');
+              el?.scrollIntoView({ behavior: 'smooth', inline: 'center' });
+            }}
+            className="py-2 bg-white rounded-xl shadow-2xs text-xs font-bold text-emerald-900 border border-slate-200 active:scale-95 text-center min-h-[40px] flex items-center justify-center cursor-pointer"
+          >
+            Rack Isla
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              const el = document.getElementById('aisle-b-section');
+              el?.scrollIntoView({ behavior: 'smooth', inline: 'center' });
+            }}
+            className="py-2 bg-white rounded-xl shadow-2xs text-xs font-bold text-indigo-900 border border-slate-200 active:scale-95 text-center min-h-[40px] flex items-center justify-center cursor-pointer"
+          >
+            Pasillo B
+          </button>
+        </div>
       </div>
       <div className="relative overflow-x-auto rounded-2xl sm:rounded-3xl border-2 sm:border-4 border-slate-800 bg-slate-100/90 p-3 sm:p-4 md:p-6 shadow-2xl">
         <div className="min-w-[880px] max-w-[1060px] mx-auto">
@@ -757,7 +792,7 @@ export function Warehouse2D({ token, onError, onNavigate, onDataChanged, refresh
           {/* 5-Column Grid */}
           <div className="grid grid-cols-[auto_1fr_auto_1fr_auto] gap-4 items-start">
             {/* ================= COLUMN 1: RACK PARED PASILLO A (22 POSICIONES) ================= */}
-            <div className="rounded-2xl border-2 border-slate-800 bg-white p-3 shadow-lg">
+            <div id="aisle-a-section" className="rounded-2xl border-2 border-slate-800 bg-white p-3 shadow-lg">
               <div className="mb-3 text-center border-b border-slate-100 pb-2">
                 <span className="inline-block rounded-full bg-blue-900 px-2.5 py-0.5 text-[10px] font-black uppercase tracking-wider text-white">
                   Rack Pared
@@ -819,7 +854,7 @@ export function Warehouse2D({ token, onError, onNavigate, onDataChanged, refresh
             </div>
 
             {/* ================= COLUMN 3: RACK CENTRAL ISLA (15 POSICIONES) ================= */}
-            <div className="flex flex-col items-center">
+            <div id="rack-central-section" className="flex flex-col items-center">
               <div className="rounded-2xl border-2 border-slate-800 bg-white p-3 shadow-lg">
                 <div className="mb-3 text-center border-b border-slate-100 pb-2">
                   <span className="inline-block rounded-full bg-emerald-800 px-2.5 py-0.5 text-[10px] font-black uppercase tracking-wider text-white">
@@ -917,7 +952,7 @@ export function Warehouse2D({ token, onError, onNavigate, onDataChanged, refresh
             </div>
 
             {/* ================= COLUMN 5: RACK PARED PASILLO B (22 POSICIONES) ================= */}
-            <div className="rounded-2xl border-2 border-slate-800 bg-white p-3 shadow-lg">
+            <div id="aisle-b-section" className="rounded-2xl border-2 border-slate-800 bg-white p-3 shadow-lg">
               <div className="mb-3 text-center border-b border-slate-100 pb-2">
                 <span className="inline-block rounded-full bg-indigo-900 px-2.5 py-0.5 text-[10px] font-black uppercase tracking-wider text-white">
                   Rack Pared

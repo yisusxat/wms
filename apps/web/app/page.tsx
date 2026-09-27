@@ -82,6 +82,11 @@ const TwoFactorModal = dynamic(
   { ssr: false }
 );
 
+const BarcodeScanner = dynamic(
+  () => import('./components/BarcodeScanner'),
+  { ssr: false }
+);
+
 type Summary = {
   products: number;
   locations: number;
@@ -185,6 +190,28 @@ export default function HomePage() {
   const [legalOpen, setLegalOpen] = useState(false);
   const [twoFactorOpen, setTwoFactorOpen] = useState(false);
   const [mappingInitialLocation, setMappingInitialLocation] = useState<string | null>(null);
+  const [globalScannerOpen, setGlobalScannerOpen] = useState(false);
+  const [isOnline, setIsOnline] = useState(true);
+  const [showReconnected, setShowReconnected] = useState(false);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    setIsOnline(navigator.onLine);
+    const handleOnline = () => {
+      setIsOnline(true);
+      setShowReconnected(true);
+      setTimeout(() => setShowReconnected(false), 4000);
+    };
+    const handleOffline = () => {
+      setIsOnline(false);
+    };
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
+  }, []);
 
   useEffect(() => {
     let active = true;
@@ -594,7 +621,21 @@ export default function HomePage() {
         </div>
       </aside>
 
-      <section className="flex-1 p-3 sm:p-6 lg:p-10 min-w-0">
+      {/* Floating Offline / Online Status Indicator */}
+      {!isOnline && (
+        <div className="fixed top-2 left-1/2 -translate-x-1/2 z-50 rounded-full bg-amber-600 px-4 py-1.5 text-xs font-bold text-white shadow-lg flex items-center gap-2 animate-bounce">
+          <span>📶</span>
+          <span>Modo Offline: Operando con almacenamiento local</span>
+        </div>
+      )}
+      {showReconnected && (
+        <div className="fixed top-2 left-1/2 -translate-x-1/2 z-50 rounded-full bg-emerald-600 px-4 py-1.5 text-xs font-bold text-white shadow-lg flex items-center gap-2 animate-fadeIn">
+          <span>✓</span>
+          <span>Conexión restablecida con el servidor</span>
+        </div>
+      )}
+
+      <section className="flex-1 p-3 sm:p-6 lg:p-10 min-w-0 pb-28 lg:pb-10">
         <header className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4 border-b border-slate-200 pb-4 sm:pb-5">
           <div>
             <div className="flex items-center gap-2">
@@ -688,6 +729,88 @@ export default function HomePage() {
           ) : null}
         </div>
       </section>
+
+      {/* Mobile Bottom Navigation Bar (Persistent Thumb-Zone Navigation) */}
+      <div
+        role="region"
+        aria-label="Barra de acciones móviles"
+        className="lg:hidden fixed bottom-0 left-0 right-0 z-40 bg-white/95 backdrop-blur-md border-t border-slate-200 px-2 py-1 shadow-lg pb-[max(0.5rem,env(safe-area-inset-bottom))]"
+      >
+        <div className="flex items-center justify-around relative">
+          <button
+            type="button"
+            onClick={() => changeTab('dashboard')}
+            className={`flex flex-col items-center justify-center py-1 px-2 min-h-[48px] min-w-[56px] text-xs transition ${
+              tab === 'dashboard' ? 'text-blue-900 font-bold' : 'text-slate-500 hover:text-slate-800'
+            }`}
+          >
+            <span className="text-xl">📊</span>
+            <span className="text-[10px] tracking-tight">Dashboard</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => changeTab('movements')}
+            className={`flex flex-col items-center justify-center py-1 px-2 min-h-[48px] min-w-[56px] text-xs transition ${
+              tab === 'movements' ? 'text-blue-900 font-bold' : 'text-slate-500 hover:text-slate-800'
+            }`}
+          >
+            <span className="text-xl">📦</span>
+            <span className="text-[10px] tracking-tight">Movimientos</span>
+          </button>
+
+          {/* Central Elevated Floating Action Button (FAB) for Instant Barcode Scan */}
+          <div className="relative -top-5 flex flex-col items-center">
+            <button
+              type="button"
+              onClick={() => setGlobalScannerOpen(true)}
+              className="flex h-14 w-14 items-center justify-center rounded-full bg-gradient-to-tr from-blue-700 to-indigo-600 text-white shadow-xl shadow-blue-500/40 ring-4 ring-white active:scale-95 transition-transform cursor-pointer"
+              aria-label="Escanear Código de Barras o QR"
+              title="Escanear Código de Barras o QR"
+            >
+              <span className="text-2xl drop-shadow-sm">📷</span>
+            </button>
+            <span className="text-[9px] font-black text-blue-900 uppercase tracking-tighter mt-1">Escanear</span>
+          </div>
+
+          <button
+            type="button"
+            onClick={() => changeTab('warehouse2d')}
+            className={`flex flex-col items-center justify-center py-1 px-2 min-h-[48px] min-w-[56px] text-xs transition ${
+              tab === 'warehouse2d' ? 'text-blue-900 font-bold' : 'text-slate-500 hover:text-slate-800'
+            }`}
+          >
+            <span className="text-xl">🗺️</span>
+            <span className="text-[10px] tracking-tight">Plano 2D</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setMobileMenuOpen(true)}
+            className="flex flex-col items-center justify-center py-1 px-2 min-h-[48px] min-w-[56px] text-xs font-semibold text-slate-500 hover:text-slate-800 transition cursor-pointer"
+          >
+            <span className="text-xl">☰</span>
+            <span className="text-[10px] tracking-tight">Más</span>
+          </button>
+        </div>
+      </div>
+
+      {/* Global Barcode Scanner Modal triggered from FAB */}
+      {globalScannerOpen && (
+        <BarcodeScanner
+          label="Escanear SKU o Casillero de Bodega"
+          onClose={() => setGlobalScannerOpen(false)}
+          onScan={(code) => {
+            setGlobalScannerOpen(false);
+            if (code.includes('-')) {
+              setMappingInitialLocation(code);
+              changeTab('warehouse2d');
+            } else {
+              changeTab('products');
+            }
+          }}
+        />
+      )}
 
       {/* Modals - Mounted only when active to save memory and avoid DOM overhead */}
       {supportOpen ? <SupportModal isOpen={supportOpen} onClose={() => setSupportOpen(false)} user={user} profile={profile} /> : null}
