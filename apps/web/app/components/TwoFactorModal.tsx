@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 import { useState } from "react";
 
 export function TwoFactorModal({
@@ -32,14 +32,14 @@ export function TwoFactorModal({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
-      <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl space-y-4">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-3 sm:p-4 backdrop-blur-xs">
+      <div className="w-full max-w-md max-h-[92vh] sm:max-h-[90vh] overflow-y-auto rounded-2xl bg-white p-4 sm:p-6 shadow-2xl space-y-4">
         <div className="flex items-center justify-between border-b pb-3">
           <div className="flex items-center gap-2">
             <span className="text-2xl">🔐</span>
             <div>
-              <h3 className="font-bold text-gray-900">Autenticación en Dos Pasos (2FA)</h3>
-              <p className="text-xs text-gray-500">TOTP (Google Authenticator / Authy)</p>
+              <h3 className="font-bold text-gray-900 text-sm sm:text-base">Autenticación en Dos Pasos (2FA)</h3>
+              <p className="text-[11px] sm:text-xs text-gray-500">TOTP (Google Authenticator / Authy)</p>
             </div>
           </div>
           <button onClick={onClose} className="text-gray-400 hover:text-gray-700 p-1.5 rounded-lg">

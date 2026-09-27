@@ -200,15 +200,19 @@ export function Warehouse3D({
         </div>
       </div>
 
-      <div className="flex flex-wrap gap-4 rounded-xl bg-white px-4 py-3 text-sm shadow-sm border border-slate-100">
+      <div className="flex flex-wrap gap-2.5 sm:gap-4 rounded-xl bg-white px-3 sm:px-4 py-2.5 sm:py-3 text-xs sm:text-sm shadow-sm border border-slate-100 items-center">
         <span className="font-semibold text-slate-700">Leyenda:</span>
-        <span className="inline-flex items-center gap-2 text-xs text-slate-600"><i className="h-3 w-3 rounded-full bg-green-500" />Vacía / disponible</span>
-        <span className="inline-flex items-center gap-2 text-xs text-slate-600"><i className="h-3 w-3 rounded-full bg-red-500" />Ocupada (con stock)</span>
-        <span className="inline-flex items-center gap-2 text-xs text-slate-600"><i className="h-3 w-3 rounded-full bg-slate-500" />Bloqueada</span>
-        <span className="inline-flex items-center gap-2 text-xs text-slate-600"><i className="h-3 w-3 rounded-full bg-amber-500" />Mantención</span>
+        <span className="inline-flex items-center gap-1.5 sm:gap-2 text-[11px] sm:text-xs text-slate-600"><i className="h-2.5 w-2.5 sm:h-3 sm:w-3 rounded-full bg-green-500" />Vacía / disponible</span>
+        <span className="inline-flex items-center gap-1.5 sm:gap-2 text-[11px] sm:text-xs text-slate-600"><i className="h-2.5 w-2.5 sm:h-3 sm:w-3 rounded-full bg-red-500" />Ocupada (con stock)</span>
+        <span className="inline-flex items-center gap-1.5 sm:gap-2 text-[11px] sm:text-xs text-slate-600"><i className="h-2.5 w-2.5 sm:h-3 sm:w-3 rounded-full bg-slate-500" />Bloqueada</span>
+        <span className="inline-flex items-center gap-1.5 sm:gap-2 text-[11px] sm:text-xs text-slate-600"><i className="h-2.5 w-2.5 sm:h-3 sm:w-3 rounded-full bg-amber-500" />Mantención</span>
       </div>
 
-      <div className="relative h-[420px] sm:h-[520px] lg:h-[620px] overflow-hidden rounded-xl bg-slate-100 shadow-sm border border-slate-200">
+      <div className="md:hidden flex items-center justify-between text-[11px] text-slate-500 px-1">
+        <span>👆 Toca y arrastra para orbitar o hacer zoom en la bodega</span>
+      </div>
+
+      <div className="relative h-[380px] sm:h-[520px] lg:h-[620px] overflow-hidden rounded-xl bg-slate-100 shadow-sm border border-slate-200">
         <Canvas camera={{ position: [15, 11, 19], fov: 48 }}>
           <color attach="background" args={['#F1F5F9']} />
           <ambientLight intensity={1.6} />
@@ -237,7 +241,7 @@ export function Warehouse3D({
             inventoryMap.get(selected.id);
           const hasStock = Boolean(invItem && (invItem.quantity || 0) > 0);
           return (
-            <aside className="absolute right-4 top-4 w-80 rounded-2xl bg-white/95 p-5 shadow-xl border border-slate-200 backdrop-blur-sm z-10">
+            <aside className="absolute left-3 right-3 sm:left-auto sm:right-4 top-3 sm:top-4 w-auto sm:w-80 rounded-2xl bg-white/95 p-4 sm:p-5 shadow-xl border border-slate-200 backdrop-blur-sm z-10">
               <div className="flex items-start justify-between">
                 <div>
                   <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Posición Seleccionada</span>

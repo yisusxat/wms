@@ -42,33 +42,33 @@ export function LegalModal({ isOpen, onClose, token, onAnonymized }: Props) {
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 p-4 backdrop-blur-xs">
-      <div className="w-full max-w-2xl max-h-[85vh] flex flex-col rounded-2xl bg-white p-6 shadow-2xl border border-slate-100">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 p-3 sm:p-4 backdrop-blur-xs">
+      <div className="w-full max-w-2xl max-h-[90vh] sm:max-h-[85vh] flex flex-col rounded-2xl bg-white p-4 sm:p-6 shadow-2xl border border-slate-100">
         <div className="flex items-start justify-between border-b border-slate-100 pb-3">
           <div>
-            <h3 className="text-lg font-bold text-slate-900">Marco Legal, SLA y Privacidad</h3>
-            <p className="text-xs text-slate-500">Términos operativos, acuerdo de nivel de servicio y cumplimiento de datos</p>
+            <h3 className="text-base sm:text-lg font-bold text-slate-900">Marco Legal, SLA y Privacidad</h3>
+            <p className="text-[11px] sm:text-xs text-slate-500">Términos operativos, acuerdo de nivel de servicio y cumplimiento de datos</p>
           </div>
-          <button onClick={onClose} className="text-slate-400 hover:text-slate-600 text-lg">✕</button>
+          <button onClick={onClose} className="text-slate-400 hover:text-slate-600 p-1 text-lg">✕</button>
         </div>
 
         {/* Tab Selector */}
-        <div className="flex border-b border-slate-200 mt-4 space-x-4 text-xs font-semibold">
+        <div className="flex border-b border-slate-200 mt-3 sm:mt-4 space-x-4 text-xs font-semibold overflow-x-auto whitespace-nowrap scrollbar-none pb-0.5">
           <button
             onClick={() => setTab('tos')}
-            className={`pb-2.5 transition ${tab === 'tos' ? 'border-b-2 border-blue-600 text-blue-600' : 'text-slate-500 hover:text-slate-800'}`}
+            className={`pb-2.5 transition shrink-0 ${tab === 'tos' ? 'border-b-2 border-blue-600 text-blue-600' : 'text-slate-500 hover:text-slate-800'}`}
           >
             Términos de Servicio (ToS)
           </button>
           <button
             onClick={() => setTab('sla')}
-            className={`pb-2.5 transition ${tab === 'sla' ? 'border-b-2 border-blue-600 text-blue-600' : 'text-slate-500 hover:text-slate-800'}`}
+            className={`pb-2.5 transition shrink-0 ${tab === 'sla' ? 'border-b-2 border-blue-600 text-blue-600' : 'text-slate-500 hover:text-slate-800'}`}
           >
             Acuerdo de Nivel de Servicio (SLA)
           </button>
           <button
             onClick={() => setTab('gdpr')}
-            className={`pb-2.5 transition ${tab === 'gdpr' ? 'border-b-2 border-blue-600 text-blue-600' : 'text-slate-500 hover:text-slate-800'}`}
+            className={`pb-2.5 transition shrink-0 ${tab === 'gdpr' ? 'border-b-2 border-blue-600 text-blue-600' : 'text-slate-500 hover:text-slate-800'}`}
           >
             Privacidad & RGPD (Derecho al Olvido)
           </button>
@@ -148,7 +148,7 @@ export function LegalModal({ isOpen, onClose, token, onAnonymized }: Props) {
         <div className="mt-4 pt-3 border-t border-slate-100 flex justify-end">
           <button
             onClick={onClose}
-            className="rounded-lg border border-slate-300 px-4 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 transition"
+            className="w-full sm:w-auto rounded-lg border border-slate-300 px-4 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 transition text-center"
           >
             Entendido
           </button>

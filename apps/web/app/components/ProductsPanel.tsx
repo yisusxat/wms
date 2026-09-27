@@ -174,7 +174,7 @@ export function ProductsPanel({ token, role, onError, onDataChanged, refreshKey 
   return (
     <section className="space-y-6">
       {/* Header and Quick Stats */}
-      <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between rounded-3xl bg-slate-900 text-white p-6 shadow-xl">
+      <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between rounded-3xl bg-slate-900 text-white p-4 sm:p-6 shadow-xl">
         <div className="flex items-center gap-3.5">
           <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-indigo-500/20 border border-indigo-400/30 text-2xl font-bold">
             📦
@@ -342,7 +342,7 @@ export function ProductsPanel({ token, role, onError, onDataChanged, refreshKey 
       )}
 
       {/* Search, Filter Bar and Table */}
-      <div className="rounded-3xl bg-white p-6 shadow-sm border border-slate-100 space-y-4">
+      <div className="rounded-3xl bg-white p-4 sm:p-6 shadow-sm border border-slate-100 space-y-4">
         {/* Filters Row */}
         <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
           {/* Search Box */}
@@ -410,7 +410,7 @@ export function ProductsPanel({ token, role, onError, onDataChanged, refreshKey 
 
         {/* Products Table */}
         <div className="overflow-x-auto rounded-2xl border border-slate-200 bg-white">
-          <table className="w-full text-left text-xs">
+          <table className="w-full text-left text-xs min-w-[620px]">
             <thead className="border-b bg-slate-50 text-[11px] font-bold uppercase tracking-wider text-slate-500">
               <tr>
                 <th className="p-3.5">SKU</th>

@@ -356,9 +356,9 @@ export default function HomePage() {
 
   if (!user || !token) {
     return (
-      <main className="grid min-h-screen place-items-center bg-slate-50 p-6">
+      <main className="grid min-h-screen place-items-center bg-slate-50 p-4 sm:p-6">
         <div className="w-full max-w-md space-y-4">
-          <form onSubmit={signIn} className="rounded-2xl bg-white p-8 shadow-sm border border-slate-100 space-y-4">
+          <form onSubmit={signIn} className="rounded-2xl bg-white p-5 sm:p-8 shadow-sm border border-slate-100 space-y-4">
             <div className="flex items-center gap-2">
               <span className="rounded bg-blue-100 px-2 py-0.5 text-xs font-bold tracking-wider text-blue-800">WMS</span>
               <p className="text-sm font-semibold uppercase tracking-widest text-brand">Logística</p>
@@ -450,14 +450,17 @@ export default function HomePage() {
   return (
     <div className="min-h-screen lg:flex bg-slate-50">
       {/* Mobile Top Navigation Bar */}
-      <div className="lg:hidden sticky top-0 z-40 flex items-center justify-between bg-[#1E3A8A] px-4 py-3 text-white shadow-md">
-        <div className="flex items-center gap-2">
-          <span className="rounded bg-white/20 px-2 py-0.5 text-xs font-bold tracking-wider">WMS</span>
-          <span className="text-sm font-semibold tracking-wide text-blue-100">Logística</span>
+      <div className="lg:hidden sticky top-0 z-40 flex items-center justify-between bg-[#1E3A8A] px-3.5 py-2.5 text-white shadow-md">
+        <div className="flex items-center gap-2 min-w-0">
+          <span className="rounded bg-white/20 px-2 py-0.5 text-xs font-bold tracking-wider shrink-0">WMS</span>
+          <span className="text-sm font-semibold tracking-wide text-blue-100 shrink-0">Logística</span>
+          <span className="text-[11px] bg-blue-800/80 px-2 py-0.5 rounded-full font-medium text-blue-100 truncate max-w-[140px]">
+            {visibleTabs.find(item => item.id === tab)?.label}
+          </span>
         </div>
         <button
           onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-          className="flex items-center gap-1.5 rounded-lg bg-white/10 px-3 py-1.5 text-xs font-medium text-white hover:bg-white/20 transition"
+          className="flex items-center gap-1.5 rounded-lg bg-white/10 px-3 py-1.5 text-xs font-medium text-white hover:bg-white/20 transition active:scale-95 shrink-0"
           aria-label="Abrir menú"
         >
           {mobileMenuOpen ? '✕ Cerrar' : '☰ Menú'}
@@ -526,8 +529,8 @@ export default function HomePage() {
         </div>
       </aside>
 
-      <section className="flex-1 p-4 sm:p-6 lg:p-10 min-w-0">
-        <header className="flex flex-wrap items-center justify-between gap-4 border-b border-slate-200 pb-5">
+      <section className="flex-1 p-3 sm:p-6 lg:p-10 min-w-0">
+        <header className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4 border-b border-slate-200 pb-4 sm:pb-5">
           <div>
             <div className="flex items-center gap-2">
               <span className="inline-flex items-center gap-1 rounded-full bg-blue-100 px-2.5 py-0.5 text-xs font-semibold text-blue-800">
@@ -538,11 +541,11 @@ export default function HomePage() {
             <h1 className="mt-1 text-2xl sm:text-3xl font-bold text-gray-900">{visibleTabs.find(item => item.id === tab)?.label ?? 'Dashboard'}</h1>
           </div>
 
-          <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+          <div className="flex flex-wrap items-center gap-1.5 sm:gap-2.5">
             {profile?.role === 'ADMIN' && (
               <button
                 onClick={() => setAuditOpen(true)}
-                className="flex items-center gap-1.5 rounded-lg border border-indigo-200 bg-indigo-50 px-3 py-2 text-sm font-medium text-indigo-900 transition hover:bg-indigo-100 shadow-xs"
+                className="flex items-center gap-1.5 rounded-lg border border-indigo-200 bg-indigo-50 px-2.5 sm:px-3 py-1.5 sm:py-2 text-xs sm:text-sm font-medium text-indigo-900 transition hover:bg-indigo-100 shadow-xs active:scale-95"
                 title="Ver bitácora de auditoría"
               >
                 📜 Auditoría
@@ -550,28 +553,28 @@ export default function HomePage() {
             )}
             <button
               onClick={() => setTwoFactorOpen(true)}
-              className="flex items-center gap-1.5 rounded-lg border border-purple-200 bg-purple-50 px-3 py-2 text-sm font-medium text-purple-900 transition hover:bg-purple-100 shadow-xs"
+              className="flex items-center gap-1.5 rounded-lg border border-purple-200 bg-purple-50 px-2.5 sm:px-3 py-1.5 sm:py-2 text-xs sm:text-sm font-medium text-purple-900 transition hover:bg-purple-100 shadow-xs active:scale-95"
               title="Configurar 2FA"
             >
-              🔐 2FA / TOTP
+              🔐 2FA
             </button>
             <button
               onClick={() => setSupportOpen(true)}
-              className="flex items-center gap-1.5 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-sm font-medium text-amber-900 transition hover:bg-amber-100 shadow-xs"
+              className="flex items-center gap-1.5 rounded-lg border border-amber-300 bg-amber-50 px-2.5 sm:px-3 py-1.5 sm:py-2 text-xs sm:text-sm font-medium text-amber-900 transition hover:bg-amber-100 shadow-xs active:scale-95"
               title="Reportar problema técnico"
             >
               <span className="text-amber-600 font-bold">⚠</span> Soporte
             </button>
             <button
               onClick={revokeAll}
-              className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-medium text-slate-600 hover:bg-slate-50 transition shadow-xs"
+              className="rounded-lg border border-slate-200 bg-white px-2.5 sm:px-3 py-1.5 sm:py-2 text-xs font-medium text-slate-600 hover:bg-slate-50 transition shadow-xs active:scale-95"
               title="Cerrar sesión en todos los dispositivos"
             >
               Cerrar en todos
             </button>
             <button
               onClick={signOut}
-              className="rounded-lg border bg-white px-3.5 py-2 text-sm font-medium text-gray-700 transition hover:bg-gray-100 shadow-xs"
+              className="rounded-lg border bg-white px-3 sm:px-3.5 py-1.5 sm:py-2 text-xs sm:text-sm font-medium text-gray-700 transition hover:bg-gray-100 shadow-xs active:scale-95"
             >
               Cerrar sesión
             </button>
@@ -758,11 +761,11 @@ function Dashboard({
         </div>
       )}
 
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 sm:gap-4">
         {cards.map(([label, value]) => (
-          <article key={label} className="rounded-xl bg-white p-5 shadow-sm border border-slate-100">
-            <p className="text-sm text-gray-500">{label}</p>
-            <p className="mt-2 text-3xl font-bold text-gray-900">{value}</p>
+          <article key={label} className="rounded-xl bg-white p-3.5 sm:p-5 shadow-sm border border-slate-100">
+            <p className="text-xs sm:text-sm text-gray-500">{label}</p>
+            <p className="mt-1 sm:mt-2 text-2xl sm:text-3xl font-bold text-gray-900">{value}</p>
           </article>
         ))}
       </div>
@@ -802,7 +805,7 @@ function Locations({ token, onError, refreshKey }: { token: string; onError: (va
           <span>Actualizar</span>
         </button>
       </div>
-      <div className="rounded-xl bg-white p-5 shadow-sm border border-slate-100">
+      <div className="rounded-xl bg-white p-3.5 sm:p-5 shadow-sm border border-slate-100">
         <Table headers={['Código', 'Nivel', 'Posición', 'Estado']} rows={(data?.items ?? []).map(item => [item.code, item.level, item.position, item.status])} />
       </div>
     </div>
@@ -838,7 +841,7 @@ function Inventory({ token, onError, refreshKey }: { token: string; onError: (va
           <span>Actualizar</span>
         </button>
       </div>
-      <div className="rounded-xl bg-white p-5 shadow-sm border border-slate-100">
+      <div className="rounded-xl bg-white p-3.5 sm:p-5 shadow-sm border border-slate-100">
         <Table headers={['SKU', 'Producto', 'Ubicación', 'Cantidad', 'Reservado']} rows={(data?.items ?? []).map(item => [item.product?.sku ?? 'N/A', item.product?.name ?? 'N/A', item.location?.code ?? 'N/A', item.quantity, item.reservedQuantity])} />
       </div>
     </div>
@@ -848,11 +851,11 @@ function Inventory({ token, onError, refreshKey }: { token: string; onError: (va
 function Table({ headers, rows }: { headers: (string | number)[]; rows: (string | number)[][] }) {
   return (
     <div className="overflow-x-auto">
-      <table className="w-full text-left text-sm">
+      <table className="w-full text-left text-xs sm:text-sm min-w-[500px]">
         <thead>
-          <tr className="border-b text-xs uppercase text-gray-500">
+          <tr className="border-b text-[10px] sm:text-xs uppercase text-gray-500">
             {headers.map(header => (
-              <th key={header} className="px-3 py-3 font-semibold">{header}</th>
+              <th key={header} className="px-3 py-2.5 sm:py-3 font-semibold whitespace-nowrap">{header}</th>
             ))}
           </tr>
         </thead>
@@ -863,7 +866,7 @@ function Table({ headers, rows }: { headers: (string | number)[]; rows: (string 
             rows.map((row, index) => (
               <tr key={index} className="border-b last:border-0 hover:bg-slate-50/50">
                 {row.map((cell, cellIndex) => (
-                  <td key={cellIndex} className="px-3 py-3">{cell}</td>
+                  <td key={cellIndex} className="px-3 py-2.5 sm:py-3 whitespace-nowrap">{cell}</td>
                 ))}
               </tr>
             ))

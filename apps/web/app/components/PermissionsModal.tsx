@@ -317,12 +317,12 @@ export function PermissionsModal({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 p-3 sm:p-5 backdrop-blur-sm animate-fadeIn">
-      <div className="w-full max-w-4xl max-h-[94vh] flex flex-col rounded-3xl bg-white shadow-2xl border border-slate-200 overflow-hidden">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 p-2 sm:p-5 backdrop-blur-sm animate-fadeIn">
+      <div className="w-full max-w-4xl max-h-[96vh] sm:max-h-[94vh] flex flex-col rounded-2xl sm:rounded-3xl bg-white shadow-2xl border border-slate-200 overflow-hidden">
         {/* Header */}
-        <div className="flex items-center justify-between border-b px-6 py-4 bg-gradient-to-r from-slate-50 via-white to-slate-50">
-          <div className="flex items-center gap-3">
-            <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-blue-600 font-bold text-white text-base shadow-sm">
+        <div className="flex items-center justify-between border-b px-3.5 sm:px-6 py-3 sm:py-4 bg-gradient-to-r from-slate-50 via-white to-slate-50">
+          <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
+            <div className="flex h-9 w-9 sm:h-11 sm:w-11 shrink-0 items-center justify-center rounded-xl sm:rounded-2xl bg-blue-600 font-bold text-white text-sm sm:text-base shadow-sm">
               {member.name ? member.name.slice(0, 2).toUpperCase() : "US"}
             </div>
             <div>
@@ -374,9 +374,9 @@ export function PermissionsModal({
         )}
 
         {/* Content Body */}
-        <div className="p-6 overflow-y-auto space-y-6 flex-1 text-sm bg-slate-50/40">
+        <div className="p-3 sm:p-6 overflow-y-auto space-y-4 sm:space-y-6 flex-1 text-sm bg-slate-50/40">
           {/* Quick Account Controls: Role Preset & Status */}
-          <div className="grid gap-4 sm:grid-cols-2 bg-white p-4 rounded-2xl border border-slate-200 shadow-2xs">
+          <div className="grid gap-3 sm:gap-4 sm:grid-cols-2 bg-white p-3.5 sm:p-4 rounded-2xl border border-slate-200 shadow-2xs">
             <div>
               <label className="block text-xs font-bold text-slate-700 mb-1.5 flex items-center justify-between">
                 <span>Rol Asignado & Plantilla Base</span>
@@ -474,7 +474,7 @@ export function PermissionsModal({
           <div className="space-y-5">
             {/* Group 1: Visualización y Secciones */}
             <div className="bg-white rounded-2xl border border-slate-200 shadow-2xs overflow-hidden">
-              <div className="flex items-center justify-between bg-blue-50/60 border-b border-blue-100/80 px-4 py-3">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 bg-blue-50/60 border-b border-blue-100/80 px-3.5 sm:px-4 py-2.5 sm:py-3">
                 <div className="flex items-center gap-2">
                   <span className="text-base">👁️</span>
                   <div>
@@ -486,7 +486,7 @@ export function PermissionsModal({
                     </p>
                   </div>
                 </div>
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 self-end sm:self-auto">
                   <span className="text-[11px] font-bold bg-blue-100/80 text-blue-800 px-2 py-0.5 rounded-md">
                     {viewActiveCount}/{VIEW_PERMISSIONS.length}
                   </span>
@@ -517,9 +517,9 @@ export function PermissionsModal({
                 </div>
               </div>
 
-              <div className="p-3 grid sm:grid-cols-3 gap-2 text-xs">
+              <div className="p-3 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 text-xs">
                 {filteredViews.length === 0 ? (
-                  <p className="col-span-3 text-center py-3 text-slate-400 text-xs">
+                  <p className="col-span-full text-center py-3 text-slate-400 text-xs">
                     No hay permisos que coincidan con la búsqueda
                   </p>
                 ) : (
@@ -538,7 +538,7 @@ export function PermissionsModal({
 
             {/* Group 2: Operaciones de Bodega */}
             <div className="bg-white rounded-2xl border border-slate-200 shadow-2xs overflow-hidden">
-              <div className="flex items-center justify-between bg-purple-50/60 border-b border-purple-100/80 px-4 py-3">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 bg-purple-50/60 border-b border-purple-100/80 px-3.5 sm:px-4 py-2.5 sm:py-3">
                 <div className="flex items-center gap-2">
                   <span className="text-base">✏️</span>
                   <div>
@@ -550,7 +550,7 @@ export function PermissionsModal({
                     </p>
                   </div>
                 </div>
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 self-end sm:self-auto">
                   <span className="text-[11px] font-bold bg-purple-100/80 text-purple-800 px-2 py-0.5 rounded-md">
                     {opActiveCount}/{OP_PERMISSIONS.length}
                   </span>
@@ -581,9 +581,9 @@ export function PermissionsModal({
                 </div>
               </div>
 
-              <div className="p-3 grid sm:grid-cols-2 gap-2 text-xs">
+              <div className="p-3 grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
                 {filteredOps.length === 0 ? (
-                  <p className="col-span-2 text-center py-3 text-slate-400 text-xs">
+                  <p className="col-span-full text-center py-3 text-slate-400 text-xs">
                     No hay permisos que coincidan con la búsqueda
                   </p>
                 ) : (
@@ -602,7 +602,7 @@ export function PermissionsModal({
 
             {/* Group 3: Configuración y Gestión de Maestros */}
             <div className="bg-white rounded-2xl border border-slate-200 shadow-2xs overflow-hidden">
-              <div className="flex items-center justify-between bg-amber-50/60 border-b border-amber-100/80 px-4 py-3">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 bg-amber-50/60 border-b border-amber-100/80 px-3.5 sm:px-4 py-2.5 sm:py-3">
                 <div className="flex items-center gap-2">
                   <span className="text-base">🛠️</span>
                   <div>
@@ -614,7 +614,7 @@ export function PermissionsModal({
                     </p>
                   </div>
                 </div>
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 self-end sm:self-auto">
                   <span className="text-[11px] font-bold bg-amber-100/80 text-amber-800 px-2 py-0.5 rounded-md">
                     {configActiveCount}/{CONFIG_PERMISSIONS.length}
                   </span>
@@ -645,9 +645,9 @@ export function PermissionsModal({
                 </div>
               </div>
 
-              <div className="p-3 grid sm:grid-cols-3 gap-2 text-xs">
+              <div className="p-3 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 text-xs">
                 {filteredConfigs.length === 0 ? (
-                  <p className="col-span-3 text-center py-3 text-slate-400 text-xs">
+                  <p className="col-span-full text-center py-3 text-slate-400 text-xs">
                     No hay permisos que coincidan con la búsqueda
                   </p>
                 ) : (
@@ -666,7 +666,7 @@ export function PermissionsModal({
 
             {/* Group 4: Descargas, Exportaciones y Herramientas */}
             <div className="bg-white rounded-2xl border border-slate-200 shadow-2xs overflow-hidden">
-              <div className="flex items-center justify-between bg-emerald-50/60 border-b border-emerald-100/80 px-4 py-3">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 bg-emerald-50/60 border-b border-emerald-100/80 px-3.5 sm:px-4 py-2.5 sm:py-3">
                 <div className="flex items-center gap-2">
                   <span className="text-base">📥</span>
                   <div>
@@ -678,7 +678,7 @@ export function PermissionsModal({
                     </p>
                   </div>
                 </div>
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 self-end sm:self-auto">
                   <span className="text-[11px] font-bold bg-emerald-100/80 text-emerald-800 px-2 py-0.5 rounded-md">
                     {exportActiveCount}/{EXPORT_PERMISSIONS.length}
                   </span>
@@ -709,9 +709,9 @@ export function PermissionsModal({
                 </div>
               </div>
 
-              <div className="p-3 grid sm:grid-cols-2 gap-2 text-xs">
+              <div className="p-3 grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
                 {filteredExports.length === 0 ? (
-                  <p className="col-span-2 text-center py-3 text-slate-400 text-xs">
+                  <p className="col-span-full text-center py-3 text-slate-400 text-xs">
                     No hay permisos que coincidan con la búsqueda
                   </p>
                 ) : (
@@ -731,24 +731,24 @@ export function PermissionsModal({
         </div>
 
         {/* Footer Actions */}
-        <div className="flex items-center justify-between border-t px-6 py-4 bg-white">
+        <div className="flex flex-col-reverse sm:flex-row items-stretch sm:items-center justify-between gap-3 border-t px-4 sm:px-6 py-3.5 sm:py-4 bg-white">
           <button
             type="button"
             onClick={onClose}
             disabled={saving}
-            className="px-4 py-2.5 rounded-xl border border-slate-200 text-xs font-bold text-slate-600 hover:bg-slate-50 transition cursor-pointer"
+            className="w-full sm:w-auto px-4 py-2.5 rounded-xl border border-slate-200 text-xs font-bold text-slate-600 hover:bg-slate-50 transition cursor-pointer text-center"
           >
             Cancelar
           </button>
-          <div className="flex items-center gap-3">
-            <span className="text-[11px] text-slate-500 hidden sm:inline">
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5 sm:gap-3">
+            <span className="text-[11px] text-slate-500 text-center sm:text-left">
               <strong>{totalActive}</strong> de {ALL_PERMISSION_KEYS.length} permisos activos asignados
             </span>
             <button
               type="button"
               onClick={handleSave}
               disabled={saving}
-              className="flex items-center gap-2 rounded-xl bg-blue-600 px-5 py-2.5 text-xs font-bold text-white shadow-md hover:bg-blue-700 transition disabled:opacity-50 cursor-pointer active:scale-95"
+              className="w-full sm:w-auto flex items-center justify-center gap-2 rounded-xl bg-blue-600 px-5 py-2.5 text-xs font-bold text-white shadow-md hover:bg-blue-700 transition disabled:opacity-50 cursor-pointer active:scale-95"
             >
               {saving ? (
                 <>

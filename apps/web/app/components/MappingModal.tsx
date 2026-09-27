@@ -1245,7 +1245,7 @@ function MappingModalInner({
     <div className={containerClass}>
       {/* ================= HEADER ================= */}
       <div
-        className={`flex items-center justify-between border-b px-6 py-4 ${
+        className={`flex items-center justify-between border-b px-4 sm:px-6 py-3.5 sm:py-4 ${
           inline
             ? "bg-gradient-to-r from-indigo-950 via-indigo-900 to-indigo-950 text-white"
             : "bg-indigo-50 text-indigo-950"
@@ -1481,10 +1481,13 @@ function MappingModalInner({
             <div className={`flex flex-col ${inline ? "min-h-[750px]" : "flex-1 overflow-hidden"}`}>
               {/* ================= VIEW 1: OFFICIAL 2D LAYOUT PLAN (FULL WIDTH) ================= */}
               {viewMode === "LAYOUT_2D" && (
-                <div className="w-full overflow-y-auto overflow-x-auto p-6 bg-slate-100/70">
+                <div className="w-full overflow-y-auto overflow-x-auto p-3 sm:p-4 md:p-6 bg-slate-100/70">
+                  <div className="md:hidden flex items-center justify-between text-[11px] text-slate-500 pb-2">
+                    <span>↔ Desliza horizontalmente para explorar los pasillos</span>
+                  </div>
                   <div className={`mx-auto space-y-4 ${showProductDetails ? "min-w-[1060px] max-w-[1320px]" : "min-w-[760px] max-w-[960px]"}`}>
                     {/* 2D Grid Header */}
-                    <div className="flex items-center justify-between text-xs text-slate-500 border-b pb-2 font-bold">
+                    <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-slate-500 border-b pb-2 font-bold">
                       <span>Bodega Principal · Haz clic en cualquier casillero para abrir la auditoría y modificar</span>
                       <button
                         type="button"

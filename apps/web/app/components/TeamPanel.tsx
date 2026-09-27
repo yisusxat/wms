@@ -169,24 +169,24 @@ export function TeamPanel({
   return (
     <section className="space-y-5">
       {/* Header with Search and Invite Button */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 rounded-2xl bg-white p-5 shadow-sm">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 rounded-2xl bg-white p-4 sm:p-5 shadow-sm">
         <div>
-          <h2 className="text-xl font-bold text-slate-800">Gestión de Equipo y Accesos</h2>
+          <h2 className="text-lg sm:text-xl font-bold text-slate-800">Gestión de Equipo y Accesos</h2>
           <p className="text-xs text-slate-500">
             Administra los operadores, supervisores y administradores de la bodega
           </p>
         </div>
-        <div className="flex flex-wrap items-center gap-3">
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5 sm:gap-3 w-full sm:w-auto">
           <input
             type="text"
             placeholder="Buscar miembro..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="flex-1 sm:flex-initial rounded-xl border border-slate-200 bg-slate-50 px-3.5 py-2 text-xs font-medium focus:bg-white focus:border-blue-600 focus:outline-none"
+            className="w-full sm:w-auto rounded-xl border border-slate-200 bg-slate-50 px-3.5 py-2 text-xs font-medium focus:bg-white focus:border-blue-600 focus:outline-none"
           />
           <button
             onClick={() => setShowModal(true)}
-            className="flex items-center gap-2 rounded-xl bg-blue-900 px-4 py-2 text-xs font-bold text-white shadow hover:bg-blue-800 transition"
+            className="flex items-center justify-center gap-2 rounded-xl bg-blue-900 px-4 py-2 text-xs font-bold text-white shadow hover:bg-blue-800 transition cursor-pointer"
           >
             <span>+</span>
             <span>Nuevo Miembro</span>
@@ -196,7 +196,7 @@ export function TeamPanel({
 
       {/* Team Table */}
       <div className="overflow-x-auto rounded-2xl bg-white shadow-sm border border-slate-100">
-        <table className="w-full min-w-[600px] text-left text-xs">
+        <table className="w-full min-w-[620px] text-left text-xs">
           <thead className="border-b border-slate-100 bg-slate-50/70 text-slate-500 font-bold uppercase tracking-wider">
             <tr>
               <th className="p-4">Miembro</th>
@@ -301,16 +301,16 @@ export function TeamPanel({
 
       {/* Modal: New Team Member */}
       {showModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 p-4 backdrop-blur-sm animate-fadeIn">
-          <div className="w-full max-w-md rounded-3xl bg-white p-6 shadow-2xl border border-slate-200">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 p-3 sm:p-4 backdrop-blur-sm animate-fadeIn">
+          <div className="w-full max-w-md max-h-[92vh] sm:max-h-[90vh] overflow-y-auto rounded-2xl sm:rounded-3xl bg-white p-4 sm:p-6 shadow-2xl border border-slate-200">
             <div className="flex items-start justify-between border-b border-slate-100 pb-3">
               <div>
-                <h3 className="text-lg font-black text-slate-900">Registrar Nuevo Miembro</h3>
-                <p className="text-xs text-slate-500">Crea el acceso directo para un operario o supervisor</p>
+                <h3 className="text-base sm:text-lg font-black text-slate-900">Registrar Nuevo Miembro</h3>
+                <p className="text-[11px] sm:text-xs text-slate-500">Crea el acceso directo para un operario o supervisor</p>
               </div>
               <button
                 onClick={() => setShowModal(false)}
-                className="rounded-full bg-slate-100 p-2 text-slate-400 hover:bg-slate-200 transition"
+                className="rounded-full bg-slate-100 p-1.5 sm:p-2 text-slate-400 hover:bg-slate-200 transition"
               >
                 ✕
               </button>
@@ -367,18 +367,18 @@ export function TeamPanel({
                 </select>
               </div>
 
-              <div className="flex justify-end gap-2 pt-3">
+              <div className="flex flex-col-reverse sm:flex-row justify-end gap-2 pt-3">
                 <button
                   type="button"
                   onClick={() => setShowModal(false)}
-                  className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-xs font-bold text-slate-600 hover:bg-slate-50"
+                  className="w-full sm:w-auto rounded-xl border border-slate-200 bg-white px-4 py-2 text-xs font-bold text-slate-600 hover:bg-slate-50 text-center"
                 >
                   Cancelar
                 </button>
                 <button
                   type="submit"
                   disabled={submitting}
-                  className="rounded-xl bg-blue-900 px-5 py-2 text-xs font-bold text-white shadow hover:bg-blue-800 disabled:opacity-50"
+                  className="w-full sm:w-auto rounded-xl bg-blue-900 px-5 py-2 text-xs font-bold text-white shadow hover:bg-blue-800 disabled:opacity-50 text-center"
                 >
                   {submitting ? 'Creando...' : 'Crear Usuario'}
                 </button>
@@ -399,9 +399,11 @@ export function TeamPanel({
 
       {/* Floating Toast Feedback */}
       {toastMessage && (
-        <div className="fixed bottom-6 right-6 z-50 flex items-center gap-2.5 rounded-2xl bg-slate-900/95 px-4 py-3 text-xs font-bold text-white shadow-2xl border border-slate-700 backdrop-blur-sm animate-fadeIn">
-          <span className="text-emerald-400 text-sm">✓</span>
-          <span>{toastMessage}</span>
+        <div className="fixed bottom-4 sm:bottom-6 left-4 right-4 sm:left-auto sm:right-6 z-50 flex items-center justify-between sm:justify-start gap-2.5 rounded-2xl bg-slate-900/95 px-4 py-3 text-xs font-bold text-white shadow-2xl border border-slate-700 backdrop-blur-sm animate-fadeIn">
+          <div className="flex items-center gap-2">
+            <span className="text-emerald-400 text-sm">✓</span>
+            <span>{toastMessage}</span>
+          </div>
           <button
             onClick={() => setToastMessage(null)}
             className="ml-3 text-slate-400 hover:text-white p-1 rounded-lg"

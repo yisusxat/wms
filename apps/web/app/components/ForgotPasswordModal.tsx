@@ -49,14 +49,14 @@ export function ForgotPasswordModal({ isOpen, onClose, apiBaseUrl = 'http://loca
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 p-4 backdrop-blur-xs">
-      <div className="w-full max-w-md max-h-[90vh] overflow-y-auto rounded-2xl bg-white p-6 shadow-xl border border-slate-100">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 p-3 sm:p-4 backdrop-blur-xs">
+      <div className="w-full max-w-md max-h-[92vh] sm:max-h-[90vh] overflow-y-auto rounded-2xl bg-white p-4 sm:p-6 shadow-xl border border-slate-100">
         <div className="flex items-start justify-between border-b border-slate-100 pb-3">
           <div>
-            <h3 className="text-lg font-bold text-slate-900">Restablecer Contraseña</h3>
-            <p className="text-xs text-slate-500">Recibe un enlace seguro en tu correo electrónico</p>
+            <h3 className="text-base sm:text-lg font-bold text-slate-900">Restablecer Contraseña</h3>
+            <p className="text-[11px] sm:text-xs text-slate-500">Recibe un enlace seguro en tu correo electrónico</p>
           </div>
-          <button onClick={handleClose} className="text-slate-400 hover:text-slate-600 text-lg">✕</button>
+          <button onClick={handleClose} className="text-slate-400 hover:text-slate-600 p-1 text-lg">✕</button>
         </div>
 
         {sent ? (
@@ -97,18 +97,18 @@ export function ForgotPasswordModal({ isOpen, onClose, apiBaseUrl = 'http://loca
 
             {error && <p className="rounded-lg bg-red-50 p-2.5 text-xs text-red-700">{error}</p>}
 
-            <div className="flex gap-2 pt-2">
+            <div className="flex flex-col-reverse sm:flex-row gap-2 pt-2">
               <button
                 type="button"
                 onClick={handleClose}
-                className="flex-1 rounded-lg border border-slate-300 py-2.5 text-sm font-medium text-slate-700 hover:bg-slate-50 transition"
+                className="w-full sm:flex-1 rounded-lg border border-slate-300 py-2.5 text-sm font-medium text-slate-700 hover:bg-slate-50 transition text-center"
               >
                 Cancelar
               </button>
               <button
                 type="submit"
                 disabled={submitting}
-                className="flex-1 rounded-lg bg-blue-600 py-2.5 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-50 transition"
+                className="w-full sm:flex-1 rounded-lg bg-blue-600 py-2.5 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-50 transition text-center"
               >
                 {submitting ? 'Enviando...' : 'Enviar enlace'}
               </button>

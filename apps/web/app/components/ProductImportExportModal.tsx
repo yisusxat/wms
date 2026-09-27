@@ -480,14 +480,14 @@ export function ProductImportModal({
     >
       <div className="flex flex-col w-full max-w-2xl max-h-[92vh] rounded-3xl bg-white shadow-2xl border border-slate-200 overflow-hidden">
         {/* Modal Header */}
-        <div className="flex items-center justify-between border-b px-6 py-4 bg-slate-50">
+        <div className="flex items-center justify-between border-b px-4 sm:px-6 py-3.5 sm:py-4 bg-slate-50">
           <div className="flex items-center gap-3">
-            <span className="flex h-10 w-10 items-center justify-center rounded-2xl bg-indigo-100 text-indigo-700 text-xl font-bold">
+            <span className="flex h-10 w-10 items-center justify-center rounded-2xl bg-indigo-100 text-indigo-700 text-xl font-bold shrink-0">
               📥
             </span>
             <div>
-              <h3 className="text-lg font-black text-slate-900">Importar Catálogo de Productos</h3>
-              <p className="text-xs text-slate-500">
+              <h3 className="text-base sm:text-lg font-black text-slate-900">Importar Catálogo de Productos</h3>
+              <p className="text-[11px] sm:text-xs text-slate-500">
                 Formatos compatibles: Excel (.xlsx, .xls), CSV (.csv) o JSON (.json)
               </p>
             </div>
@@ -502,7 +502,7 @@ export function ProductImportModal({
         </div>
 
         {/* Modal Body */}
-        <div className="flex-1 overflow-y-auto p-6 space-y-5">
+        <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-4 sm:space-y-5">
           {/* Download Templates Banner */}
           <div className="rounded-2xl border border-indigo-100 bg-indigo-50/50 p-4 space-y-2">
             <div className="flex items-center justify-between">
@@ -647,8 +647,8 @@ export function ProductImportModal({
                 <span className="text-xs font-bold text-slate-700 block">
                   Vista Previa (primeras {Math.min(parsedRows.length, 25)} de {parsedRows.length}):
                 </span>
-                <div className="max-h-56 overflow-y-auto rounded-xl border border-slate-200 bg-white">
-                  <table className="w-full text-left text-xs">
+                <div className="max-h-56 overflow-y-auto overflow-x-auto rounded-xl border border-slate-200 bg-white">
+                  <table className="w-full text-left text-xs min-w-[500px]">
                     <thead className="sticky top-0 bg-slate-100 text-[10px] font-bold uppercase text-slate-600">
                       <tr>
                         <th className="p-2">Estado</th>
@@ -708,12 +708,12 @@ export function ProductImportModal({
         </div>
 
         {/* Modal Footer */}
-        <div className="flex items-center justify-between border-t px-6 py-4 bg-slate-50">
+        <div className="flex flex-col-reverse sm:flex-row sm:items-center justify-between gap-2.5 border-t px-4 sm:px-6 py-3 sm:py-4 bg-slate-50">
           <button
             type="button"
             onClick={onClose}
             disabled={importing}
-            className="rounded-xl border border-slate-300 px-4 py-2.5 text-xs font-bold text-slate-700 hover:bg-slate-100 transition cursor-pointer disabled:opacity-50"
+            className="w-full sm:w-auto rounded-xl border border-slate-300 px-4 py-2.5 text-xs font-bold text-slate-700 hover:bg-slate-100 transition cursor-pointer disabled:opacity-50 text-center"
           >
             {successMsg ? 'Cerrar' : 'Cancelar'}
           </button>
@@ -723,7 +723,7 @@ export function ProductImportModal({
               type="button"
               onClick={handleExecuteImport}
               disabled={importing || validCount === 0}
-              className="rounded-xl bg-indigo-600 px-6 py-2.5 text-xs font-bold text-white hover:bg-indigo-700 shadow-md transition disabled:opacity-50 cursor-pointer flex items-center gap-2"
+              className="w-full sm:w-auto rounded-xl bg-indigo-600 px-6 py-2.5 text-xs font-bold text-white hover:bg-indigo-700 shadow-md transition disabled:opacity-50 cursor-pointer flex items-center justify-center gap-2"
             >
               {importing ? (
                 <>

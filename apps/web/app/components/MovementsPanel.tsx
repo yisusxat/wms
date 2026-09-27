@@ -408,7 +408,7 @@ export function MovementsPanel({
           ))}
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           {pendingOffline.length > 0 && (
             <button
               type="button"
@@ -738,7 +738,7 @@ export function MovementsPanel({
           <button
             type="submit"
             disabled={isSubmitting}
-            className="rounded-lg bg-brand px-6 py-3 font-semibold text-white shadow hover:opacity-95 transition disabled:opacity-60 flex items-center justify-center gap-2 cursor-pointer disabled:cursor-not-allowed"
+            className="w-full sm:w-auto rounded-lg bg-brand px-6 py-3 font-semibold text-white shadow hover:opacity-95 transition disabled:opacity-60 flex items-center justify-center gap-2 cursor-pointer disabled:cursor-not-allowed"
           >
             {isSubmitting ? (
               <>
@@ -822,7 +822,7 @@ function Table({ headers, rows }: { headers: string[]; rows: (string | number)[]
         <thead>
           <tr className="border-b text-xs uppercase text-gray-500">
             {headers.map((header) => (
-              <th key={header} className="px-3 py-3">
+              <th key={header} className="px-3 py-2.5 sm:py-3 whitespace-nowrap">
                 {header}
               </th>
             ))}
@@ -839,7 +839,7 @@ function Table({ headers, rows }: { headers: string[]; rows: (string | number)[]
             rows.map((row, index) => (
               <tr key={index} className="border-b last:border-0 hover:bg-slate-50">
                 {row.map((cell, cellIndex) => (
-                  <td key={cellIndex} className="px-3 py-3 font-medium">
+                  <td key={cellIndex} className="px-3 py-2.5 sm:py-3 font-medium whitespace-nowrap">
                     {cell}
                   </td>
                 ))}

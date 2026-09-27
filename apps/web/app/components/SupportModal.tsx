@@ -229,21 +229,21 @@ export function SupportModal({ isOpen, onClose, user, profile }: SupportModalPro
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 p-4 backdrop-blur-sm animate-fadeIn">
-      <div className="w-full max-w-lg max-h-[90vh] overflow-y-auto rounded-3xl bg-white p-6 shadow-2xl border border-slate-200">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 p-3 sm:p-4 backdrop-blur-sm animate-fadeIn">
+      <div className="w-full max-w-lg max-h-[92vh] sm:max-h-[90vh] overflow-y-auto rounded-2xl sm:rounded-3xl bg-white p-4 sm:p-6 shadow-2xl border border-slate-200">
         <div className="flex items-start justify-between border-b border-slate-100 pb-3">
-          <div className="flex items-center gap-2.5">
-            <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-blue-100 text-blue-900 text-lg">
+          <div className="flex items-center gap-2 sm:gap-2.5">
+            <span className="flex h-8 w-8 sm:h-9 sm:w-9 shrink-0 items-center justify-center rounded-xl bg-blue-100 text-blue-900 text-base sm:text-lg">
               🛠️
             </span>
             <div>
-              <h3 className="text-lg font-black text-slate-900">Mesa de Ayuda y Soporte WMS</h3>
-              <p className="text-xs text-slate-500">Reportar incidencias operativas o solicitar asistencia</p>
+              <h3 className="text-base sm:text-lg font-black text-slate-900">Mesa de Ayuda y Soporte WMS</h3>
+              <p className="text-[11px] sm:text-xs text-slate-500">Reportar incidencias operativas o solicitar asistencia</p>
             </div>
           </div>
           <button
             onClick={handleClose}
-            className="rounded-full bg-slate-100 p-2 text-slate-400 hover:bg-slate-200 hover:text-slate-700 transition"
+            className="rounded-full bg-slate-100 p-1.5 sm:p-2 text-slate-400 hover:bg-slate-200 hover:text-slate-700 transition"
           >
             ✕
           </button>
@@ -284,7 +284,7 @@ export function SupportModal({ isOpen, onClose, user, profile }: SupportModalPro
             <div className="pt-2">
               <button
                 onClick={handleClose}
-                className="rounded-xl bg-slate-900 px-7 py-2.5 text-xs font-bold text-white shadow hover:bg-slate-800 transition"
+                className="w-full sm:w-auto rounded-xl bg-slate-900 px-7 py-2.5 text-xs font-bold text-white shadow hover:bg-slate-800 transition text-center"
               >
                 Cerrar y Continuar
               </button>
@@ -340,18 +340,18 @@ export function SupportModal({ isOpen, onClose, user, profile }: SupportModalPro
               <p>Resolución: <span className="font-mono text-slate-700">{screenResolution}</span></p>
             </div>
 
-            <div className="flex justify-end gap-2 pt-2">
+            <div className="flex flex-col-reverse sm:flex-row justify-end gap-2 pt-2">
               <button
                 type="button"
                 onClick={handleClose}
-                className="rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-xs font-bold text-slate-600 hover:bg-slate-50"
+                className="w-full sm:w-auto rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-xs font-bold text-slate-600 hover:bg-slate-50 text-center"
               >
                 Cancelar
               </button>
               <button
                 type="submit"
                 disabled={loading}
-                className="rounded-xl bg-blue-900 px-5 py-2.5 text-xs font-bold text-white shadow hover:bg-blue-800 disabled:opacity-50"
+                className="w-full sm:w-auto rounded-xl bg-blue-900 px-5 py-2.5 text-xs font-bold text-white shadow hover:bg-blue-800 disabled:opacity-50 text-center"
               >
                 {loading ? 'Enviando...' : 'Enviar Reporte'}
               </button>

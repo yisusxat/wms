@@ -1,5 +1,13 @@
+import type { Viewport } from 'next';
 import './globals.css';
 import '../sentry.client.config';
+
+export const viewport: Viewport = {
+  width: 'device-width',
+  initialScale: 1,
+  maximumScale: 5,
+  themeColor: '#1E3A8A',
+};
 
 export const metadata = {
   title: 'WMS Enterprise - Gestión Logística',
@@ -12,7 +20,6 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
     <html lang="es">
       <head>
         <link rel="manifest" href="/manifest.json" />
-        <meta name="theme-color" content="#1E3A8A" />
       </head>
       <body>
         {children}

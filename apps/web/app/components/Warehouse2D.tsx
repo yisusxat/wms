@@ -386,7 +386,7 @@ export function Warehouse2D({ token, onError, onNavigate, onDataChanged, refresh
   return (
     <section className="space-y-4">
       {/* 1. Header KPI Cards */}
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-3">
         {(['AVAILABLE', 'OCCUPIED', 'BLOCKED', 'MAINTENANCE'] as const).map((key) => {
           const cfg = STATUS_CONFIG[key];
           const count = stats[key] ?? 0;
@@ -397,21 +397,21 @@ export function Warehouse2D({ token, onError, onNavigate, onDataChanged, refresh
             <div
               key={key}
               onClick={() => setStatusFilter(isSelected ? 'all' : key)}
-              className={`cursor-pointer rounded-2xl bg-white p-4 shadow-sm border-2 transition-all ${
+              className={`cursor-pointer rounded-2xl bg-white p-3 sm:p-4 shadow-sm border-2 transition-all ${
                 isSelected
                   ? 'border-blue-600 ring-2 ring-blue-100 shadow-md scale-[1.02]'
                   : 'border-slate-100 hover:border-slate-300 hover:shadow'
               }`}
             >
               <div className="flex items-center justify-between">
-                <span className="text-xs font-bold uppercase tracking-wider text-slate-500">{cfg.label}s</span>
-                <span className="h-3 w-3 rounded-full shadow-sm" style={{ backgroundColor: cfg.bg }} />
+                <span className="text-[11px] sm:text-xs font-bold uppercase tracking-wider text-slate-500">{cfg.label}s</span>
+                <span className="h-2.5 w-2.5 sm:h-3 sm:w-3 rounded-full shadow-sm" style={{ backgroundColor: cfg.bg }} />
               </div>
-              <div className="mt-2 flex items-baseline justify-between">
-                <p className="text-3xl font-black text-slate-800">{count}</p>
-                <span className="text-xs font-semibold text-slate-400">{pct}% del total</span>
+              <div className="mt-1.5 sm:mt-2 flex items-baseline justify-between">
+                <p className="text-2xl sm:text-3xl font-black text-slate-800">{count}</p>
+                <span className="text-[10px] sm:text-xs font-semibold text-slate-400">{pct}% del total</span>
               </div>
-              <p className="mt-1 text-[11px] text-slate-400">
+              <p className="mt-1 text-[10px] sm:text-[11px] text-slate-400">
                 {isSelected ? '✓ Filtro activo (clic para limpiar)' : 'Clic para filtrar en el plano'}
               </p>
             </div>
@@ -420,14 +420,14 @@ export function Warehouse2D({ token, onError, onNavigate, onDataChanged, refresh
       </div>
 
       {/* 2. Interactive Controls Bar */}
-      <div className="flex flex-wrap items-center justify-between gap-4 rounded-2xl bg-white p-4 shadow-sm border border-slate-100">
+      <div className="flex flex-wrap items-center justify-between gap-3 sm:gap-4 rounded-2xl bg-white p-3 sm:p-4 shadow-sm border border-slate-100">
         {/* Level Tabs */}
         <div className="flex items-center gap-2">
           <span className="text-xs font-bold uppercase text-slate-500">Niveles:</span>
-          <div className="inline-flex rounded-xl border border-slate-200 p-1 bg-slate-50">
+          <div className="inline-flex rounded-xl border border-slate-200 p-0.5 sm:p-1 bg-slate-50">
             <button
               onClick={() => setLevelFilter('all')}
-              className={`px-3 py-1.5 text-xs font-bold rounded-lg transition ${
+              className={`px-2.5 sm:px-3 py-1.5 text-xs font-bold rounded-lg transition ${
                 levelFilter === 'all'
                   ? 'bg-blue-900 text-white shadow-sm'
                   : 'text-slate-600 hover:text-slate-900 hover:bg-white/80'
@@ -437,29 +437,29 @@ export function Warehouse2D({ token, onError, onNavigate, onDataChanged, refresh
             </button>
             <button
               onClick={() => setLevelFilter('1')}
-              className={`px-3 py-1.5 text-xs font-bold rounded-lg transition ${
+              className={`px-2.5 sm:px-3 py-1.5 text-xs font-bold rounded-lg transition ${
                 levelFilter === '1'
                   ? 'bg-blue-900 text-white shadow-sm'
                   : 'text-slate-600 hover:text-slate-900 hover:bg-white/80'
               }`}
             >
-              Nivel 1 (Piso)
+              Nivel 1
             </button>
             <button
               onClick={() => setLevelFilter('2')}
-              className={`px-3 py-1.5 text-xs font-bold rounded-lg transition ${
+              className={`px-2.5 sm:px-3 py-1.5 text-xs font-bold rounded-lg transition ${
                 levelFilter === '2'
                   ? 'bg-blue-900 text-white shadow-sm'
                   : 'text-slate-600 hover:text-slate-900 hover:bg-white/80'
               }`}
             >
-              Nivel 2 (Superior)
+              Nivel 2
             </button>
           </div>
         </div>
 
         {/* Quick Search */}
-        <div className="flex items-center gap-2 flex-1 max-w-sm">
+        <div className="flex items-center gap-2 w-full sm:w-auto flex-1 sm:max-w-sm">
           <div className="relative w-full">
             <input
               type="text"
@@ -481,7 +481,7 @@ export function Warehouse2D({ token, onError, onNavigate, onDataChanged, refresh
         </div>
 
         {/* Action buttons */}
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
           {statusFilter !== 'all' && (
             <button
               onClick={() => setStatusFilter('all')}
@@ -736,7 +736,7 @@ export function Warehouse2D({ token, onError, onNavigate, onDataChanged, refresh
       <div className="md:hidden flex items-center justify-between px-2 py-1 text-xs text-slate-500">
         <span>↔ Desliza horizontalmente para explorar los pasillos</span>
       </div>
-      <div className="relative overflow-x-auto rounded-3xl border-4 border-slate-800 bg-slate-100/90 p-6 shadow-2xl">
+      <div className="relative overflow-x-auto rounded-2xl sm:rounded-3xl border-2 sm:border-4 border-slate-800 bg-slate-100/90 p-3 sm:p-4 md:p-6 shadow-2xl">
         <div className="min-w-[880px] max-w-[1060px] mx-auto">
           {/* Header Bar */}
           <div className="mb-5 flex items-center justify-between border-b-2 border-slate-300 pb-3">

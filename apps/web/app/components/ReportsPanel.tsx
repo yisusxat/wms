@@ -249,10 +249,10 @@ export default function ReportsPanel({ token, organizationId, onDataChanged }: P
         </div>
 
         {/* Sub-tab pills */}
-        <div className="flex bg-slate-100 p-1 rounded-xl">
+        <div className="flex bg-slate-100 p-1 rounded-xl overflow-x-auto max-w-full">
           <button
             onClick={() => setSubTab("reports")}
-            className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition ${
+            className={`px-3 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition ${
               subTab === "reports" ? "bg-white text-slate-800 shadow-xs" : "text-slate-500"
             }`}
           >
@@ -260,7 +260,7 @@ export default function ReportsPanel({ token, organizationId, onDataChanged }: P
           </button>
           <button
             onClick={() => setSubTab("bulk")}
-            className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition ${
+            className={`px-3 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition ${
               subTab === "bulk" ? "bg-white text-slate-800 shadow-xs" : "text-slate-500"
             }`}
           >
@@ -268,7 +268,7 @@ export default function ReportsPanel({ token, organizationId, onDataChanged }: P
           </button>
           <button
             onClick={() => setSubTab("schedule")}
-            className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition ${
+            className={`px-3 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition ${
               subTab === "schedule" ? "bg-white text-slate-800 shadow-xs" : "text-slate-500"
             }`}
           >
@@ -335,12 +335,15 @@ export default function ReportsPanel({ token, organizationId, onDataChanged }: P
               return (
                 <div
                   key={report.id}
-                  className="bg-white rounded-xl border border-slate-200 p-5 shadow-sm flex items-start gap-4"
+                  className="bg-white rounded-xl border border-slate-200 p-4 sm:p-5 shadow-sm flex flex-col sm:flex-row sm:items-start gap-3 sm:gap-4"
                 >
-                  <div className="text-4xl shrink-0">{report.icon}</div>
+                  <div className="flex items-center gap-3 sm:block">
+                    <div className="text-3xl sm:text-4xl shrink-0">{report.icon}</div>
+                    <h3 className="font-semibold text-slate-800 sm:hidden">{report.label}</h3>
+                  </div>
                   <div className="flex-1 min-w-0">
-                    <h3 className="font-semibold text-slate-800 mb-1">{report.label}</h3>
-                    <p className="text-sm text-slate-500 mb-3">{report.description}</p>
+                    <h3 className="hidden sm:block font-semibold text-slate-800 mb-1">{report.label}</h3>
+                    <p className="text-xs sm:text-sm text-slate-500 mb-2 sm:mb-3">{report.description}</p>
                     {report.hasPeriod && (
                       <p className="text-xs text-slate-400 mb-2">
                         Período:{" "}
@@ -359,7 +362,7 @@ export default function ReportsPanel({ token, organizationId, onDataChanged }: P
                   <button
                     onClick={() => downloadReport(report.id)}
                     disabled={isLoading}
-                    className={`shrink-0 flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold transition-all ${
+                    className={`w-full sm:w-auto shrink-0 flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold transition-all ${
                       isLoading
                         ? "bg-slate-100 text-slate-400 cursor-not-allowed"
                         : "bg-blue-600 hover:bg-blue-700 text-white shadow-sm active:scale-95"

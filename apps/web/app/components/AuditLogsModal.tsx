@@ -47,19 +47,19 @@ export function AuditLogsModal({ isOpen, onClose, token }: Props) {
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 p-4 backdrop-blur-xs">
-      <div className="w-full max-w-4xl max-h-[85vh] flex flex-col rounded-2xl bg-white p-6 shadow-2xl border border-slate-100">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 p-3 sm:p-4 backdrop-blur-xs">
+      <div className="w-full max-w-4xl max-h-[90vh] sm:max-h-[85vh] flex flex-col rounded-2xl bg-white p-4 sm:p-6 shadow-2xl border border-slate-100">
         <div className="flex items-start justify-between border-b border-slate-100 pb-3">
           <div>
             <div className="flex items-center gap-2">
               <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-indigo-100 text-indigo-700 text-sm font-bold">
                 📜
               </span>
-              <h3 className="text-lg font-bold text-slate-900">Bitácora de Auditoría (Audit Log)</h3>
+              <h3 className="text-base sm:text-lg font-bold text-slate-900">Bitácora de Auditoría (Audit Log)</h3>
             </div>
-            <p className="text-xs text-slate-500 mt-1">Registro inmutable de acciones críticas, mutaciones y eventos de seguridad</p>
+            <p className="text-[11px] sm:text-xs text-slate-500 mt-1">Registro inmutable de acciones críticas, mutaciones y eventos de seguridad</p>
           </div>
-          <button onClick={onClose} className="text-slate-400 hover:text-slate-600 text-lg">✕</button>
+          <button onClick={onClose} className="text-slate-400 hover:text-slate-600 p-1 text-lg">✕</button>
         </div>
 
         {error && <p className="mt-4 rounded-lg bg-red-50 p-2.5 text-xs text-red-700">{error}</p>}
@@ -110,7 +110,7 @@ export function AuditLogsModal({ isOpen, onClose, token }: Props) {
         <div className="mt-4 pt-3 border-t border-slate-100 flex justify-end">
           <button
             onClick={onClose}
-            className="rounded-lg border border-slate-300 px-4 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 transition"
+            className="w-full sm:w-auto rounded-lg border border-slate-300 px-4 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 transition text-center"
           >
             Cerrar
           </button>

@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 import { useState } from "react";
 import { apiFetch } from "../../lib/api";
 import BarcodeScanner from "./BarcodeScanner";
@@ -174,11 +174,11 @@ export function PickingModal({
                   return (
                     <div
                       key={item.step}
-                      className={`p-4 flex items-center justify-between transition ${
+                      className={`p-3.5 sm:p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 transition ${
                         isDone ? "bg-emerald-50 text-emerald-950" : "bg-white hover:bg-slate-50"
                       }`}
                     >
-                      <div className="flex items-center gap-3">
+                      <div className="flex items-start sm:items-center gap-3">
                         <span
                           className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full font-bold text-sm ${
                             isDone ? "bg-emerald-600 text-white" : "bg-blue-100 text-blue-800"
@@ -187,7 +187,7 @@ export function PickingModal({
                           {isDone ? "✓" : item.step}
                         </span>
                         <div>
-                          <div className="flex items-center gap-2">
+                          <div className="flex flex-wrap items-center gap-2">
                             <span className="font-mono font-bold text-base text-gray-900">
                               {item.locationCode}
                             </span>
@@ -202,7 +202,7 @@ export function PickingModal({
                         </div>
                       </div>
 
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center justify-between sm:justify-end gap-2 w-full sm:w-auto pt-2 sm:pt-0 border-t sm:border-t-0 border-slate-100">
                         {!isDone && (
                           <button
                             onClick={() => setScannerStep(item.step)}
@@ -211,17 +211,20 @@ export function PickingModal({
                             📷 Escanear SKU
                           </button>
                         )}
-                        <input
-                          type="checkbox"
-                          checked={isDone}
-                          onChange={(e) => {
-                            const next = new Set(checkedSteps);
-                            if (e.target.checked) next.add(item.step);
-                            else next.delete(item.step);
-                            setCheckedSteps(next);
-                          }}
-                          className="h-5 w-5 rounded border-gray-300 text-emerald-600 focus:ring-emerald-500"
-                        />
+                        <label className="flex items-center gap-1.5 text-xs text-slate-500 sm:text-transparent cursor-pointer">
+                          <span className="sm:hidden">Confirmado:</span>
+                          <input
+                            type="checkbox"
+                            checked={isDone}
+                            onChange={(e) => {
+                              const next = new Set(checkedSteps);
+                              if (e.target.checked) next.add(item.step);
+                              else next.delete(item.step);
+                              setCheckedSteps(next);
+                            }}
+                            className="h-5 w-5 rounded border-gray-300 text-emerald-600 focus:ring-emerald-500"
+                          />
+                        </label>
                       </div>
                     </div>
                   );

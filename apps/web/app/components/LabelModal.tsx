@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 import { useState } from "react";
 
 export interface LabelModalData {
@@ -32,8 +32,8 @@ export function LabelModal({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
-      <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl space-y-4">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-3 sm:p-4 backdrop-blur-xs">
+      <div className="w-full max-w-md max-h-[92vh] sm:max-h-[90vh] overflow-y-auto rounded-2xl bg-white p-4 sm:p-6 shadow-2xl space-y-4">
         <div className="flex items-center justify-between border-b pb-3">
           <div className="flex items-center gap-2">
             <span className="text-2xl">🏷️</span>
@@ -53,7 +53,7 @@ export function LabelModal({
         {/* Printable Card Area */}
         <div
           id="printable-label"
-          className="rounded-xl border-2 border-dashed border-gray-300 p-5 bg-white text-center space-y-3"
+          className="rounded-xl border-2 border-dashed border-gray-300 p-4 sm:p-5 bg-white text-center space-y-3"
         >
           <div className="flex justify-between items-center text-[10px] text-gray-400 uppercase tracking-widest font-semibold border-b pb-1">
             <span>WMS Enterprise</span>
@@ -64,13 +64,13 @@ export function LabelModal({
             <p className="text-xs font-semibold text-blue-600 tracking-wide uppercase">
               {data.type === "LOCATION" ? "Ubicación en Rack" : "Identificador de Stock"}
             </p>
-            <h2 className="text-2xl font-black text-gray-900 font-mono mt-0.5">{data.code}</h2>
+            <h2 className="text-xl sm:text-2xl font-black text-gray-900 font-mono mt-0.5 truncate">{data.code}</h2>
             {data.subtitle && <p className="text-xs text-gray-500 mt-1">{data.subtitle}</p>}
           </div>
 
           {/* Barcode representation */}
           <div className="bg-slate-50 p-3 rounded-lg border border-slate-200 flex flex-col items-center">
-            <div className="font-mono text-xl tracking-[0.25em] font-bold text-slate-800">
+            <div className="font-mono text-lg sm:text-xl tracking-[0.2em] sm:tracking-[0.25em] font-bold text-slate-800">
               ||| | |||| | || | |||
             </div>
             <span className="text-xs font-mono text-gray-600 mt-1 font-semibold">{data.barcode}</span>
@@ -78,16 +78,16 @@ export function LabelModal({
         </div>
 
         {/* Actions */}
-        <div className="grid grid-cols-2 gap-2 pt-2">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-2">
           <button
             onClick={handlePrint}
-            className="flex items-center justify-center gap-1.5 rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-blue-700 transition shadow-sm"
+            className="flex items-center justify-center gap-1.5 rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-blue-700 transition shadow-sm cursor-pointer"
           >
             🖨️ Imprimir
           </button>
           <button
             onClick={copyZpl}
-            className="flex items-center justify-center gap-1.5 rounded-xl border border-gray-300 bg-white px-4 py-2.5 text-sm font-semibold text-gray-700 hover:bg-gray-50 transition"
+            className="flex items-center justify-center gap-1.5 rounded-xl border border-gray-300 bg-white px-4 py-2.5 text-sm font-semibold text-gray-700 hover:bg-gray-50 transition cursor-pointer"
           >
             {copiedZpl ? "✓ ¡Copiado!" : "📋 Copiar ZPL (Zebra)"}
           </button>

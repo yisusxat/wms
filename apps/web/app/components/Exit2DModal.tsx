@@ -246,14 +246,14 @@ export function Exit2DModal({ isOpen, onClose, token, onSuccess }: Props) {
       <div className="print:hidden fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 p-4 backdrop-blur-xs animate-fadeIn">
         <div className="w-full max-w-4xl max-h-[92vh] flex flex-col rounded-3xl bg-white shadow-2xl border border-slate-200 overflow-hidden">
           {/* Header */}
-          <div className="flex items-center justify-between border-b px-6 py-4 bg-orange-50 text-orange-950">
+          <div className="flex items-center justify-between border-b px-4 sm:px-6 py-3.5 sm:py-4 bg-orange-50 text-orange-950">
             <div className="flex items-center gap-3">
-              <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-orange-600 text-white shadow-sm font-bold text-lg">
+              <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-orange-600 text-white shadow-sm font-bold text-lg shrink-0">
                 📤
               </span>
               <div>
-                <h3 className="font-black text-base">Salida y Despacho de Productos (Layout 2D)</h3>
-                <p className="text-xs text-orange-800">
+                <h3 className="font-black text-sm sm:text-base">Salida y Despacho de Productos (Layout 2D)</h3>
+                <p className="text-[11px] sm:text-xs text-orange-800">
                   {step === "SELECT" && "Selección de posiciones con inventario · Orden de picking optimizado"}
                   {step === "PRE_REPORT" && "Verificación de ruta y orden de extracción antes de confirmar"}
                   {step === "SUCCESS" && "Reporte oficial emitido · Listo para imprimir orden de picking"}
@@ -270,7 +270,7 @@ export function Exit2DModal({ isOpen, onClose, token, onSuccess }: Props) {
 
           {/* STEP 1: SELECT ITEMS */}
           {step === "SELECT" && (
-            <div className="p-6 overflow-y-auto space-y-4 flex-1 text-sm">
+            <div className="p-4 sm:p-6 overflow-y-auto space-y-4 flex-1 text-sm">
               <div className="flex flex-wrap items-center justify-between gap-2 border-b pb-3">
                 <div className="space-y-0.5">
                   <span className="text-xs font-black uppercase tracking-wider text-slate-700">
@@ -377,7 +377,7 @@ export function Exit2DModal({ isOpen, onClose, token, onSuccess }: Props) {
 
           {/* STEP 2: PRE-REPORT (REVIEW SORTED ROUTE) */}
           {step === "PRE_REPORT" && (
-            <div className="p-6 overflow-y-auto space-y-4 flex-1 text-sm">
+            <div className="p-4 sm:p-6 overflow-y-auto space-y-4 flex-1 text-sm">
               <div className="rounded-2xl border border-amber-300 bg-amber-50 p-4 text-amber-950 text-xs space-y-1">
                 <div className="flex items-center gap-2 font-bold">
                   <span>⚠️ Confirmación de Salida Física y Ruta de Picking:</span>
@@ -542,11 +542,11 @@ export function Exit2DModal({ isOpen, onClose, token, onSuccess }: Props) {
           )}
 
           {/* Footer Actions */}
-          <div className="flex items-center justify-between border-t px-6 py-4 bg-slate-50">
+          <div className="flex flex-col-reverse sm:flex-row sm:items-center justify-between gap-2.5 border-t px-4 sm:px-6 py-3 sm:py-4 bg-slate-50">
             <button
               type="button"
               onClick={onClose}
-              className="px-4 py-2 text-xs font-semibold text-slate-600 hover:text-slate-800"
+              className="w-full sm:w-auto px-4 py-2 text-xs font-semibold text-slate-600 hover:text-slate-800 text-center"
             >
               {step === "SUCCESS" ? "Cerrar" : "Cancelar"}
             </button>
@@ -556,18 +556,18 @@ export function Exit2DModal({ isOpen, onClose, token, onSuccess }: Props) {
                 type="button"
                 onClick={handleProceedToPreReport}
                 disabled={sortedSelectedItems.length === 0}
-                className="rounded-xl bg-orange-600 px-5 py-2.5 text-xs font-bold text-white hover:bg-orange-700 shadow transition disabled:opacity-50"
+                className="w-full sm:w-auto rounded-xl bg-orange-600 px-5 py-2.5 text-xs font-bold text-white hover:bg-orange-700 shadow transition disabled:opacity-50 text-center"
               >
                 Continuar a Verificación de Ruta ({sortedSelectedItems.length}) →
               </button>
             )}
 
             {step === "PRE_REPORT" && (
-              <div className="flex items-center gap-2">
+              <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 w-full sm:w-auto">
                 <button
                   type="button"
                   onClick={() => setStep("SELECT")}
-                  className="px-3 py-2 text-xs font-bold text-slate-600 hover:text-slate-800"
+                  className="w-full sm:w-auto px-3 py-2 text-xs font-bold text-slate-600 hover:text-slate-800 text-center"
                 >
                   ← Modificar Selección
                 </button>
@@ -575,7 +575,7 @@ export function Exit2DModal({ isOpen, onClose, token, onSuccess }: Props) {
                   type="button"
                   onClick={handleConfirmExit}
                   disabled={submitting}
-                  className="rounded-xl bg-orange-600 px-5 py-2.5 text-xs font-bold text-white hover:bg-orange-700 shadow transition disabled:opacity-50 flex items-center gap-2"
+                  className="w-full sm:w-auto rounded-xl bg-orange-600 px-5 py-2.5 text-xs font-bold text-white hover:bg-orange-700 shadow transition disabled:opacity-50 flex items-center justify-center gap-2"
                 >
                   {submitting ? (
                     <>
@@ -593,7 +593,7 @@ export function Exit2DModal({ isOpen, onClose, token, onSuccess }: Props) {
               <button
                 type="button"
                 onClick={() => window.print()}
-                className="flex items-center gap-2 rounded-xl bg-blue-600 px-5 py-2.5 text-xs font-bold text-white hover:bg-blue-700 shadow transition hover:scale-105 active:scale-95"
+                className="w-full sm:w-auto flex items-center justify-center gap-2 rounded-xl bg-blue-600 px-5 py-2.5 text-xs font-bold text-white hover:bg-blue-700 shadow transition hover:scale-105 active:scale-95"
               >
                 <span>🖨️</span>
                 <span>Imprimir Reporte Oficial (Hoja de Picking)</span>

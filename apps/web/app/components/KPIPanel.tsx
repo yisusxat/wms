@@ -143,12 +143,12 @@ export default function KPIPanel({ token, organizationId, refreshKey }: Props) {
   return (
     <div className="space-y-4">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
-          <h2 className="text-xl font-bold text-slate-800">🎯 Centro de Mando — KPIs Logísticos</h2>
-          <p className="text-sm text-slate-500">Inteligencia operativa en tiempo real para toma de decisiones</p>
+          <h2 className="text-lg sm:text-xl font-bold text-slate-800">🎯 Centro de Mando — KPIs Logísticos</h2>
+          <p className="text-xs sm:text-sm text-slate-500">Inteligencia operativa en tiempo real para toma de decisiones</p>
         </div>
-        <button onClick={fetchKpis} className="flex items-center gap-2 px-3 py-2 bg-slate-100 hover:bg-slate-200 rounded-lg text-sm text-slate-600 transition-colors">
+        <button onClick={fetchKpis} className="flex items-center justify-center gap-2 px-3 py-2 bg-slate-100 hover:bg-slate-200 rounded-lg text-xs sm:text-sm text-slate-600 transition-colors w-full sm:w-auto cursor-pointer">
           🔄 Actualizar
         </button>
       </div>
@@ -250,7 +250,7 @@ export default function KPIPanel({ token, organizationId, refreshKey }: Props) {
               </div>
               {cls.items.length > 0 && (
                 <div className="overflow-x-auto">
-                  <table className="w-full text-xs">
+                  <table className="w-full text-xs min-w-[380px]">
                     <thead>
                       <tr className="opacity-70">
                         <th className="text-left py-1 pr-4">SKU</th>
@@ -282,11 +282,11 @@ export default function KPIPanel({ token, organizationId, refreshKey }: Props) {
         <div className="space-y-3">
           <div className="bg-amber-50 border border-amber-300 rounded-xl p-4">
             <h3 className="font-semibold text-amber-800 mb-1">💀 Inventario Inactivo — {kpis.deadStock.count} SKUs</h3>
-            <p className="text-sm text-amber-700">Productos sin salidas en más de 60 días. Considera liquidar, devolver al proveedor o reubicar.</p>
+            <p className="text-xs sm:text-sm text-amber-700">Productos sin salidas en más de 60 días. Considera liquidar, devolver al proveedor o reubicar.</p>
           </div>
           {kpis.deadStock.items.length > 0 ? (
-            <div className="bg-white rounded-xl border border-slate-200 overflow-hidden shadow-sm">
-              <table className="w-full text-sm">
+            <div className="bg-white rounded-xl border border-slate-200 overflow-x-auto shadow-sm">
+              <table className="w-full text-xs sm:text-sm min-w-[480px]">
                 <thead className="bg-slate-50 text-xs text-slate-500">
                   <tr>
                     <th className="text-left px-4 py-3">SKU</th>
@@ -324,7 +324,7 @@ export default function KPIPanel({ token, organizationId, refreshKey }: Props) {
       {/* THROUGHPUT TAB */}
       {activeTab === "throughput" && (
         <div className="space-y-3">
-          <div className="grid grid-cols-3 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <MetricCard icon="📦" title="Total Entradas 7d" value={kpis.throughput.totalReceipts7d} unit="u" />
             <MetricCard icon="🚀" title="Total Salidas 7d" value={kpis.throughput.totalIssues7d} unit="u" />
             <MetricCard
@@ -334,8 +334,8 @@ export default function KPIPanel({ token, organizationId, refreshKey }: Props) {
             />
           </div>
           <ThroughputChart trend={kpis.throughput.trend} />
-          <div className="bg-white rounded-xl border border-slate-200 overflow-hidden shadow-sm">
-            <table className="w-full text-sm">
+          <div className="bg-white rounded-xl border border-slate-200 overflow-x-auto shadow-sm">
+            <table className="w-full text-xs sm:text-sm min-w-[360px]">
               <thead className="bg-slate-50 text-xs text-slate-500">
                 <tr>
                   <th className="text-left px-4 py-3">Fecha</th>
@@ -368,13 +368,13 @@ export default function KPIPanel({ token, organizationId, refreshKey }: Props) {
             <h3 className={`font-semibold mb-1 ${kpis.breakRisk.count > 0 ? "text-red-800" : "text-green-800"}`}>
               {kpis.breakRisk.count > 0 ? `🚨 ${kpis.breakRisk.count} SKUs en riesgo de quiebre` : "✅ Sin riesgo de quiebre inmediato"}
             </h3>
-            <p className={`text-sm ${kpis.breakRisk.count > 0 ? "text-red-700" : "text-green-700"}`}>
+            <p className={`text-xs sm:text-sm ${kpis.breakRisk.count > 0 ? "text-red-700" : "text-green-700"}`}>
               {kpis.breakRisk.count > 0 ? "Estos productos tienen cobertura ≤7 días según rotación histórica." : "Todos los SKUs tienen cobertura superior a 7 días."}
             </p>
           </div>
           {kpis.breakRisk.items.length > 0 && (
-            <div className="bg-white rounded-xl border border-slate-200 overflow-hidden shadow-sm">
-              <table className="w-full text-sm">
+            <div className="bg-white rounded-xl border border-slate-200 overflow-x-auto shadow-sm">
+              <table className="w-full text-xs sm:text-sm min-w-[480px]">
                 <thead className="bg-slate-50 text-xs text-slate-500">
                   <tr>
                     <th className="text-left px-4 py-3">SKU</th>
