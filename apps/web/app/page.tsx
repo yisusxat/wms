@@ -2,20 +2,85 @@
 
 import { FormEvent, useCallback, useEffect, useMemo, useState } from 'react';
 import { insforge } from '../lib/insforge';
+import dynamic from 'next/dynamic';
 import { apiFetch, CurrentUser, InventoryItem, Location, Page, Product } from '../lib/api';
 import { MovementsPanel } from './components/MovementsPanel';
-import { Warehouse3D } from './components/Warehouse3D';
-import { Warehouse2D } from './components/Warehouse2D';
-import { WarehouseMappingView } from './components/WarehouseMappingView';
-import { TeamPanel } from './components/TeamPanel';
-import { SupportModal } from './components/SupportModal';
-import { ForgotPasswordModal } from './components/ForgotPasswordModal';
-import { AuditLogsModal } from './components/AuditLogsModal';
-import { LegalModal } from './components/LegalModal';
-import KPIPanel from './components/KPIPanel';
-import ReportsPanel from './components/ReportsPanel';
-import { TwoFactorModal } from './components/TwoFactorModal';
 import { ProductsPanel } from './components/ProductsPanel';
+
+const Warehouse3D = dynamic(
+  () => import('./components/Warehouse3D').then((m) => m.Warehouse3D),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="flex h-96 w-full flex-col items-center justify-center rounded-xl border border-slate-700 bg-slate-900 text-slate-300 shadow-inner">
+        <div className="flex items-center gap-3">
+          <div className="h-6 w-6 animate-spin rounded-full border-2 border-blue-400 border-t-transparent" />
+          <span className="text-sm font-medium">Inicializando vista 3D interactiva...</span>
+        </div>
+      </div>
+    ),
+  }
+);
+
+const Warehouse2D = dynamic(
+  () => import('./components/Warehouse2D').then((m) => m.Warehouse2D),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="flex h-96 w-full flex-col items-center justify-center rounded-xl border border-slate-200 bg-slate-50 text-slate-500">
+        <div className="flex items-center gap-3">
+          <div className="h-6 w-6 animate-spin rounded-full border-2 border-blue-600 border-t-transparent" />
+          <span className="text-sm font-medium">Cargando layout 2D de bodega...</span>
+        </div>
+      </div>
+    ),
+  }
+);
+
+const WarehouseMappingView = dynamic(
+  () => import('./components/WarehouseMappingView').then((m) => m.WarehouseMappingView),
+  { ssr: false }
+);
+
+const KPIPanel = dynamic(
+  () => import('./components/KPIPanel'),
+  { ssr: false }
+);
+
+const ReportsPanel = dynamic(
+  () => import('./components/ReportsPanel'),
+  { ssr: false }
+);
+
+const TeamPanel = dynamic(
+  () => import('./components/TeamPanel').then((m) => m.TeamPanel),
+  { ssr: false }
+);
+
+const SupportModal = dynamic(
+  () => import('./components/SupportModal').then((m) => m.SupportModal),
+  { ssr: false }
+);
+
+const ForgotPasswordModal = dynamic(
+  () => import('./components/ForgotPasswordModal').then((m) => m.ForgotPasswordModal),
+  { ssr: false }
+);
+
+const AuditLogsModal = dynamic(
+  () => import('./components/AuditLogsModal').then((m) => m.AuditLogsModal),
+  { ssr: false }
+);
+
+const LegalModal = dynamic(
+  () => import('./components/LegalModal').then((m) => m.LegalModal),
+  { ssr: false }
+);
+
+const TwoFactorModal = dynamic(
+  () => import('./components/TwoFactorModal').then((m) => m.TwoFactorModal),
+  { ssr: false }
+);
 
 type Summary = {
   products: number;
@@ -441,8 +506,8 @@ export default function HomePage() {
           </div>
         </div>
 
-        <ForgotPasswordModal isOpen={forgotOpen} onClose={() => setForgotOpen(false)} />
-        <LegalModal isOpen={legalOpen} onClose={() => setLegalOpen(false)} />
+        {forgotOpen ? <ForgotPasswordModal isOpen={forgotOpen} onClose={() => setForgotOpen(false)} /> : null}
+        {legalOpen ? <LegalModal isOpen={legalOpen} onClose={() => setLegalOpen(false)} /> : null}
       </main>
     );
   }
@@ -584,15 +649,15 @@ export default function HomePage() {
         {error && <p className="mt-6 rounded-lg bg-red-50 p-3 text-sm text-danger">{error}</p>}
 
         <div className="mt-8">
-          {tab === 'dashboard' && <Dashboard summary={summary} onNavigate={changeTab} role={profile?.role} />}
-          {tab === 'kpis' && <KPIPanel token={token} organizationId={profile?.organizationId} refreshKey={dataVersion} />}
-          {tab === 'reports' && <ReportsPanel token={token} organizationId={profile?.organizationId} onDataChanged={refreshSummary} refreshKey={dataVersion} />}
-          {tab === 'products' && <ProductsPanel token={token} role={profile?.role} onError={setError} onDataChanged={refreshSummary} refreshKey={dataVersion} />}
-          {tab === 'locations' && <Locations token={token} onError={setError} refreshKey={dataVersion} />}
-          {tab === 'inventory' && <Inventory token={token} onError={setError} refreshKey={dataVersion} />}
-          {tab === 'movements' && <MovementsPanel token={token} role={profile?.role} onError={setError} onDataChanged={refreshSummary} refreshKey={dataVersion} />}
-          {tab === 'warehouse3d' && <Warehouse3D token={token} onError={setError} refreshKey={dataVersion} />}
-          {tab === 'warehouse2d' && (
+          {tab === 'dashboard' ? <Dashboard summary={summary} onNavigate={changeTab} role={profile?.role} /> : null}
+          {tab === 'kpis' ? <KPIPanel token={token} organizationId={profile?.organizationId} refreshKey={dataVersion} /> : null}
+          {tab === 'reports' ? <ReportsPanel token={token} organizationId={profile?.organizationId} onDataChanged={refreshSummary} refreshKey={dataVersion} /> : null}
+          {tab === 'products' ? <ProductsPanel token={token} role={profile?.role} onError={setError} onDataChanged={refreshSummary} refreshKey={dataVersion} /> : null}
+          {tab === 'locations' ? <Locations token={token} onError={setError} refreshKey={dataVersion} /> : null}
+          {tab === 'inventory' ? <Inventory token={token} onError={setError} refreshKey={dataVersion} /> : null}
+          {tab === 'movements' ? <MovementsPanel token={token} role={profile?.role} onError={setError} onDataChanged={refreshSummary} refreshKey={dataVersion} /> : null}
+          {tab === 'warehouse3d' ? <Warehouse3D token={token} onError={setError} refreshKey={dataVersion} /> : null}
+          {tab === 'warehouse2d' ? (
             <Warehouse2D
               token={token}
               onError={setError}
@@ -607,8 +672,8 @@ export default function HomePage() {
                 }
               }}
             />
-          )}
-          {tab === 'mapping' && (
+          ) : null}
+          {tab === 'mapping' ? (
             <WarehouseMappingView
               token={token}
               onError={setError}
@@ -617,18 +682,18 @@ export default function HomePage() {
               onDataChanged={refreshSummary}
               refreshKey={dataVersion}
             />
-          )}
-          {tab === 'team' && (profile?.role === 'ADMIN' || userPerms?.canManageTeam) && (
+          ) : null}
+          {tab === 'team' && (profile?.role === 'ADMIN' || userPerms?.canManageTeam) ? (
             <TeamPanel token={token} onError={setError} onDataChanged={refreshSummary} refreshKey={dataVersion} />
-          )}
+          ) : null}
         </div>
       </section>
 
-      {/* Modals */}
-      <SupportModal isOpen={supportOpen} onClose={() => setSupportOpen(false)} user={user} profile={profile} />
-      <AuditLogsModal isOpen={auditOpen} onClose={() => setAuditOpen(false)} token={token} />
-      <LegalModal isOpen={legalOpen} onClose={() => setLegalOpen(false)} token={token} onAnonymized={signOut} />
-      <TwoFactorModal isOpen={twoFactorOpen} onClose={() => setTwoFactorOpen(false)} userEmail={user?.email} />
+      {/* Modals - Mounted only when active to save memory and avoid DOM overhead */}
+      {supportOpen ? <SupportModal isOpen={supportOpen} onClose={() => setSupportOpen(false)} user={user} profile={profile} /> : null}
+      {auditOpen ? <AuditLogsModal isOpen={auditOpen} onClose={() => setAuditOpen(false)} token={token} /> : null}
+      {legalOpen ? <LegalModal isOpen={legalOpen} onClose={() => setLegalOpen(false)} token={token} onAnonymized={signOut} /> : null}
+      {twoFactorOpen ? <TwoFactorModal isOpen={twoFactorOpen} onClose={() => setTwoFactorOpen(false)} userEmail={user?.email} /> : null}
     </div>
   );
 }
