@@ -83,6 +83,7 @@ export function Warehouse2D({ token, onError, onNavigate, onDataChanged, refresh
   const [entryPositionsCount, setEntryPositionsCount] = useState<number>(1);
   const [entrySelectedCodes, setEntrySelectedCodes] = useState<Set<string>>(new Set());
   const [successBanner, setSuccessBanner] = useState<string | null>(null);
+  const [heatmapMode, setHeatmapMode] = useState(false);
 
   const refreshLocations = () => {
     Promise.all([
@@ -281,11 +282,37 @@ export function Warehouse2D({ token, onError, onNavigate, onDataChanged, refresh
       ? Array.from(entrySelectedCodes).indexOf(loc.code) + 1
       : 0;
 
+    const invItem =
+      inventoryMap.get(loc.code) ||
+      inventoryMap.get(normalizeLocationCode(loc.code)) ||
+      inventoryMap.get(loc.id) ||
+      null;
+    const invQty = invItem?.quantity ?? 0;
+    const maxCapacity = 100;
+    const occupancyPct = Math.min(100, Math.round((invQty / maxCapacity) * 100));
+
     let buttonBg = cfg.bg;
     let buttonBorder = cfg.border;
     let buttonOpacity = statusFilter !== 'all' && !matched ? 0.2 : 1;
 
-    if (isEntrySelectionMode) {
+    if (heatmapMode && !isEntrySelectionMode) {
+      if (loc.status === 'BLOCKED' || loc.status === 'MAINTENANCE') {
+        buttonBg = '#64748B';
+        buttonBorder = '#475569';
+      } else if (invQty <= 0) {
+        buttonBg = '#10B981'; // Green: Vacío
+        buttonBorder = '#059669';
+      } else if (occupancyPct <= 50) {
+        buttonBg = '#3B82F6'; // Blue: Baja ocupación (1-50%)
+        buttonBorder = '#2563EB';
+      } else if (occupancyPct <= 85) {
+        buttonBg = '#F59E0B'; // Amber: Media ocupación (51-85%)
+        buttonBorder = '#D97706';
+      } else {
+        buttonBg = '#EF4444'; // Red: Saturado (>85%)
+        buttonBorder = '#DC2626';
+      }
+    } else if (isEntrySelectionMode) {
       if (loc.status === 'AVAILABLE') {
         if (isSelectedForEntry) {
           buttonBg = '#2563EB'; // Royal Blue
@@ -375,6 +402,10 @@ export function Warehouse2D({ token, onError, onNavigate, onDataChanged, refresh
         {isEntrySelectionMode && isSelectedForEntry ? (
           <span className="drop-shadow-md select-none text-[10px] font-black">
             ✓{selectedEntryIndex}
+          </span>
+        ) : heatmapMode && invQty > 0 ? (
+          <span className="drop-shadow-md select-none text-[9px] font-black">
+            {invQty}u
           </span>
         ) : (
           <span className="drop-shadow-md select-none">{String(position).padStart(2, '0')}</span>
@@ -511,6 +542,20 @@ export function Warehouse2D({ token, onError, onNavigate, onDataChanged, refresh
           </button>
 
           <button
+            type="button"
+            onClick={() => setHeatmapMode(!heatmapMode)}
+            className={`flex items-center gap-1.5 rounded-xl border px-3 py-1.5 text-xs font-bold shadow-sm transition active:scale-95 ${
+              heatmapMode
+                ? 'bg-rose-50 border-rose-300 text-rose-800 ring-2 ring-rose-200'
+                : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50'
+            }`}
+            title="Alternar mapa de calor de ocupación"
+          >
+            <span>{heatmapMode ? '🔥' : '🗺️'}</span>
+            <span>{heatmapMode ? 'Mapa de Calor Activo' : 'Mapa de Calor'}</span>
+          </button>
+
+          <button
             onClick={() => {
               if (isEntrySelectionMode) {
                 setIsEntrySelectionMode(false);
@@ -556,6 +601,40 @@ export function Warehouse2D({ token, onError, onNavigate, onDataChanged, refresh
           </button>
         </div>
       </div>
+
+      {/* Heatmap Legend */}
+      {heatmapMode && (
+        <div className="flex flex-wrap items-center justify-between gap-3 p-3.5 rounded-2xl bg-slate-900 text-white shadow-sm border border-slate-800 animate-fadeIn">
+          <div className="flex items-center gap-2">
+            <span className="text-base">🔥</span>
+            <span className="text-xs font-bold uppercase tracking-wider text-slate-300">
+              Semáforo Térmico de Ocupación:
+            </span>
+          </div>
+          <div className="flex flex-wrap items-center gap-4 text-xs font-medium">
+            <div className="flex items-center gap-1.5">
+              <span className="w-3.5 h-3.5 rounded-md bg-[#10B981] inline-block shadow-sm" />
+              <span>Vacío (0u)</span>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <span className="w-3.5 h-3.5 rounded-md bg-[#3B82F6] inline-block shadow-sm" />
+              <span>Baja (1-50%)</span>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <span className="w-3.5 h-3.5 rounded-md bg-[#F59E0B] inline-block shadow-sm" />
+              <span>Media (51-85%)</span>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <span className="w-3.5 h-3.5 rounded-md bg-[#EF4444] inline-block shadow-sm" />
+              <span>Saturado (&gt;85%)</span>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <span className="w-3.5 h-3.5 rounded-md bg-[#64748B] inline-block shadow-sm" />
+              <span>Bloqueado</span>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Success Notification Toast */}
       {successBanner && (

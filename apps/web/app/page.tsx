@@ -87,6 +87,12 @@ const BarcodeScanner = dynamic(
   { ssr: false }
 );
 
+import { ToastProvider, useToast } from './components/Toast';
+import { ThemeProvider, ThemeToggle, useTheme } from './components/ThemeContext';
+import CommandPalette from './components/CommandPalette';
+import { DashboardSkeleton } from './components/Skeleton';
+import { isSoundEnabled, setSoundEnabled } from '../lib/audioCues';
+
 type Summary = {
   products: number;
   locations: number;
@@ -146,7 +152,7 @@ function getEmailFromJwt(jwt: string): string {
   }
 }
 
-export default function HomePage() {
+function HomePageContent() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [rememberPassword, setRememberPassword] = useState(false);
@@ -155,6 +161,12 @@ export default function HomePage() {
   const [profile, setProfile] = useState<CurrentUser | null>(null);
   const [token, setToken] = useState<string | null>(null);
   const [summary, setSummary] = useState<Summary | null>(null);
+
+  // Command palette & sound & theme states
+  const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
+  const [soundOn, setSoundOn] = useState(() => isSoundEnabled());
+  const { isDark, toggleTheme } = useTheme();
+  const { showToast } = useToast();
 
   // Restore active tab from localStorage so page reload preserves the current section
   const [tab, setTab] = useState<Tab>(() => {
@@ -194,16 +206,30 @@ export default function HomePage() {
   const [isOnline, setIsOnline] = useState(true);
   const [showReconnected, setShowReconnected] = useState(false);
 
+  // Global Ctrl+K / Cmd+K Command Palette Shortcut
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
+        e.preventDefault();
+        setCommandPaletteOpen((prev) => !prev);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
+
   useEffect(() => {
     if (typeof window === 'undefined') return;
     setIsOnline(navigator.onLine);
     const handleOnline = () => {
       setIsOnline(true);
       setShowReconnected(true);
+      showToast({ message: 'Conexión a internet restablecida.', type: 'success' });
       setTimeout(() => setShowReconnected(false), 4000);
     };
     const handleOffline = () => {
       setIsOnline(false);
+      showToast({ message: 'Sin conexión a internet. Los movimientos se guardarán en modo offline.', type: 'warning' });
     };
     window.addEventListener('online', handleOnline);
     window.addEventListener('offline', handleOffline);
@@ -211,7 +237,7 @@ export default function HomePage() {
       window.removeEventListener('online', handleOnline);
       window.removeEventListener('offline', handleOffline);
     };
-  }, []);
+  }, [showToast]);
 
   useEffect(() => {
     let active = true;
@@ -648,6 +674,40 @@ export default function HomePage() {
           </div>
 
           <div className="flex flex-wrap items-center gap-1.5 sm:gap-2.5">
+            {/* Quick Command Palette Launcher */}
+            <button
+              onClick={() => setCommandPaletteOpen(true)}
+              className="flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 px-2.5 sm:px-3 py-1.5 sm:py-2 text-xs sm:text-sm font-medium text-slate-700 transition shadow-xs active:scale-95 cursor-pointer"
+              title="Abrir paleta de comandos rápida (Ctrl+K)"
+            >
+              <span>🔍</span>
+              <span className="hidden md:inline">Comandos</span>
+              <kbd className="hidden sm:inline-flex items-center font-mono text-[10px] bg-slate-100 border border-slate-300 px-1 py-0.5 rounded text-slate-500">
+                ⌘K
+              </kbd>
+            </button>
+
+            {/* Theme Toggle (Light / Dark) */}
+            <ThemeToggle />
+
+            {/* Sound Toggle */}
+            <button
+              onClick={() => {
+                const next = !soundOn;
+                setSoundOn(next);
+                setSoundEnabled(next);
+                showToast({
+                  message: next ? 'Efectos de sonido activados' : 'Efectos de sonido silenciados',
+                  type: 'info',
+                });
+              }}
+              className="p-1.5 sm:p-2 rounded-lg border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 transition text-xs sm:text-sm shadow-xs flex items-center justify-center min-w-[36px] min-h-[36px] cursor-pointer active:scale-95"
+              title={soundOn ? 'Silenciar efectos de sonido' : 'Activar efectos de sonido'}
+              aria-label="Alternar sonido"
+            >
+              {soundOn ? '🔊' : '🔇'}
+            </button>
+
             {profile?.role === 'ADMIN' && (
               <button
                 onClick={() => setAuditOpen(true)}
@@ -824,7 +884,40 @@ export default function HomePage() {
       {auditOpen ? <AuditLogsModal isOpen={auditOpen} onClose={() => setAuditOpen(false)} token={token} /> : null}
       {legalOpen ? <LegalModal isOpen={legalOpen} onClose={() => setLegalOpen(false)} token={token} onAnonymized={signOut} /> : null}
       {twoFactorOpen ? <TwoFactorModal isOpen={twoFactorOpen} onClose={() => setTwoFactorOpen(false)} userEmail={user?.email} /> : null}
+      {/* Global Command Palette (Ctrl+K) */}
+      <CommandPalette
+        isOpen={commandPaletteOpen}
+        onClose={() => setCommandPaletteOpen(false)}
+        onNavigate={(t) => changeTab(t as Tab)}
+        onOpenScanner={() => setGlobalScannerOpen(true)}
+        onOpenAudit={() => setAuditOpen(true)}
+        onOpenSupport={() => setSupportOpen(true)}
+        onOpen2FA={() => setTwoFactorOpen(true)}
+        onOpenLegal={() => setLegalOpen(true)}
+        onToggleTheme={toggleTheme}
+        onToggleSound={() => {
+          const next = !soundOn;
+          setSoundOn(next);
+          setSoundEnabled(next);
+          showToast({
+            message: next ? 'Efectos de sonido activados' : 'Efectos de sonido silenciados',
+            type: 'info',
+          });
+        }}
+        isDark={isDark}
+        isSoundOn={soundOn}
+      />
     </div>
+  );
+}
+
+export default function HomePage() {
+  return (
+    <ThemeProvider>
+      <ToastProvider>
+        <HomePageContent />
+      </ToastProvider>
+    </ThemeProvider>
   );
 }
 
@@ -837,6 +930,10 @@ function Dashboard({
   onNavigate: (tab: Tab) => void;
   role?: CurrentUser['role'];
 }) {
+  if (!summary) {
+    return <DashboardSkeleton />;
+  }
+
   const cards = summary
     ? [
         ['Productos', summary.products],

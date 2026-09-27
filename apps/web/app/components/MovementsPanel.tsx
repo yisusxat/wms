@@ -6,6 +6,7 @@ import BarcodeScanner from "./BarcodeScanner";
 import { LabelModal, LabelModalData } from "./LabelModal";
 import { PickingModal } from "./PickingModal";
 import { queueOfflineMovement, getPendingMovements, syncOfflineMovements, PendingMovement } from "../../lib/offlineSync";
+import { playSuccessSound, playErrorSound, playClickSound } from "../../lib/audioCues";
 
 type Mode = "entry" | "exit" | "transfer" | "adjustment";
 
@@ -36,6 +37,9 @@ export function MovementsPanel({
   refreshKey?: number;
 }) {
   const [mode, setMode] = useState<Mode>("entry");
+  const [isGuidedMode, setIsGuidedMode] = useState(false);
+  const [guidedStep, setGuidedStep] = useState<1 | 2 | 3>(1);
+  const [tableDensity, setTableDensity] = useState<"comfortable" | "compact">("comfortable");
   const [products, setProducts] = useState<Product[]>([]);
   const [locations, setLocations] = useState<Location[]>([]);
   const [movements, setMovements] = useState<Page<Movement> | null>(null);
@@ -306,6 +310,8 @@ export function MovementsPanel({
           : `Ajuste de inventario aplicado (${form.delta > 0 ? "+" : ""}${form.delta}) en ${locCode}`;
 
       setSuccessMsg(`✅ ${actionText}.`);
+      playSuccessSound();
+      if (isGuidedMode) setGuidedStep(1);
 
       // Limpiar campos para permitir la siguiente operación de forma limpia
       setForm((prev) => ({
@@ -316,6 +322,7 @@ export function MovementsPanel({
         reason: "",
       }));
     } catch (e: any) {
+      playErrorSound();
       // Si falló por desconexión de red repentina
       if (!navigator.onLine || (e as Error).message.includes("Failed to fetch") || (e as Error).message.includes("NetworkError")) {
         try {
@@ -413,6 +420,35 @@ export function MovementsPanel({
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
+          {/* Quick vs Guided Mode Toggle */}
+          <div className="inline-flex rounded-xl border border-slate-200 bg-slate-50 p-0.5">
+            <button
+              type="button"
+              onClick={() => {
+                setIsGuidedMode(false);
+                playClickSound();
+              }}
+              className={`px-3 py-1.5 text-xs font-bold rounded-lg transition ${
+                !isGuidedMode ? "bg-white shadow-xs text-slate-900" : "text-slate-500 hover:text-slate-800"
+              }`}
+            >
+              ⚡ Rápido
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setIsGuidedMode(true);
+                setGuidedStep(1);
+                playClickSound();
+              }}
+              className={`px-3 py-1.5 text-xs font-bold rounded-lg transition ${
+                isGuidedMode ? "bg-white shadow-xs text-slate-900" : "text-slate-500 hover:text-slate-800"
+              }`}
+            >
+              🚶 Modo Guiado
+            </button>
+          </div>
+
           {pendingOffline.length > 0 && (
             <button
               type="button"
@@ -565,6 +601,73 @@ export function MovementsPanel({
 
       {/* Main Movement Form */}
       <form onSubmit={submit} className="space-y-4 rounded-xl bg-white p-5 shadow-sm border border-slate-100">
+        {/* Stepper Progress Bar (Only visible in Guided Mode) */}
+        {isGuidedMode && (
+          <div className="border-b border-slate-100 pb-4 mb-4">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-xs font-bold uppercase tracking-wider text-blue-900">
+                Operación Asistida Paso a Paso
+              </span>
+              <span className="text-xs font-bold text-slate-500 bg-slate-100 px-2.5 py-0.5 rounded-full">
+                Paso {guidedStep} de 3
+              </span>
+            </div>
+            <div className="flex items-center justify-between gap-2 max-w-md">
+              <button
+                type="button"
+                onClick={() => {
+                  setGuidedStep(1);
+                  playClickSound();
+                }}
+                className={`flex-1 flex items-center justify-center gap-1.5 py-2 px-2 rounded-xl text-xs font-bold transition ${
+                  guidedStep === 1
+                    ? "bg-brand text-white shadow-xs"
+                    : guidedStep > 1
+                    ? "bg-emerald-50 text-emerald-800 border border-emerald-200"
+                    : "bg-slate-100 text-slate-500"
+                }`}
+              >
+                <span>{guidedStep > 1 ? "✓" : "1"}</span>
+                <span>Artículo</span>
+              </button>
+              <span className="text-slate-300">→</span>
+              <button
+                type="button"
+                onClick={() => {
+                  setGuidedStep(2);
+                  playClickSound();
+                }}
+                className={`flex-1 flex items-center justify-center gap-1.5 py-2 px-2 rounded-xl text-xs font-bold transition ${
+                  guidedStep === 2
+                    ? "bg-brand text-white shadow-xs"
+                    : guidedStep > 2
+                    ? "bg-emerald-50 text-emerald-800 border border-emerald-200"
+                    : "bg-slate-100 text-slate-500"
+                }`}
+              >
+                <span>{guidedStep > 2 ? "✓" : "2"}</span>
+                <span>Ubicación</span>
+              </button>
+              <span className="text-slate-300">→</span>
+              <button
+                type="button"
+                onClick={() => {
+                  setGuidedStep(3);
+                  playClickSound();
+                }}
+                className={`flex-1 flex items-center justify-center gap-1.5 py-2 px-2 rounded-xl text-xs font-bold transition ${
+                  guidedStep === 3
+                    ? "bg-brand text-white shadow-xs"
+                    : "bg-slate-100 text-slate-500"
+                }`}
+              >
+                <span>3</span>
+                <span>Confirmar</span>
+              </button>
+            </div>
+          </div>
+        )}
+
         <div className="grid gap-3 md:grid-cols-2">
           {/* Product field + Scanner */}
           <div>
@@ -786,8 +889,43 @@ export function MovementsPanel({
 
       {/* Movements Table */}
       <div className="rounded-xl bg-white p-5 shadow-sm border border-slate-100">
-        <h3 className="font-bold text-gray-800 mb-3 text-sm">Historial Reciente de Movimientos</h3>
+        <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
+          <h3 className="font-bold text-gray-800 text-sm">Historial Reciente de Movimientos</h3>
+          <div className="inline-flex rounded-xl border border-slate-200 bg-slate-50 p-0.5">
+            <button
+              type="button"
+              onClick={() => {
+                setTableDensity("comfortable");
+                playClickSound();
+              }}
+              className={`px-2.5 py-1 text-xs font-semibold rounded-lg transition ${
+                tableDensity === "comfortable"
+                  ? "bg-white shadow-xs text-slate-900 font-bold"
+                  : "text-slate-500 hover:text-slate-800"
+              }`}
+              title="Vista Cómoda"
+            >
+              🔘 Cómoda
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setTableDensity("compact");
+                playClickSound();
+              }}
+              className={`px-2.5 py-1 text-xs font-semibold rounded-lg transition ${
+                tableDensity === "compact"
+                  ? "bg-white shadow-xs text-slate-900 font-bold"
+                  : "text-slate-500 hover:text-slate-800"
+              }`}
+              title="Vista Compacta"
+            >
+              ≡ Compacta
+            </button>
+          </div>
+        </div>
         <Table
+          density={tableDensity}
           headers={["Tipo", "Producto", "Cantidad", "Origen", "Destino", "Fecha"]}
           rows={(movements?.items ?? []).map((item) => [
             item.type,
@@ -823,14 +961,27 @@ export function MovementsPanel({
   );
 }
 
-function Table({ headers, rows }: { headers: string[]; rows: (string | number)[][] }) {
+function Table({
+  headers,
+  rows,
+  density = "comfortable",
+}: {
+  headers: string[];
+  rows: (string | number)[][];
+  density?: "comfortable" | "compact";
+}) {
+  const cellPadding =
+    density === "compact" ? "px-3 py-1.5 text-xs font-mono" : "px-3 py-2.5 sm:py-3 text-sm";
   return (
     <div className="overflow-x-auto">
-      <table className="w-full text-left text-sm">
+      <table className="w-full text-left">
         <thead>
           <tr className="border-b text-xs uppercase text-gray-500">
             {headers.map((header) => (
-              <th key={header} className="px-3 py-2.5 sm:py-3 whitespace-nowrap">
+              <th
+                key={header}
+                className={`${density === "compact" ? "px-3 py-2 text-xs" : "px-3 py-2.5 sm:py-3 text-xs"} whitespace-nowrap font-bold`}
+              >
                 {header}
               </th>
             ))}
@@ -845,9 +996,9 @@ function Table({ headers, rows }: { headers: string[]; rows: (string | number)[]
             </tr>
           ) : (
             rows.map((row, index) => (
-              <tr key={index} className="border-b last:border-0 hover:bg-slate-50">
+              <tr key={index} className="border-b last:border-0 hover:bg-slate-50 transition-colors">
                 {row.map((cell, cellIndex) => (
-                  <td key={cellIndex} className="px-3 py-2.5 sm:py-3 font-medium whitespace-nowrap">
+                  <td key={cellIndex} className={`${cellPadding} font-medium whitespace-nowrap`}>
                     {cell}
                   </td>
                 ))}

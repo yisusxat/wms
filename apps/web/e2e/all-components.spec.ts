@@ -537,5 +537,40 @@ test.describe('7. Modales de Soporte, Legal, Auditoría y Seguridad', () => {
     // Scanner closes and routes appropriately
     await expect(page.getByText('Escáner de Código')).not.toBeVisible();
   });
+
+  test('UI/UX Avanzado: Paleta de Comandos Ctrl+K, Modo Oscuro/Industrial, Heatmap 2D y Stepper', async ({ page }) => {
+    await loginAndNavigate(page);
+
+    // 1. Theme toggle
+    const themeBtn = page.getByRole('button', { name: 'Alternar tema visual' });
+    await expect(themeBtn).toBeVisible();
+    await themeBtn.click();
+    await themeBtn.click();
+
+    // 2. Command Palette
+    await page.getByRole('button', { name: /Comandos/i }).click();
+    await expect(page.getByRole('dialog', { name: 'Paleta de comandos' })).toBeVisible();
+    await page.keyboard.press('Escape');
+    await expect(page.getByRole('dialog', { name: 'Paleta de comandos' })).not.toBeVisible();
+
+    // 3. Warehouse 2D Heatmap Mode
+    await page.getByRole('button', { name: '🗺️ Vista 2D' }).click();
+    const heatmapBtn = page.getByRole('button', { name: /Mapa de Calor/i });
+    await expect(heatmapBtn).toBeVisible();
+    await heatmapBtn.click();
+    await expect(page.getByText('Semáforo Térmico de Ocupación:')).toBeVisible();
+    await heatmapBtn.click();
+
+    // 4. Movements Guided Stepper & Table Density
+    await page.getByRole('button', { name: '🔄 Movimientos' }).click();
+    await page.getByRole('button', { name: '🚶 Modo Guiado' }).click();
+    await expect(page.getByText('Paso 1 de 3')).toBeVisible();
+
+    // Table density toggle
+    const compactBtn = page.getByRole('button', { name: '≡ Compacta' });
+    await expect(compactBtn).toBeVisible();
+    await compactBtn.click();
+    await page.getByRole('button', { name: '🔘 Cómoda' }).click();
+  });
 });
 

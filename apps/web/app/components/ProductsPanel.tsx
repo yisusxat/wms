@@ -3,6 +3,7 @@
 import { useState, useEffect, useMemo, FormEvent } from 'react';
 import { apiFetch, CurrentUser, Page, Product } from '../../lib/api';
 import { ProductImportModal, ProductExportMenu } from './ProductImportExportModal';
+import { TableSkeleton } from './Skeleton';
 
 interface ProductsPanelProps {
   token: string;
@@ -20,6 +21,7 @@ export function ProductsPanel({ token, role, onError, onDataChanged, refreshKey 
   const [selectedStatus, setSelectedStatus] = useState<'ALL' | 'ACTIVE' | 'INACTIVE'>('ALL');
   const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(false);
+  const [density, setDensity] = useState<'comfortable' | 'compact'>('comfortable');
   const [showAddForm, setShowAddForm] = useState(false);
   const [importModalOpen, setImportModalOpen] = useState(false);
 
@@ -405,6 +407,34 @@ export function ProductsPanel({ token, role, onError, onDataChanged, refreshKey 
               <option value="ACTIVE">Solo Activos</option>
               <option value="INACTIVE">Solo Inactivos</option>
             </select>
+
+            {/* Density toggle */}
+            <div className="inline-flex rounded-xl border border-slate-200 bg-slate-50 p-0.5 ml-auto">
+              <button
+                type="button"
+                onClick={() => setDensity('comfortable')}
+                className={`px-2.5 py-1 text-xs font-semibold rounded-lg transition ${
+                  density === 'comfortable'
+                    ? 'bg-white shadow-xs text-slate-900 font-bold'
+                    : 'text-slate-500 hover:text-slate-800'
+                }`}
+                title="Vista Cómoda (Móvil/Táctil)"
+              >
+                🔘 Cómoda
+              </button>
+              <button
+                type="button"
+                onClick={() => setDensity('compact')}
+                className={`px-2.5 py-1 text-xs font-semibold rounded-lg transition ${
+                  density === 'compact'
+                    ? 'bg-white shadow-xs text-slate-900 font-bold'
+                    : 'text-slate-500 hover:text-slate-800'
+                }`}
+                title="Vista Compacta (Alta Densidad)"
+              >
+                ≡ Compacta
+              </button>
+            </div>
           </div>
         </div>
 
@@ -413,22 +443,19 @@ export function ProductsPanel({ token, role, onError, onDataChanged, refreshKey 
           <table className="w-full text-left text-xs min-w-[620px]">
             <thead className="border-b bg-slate-50 text-[11px] font-bold uppercase tracking-wider text-slate-500">
               <tr>
-                <th className="p-3.5">SKU</th>
-                <th className="p-3.5">Nombre del Producto</th>
-                <th className="p-3.5">Categoría</th>
-                <th className="p-3.5">Unidad</th>
-                <th className="p-3.5">Estado</th>
-                {canManage && <th className="p-3.5 text-right">Acciones</th>}
+                <th className={density === 'compact' ? 'px-3 py-2' : 'p-3.5'}>SKU</th>
+                <th className={density === 'compact' ? 'px-3 py-2' : 'p-3.5'}>Nombre del Producto</th>
+                <th className={density === 'compact' ? 'px-3 py-2' : 'p-3.5'}>Categoría</th>
+                <th className={density === 'compact' ? 'px-3 py-2' : 'p-3.5'}>Unidad</th>
+                <th className={density === 'compact' ? 'px-3 py-2' : 'p-3.5'}>Estado</th>
+                {canManage && <th className={(density === 'compact' ? 'px-3 py-2' : 'p-3.5') + ' text-right'}>Acciones</th>}
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
               {loading ? (
                 <tr>
-                  <td colSpan={canManage ? 6 : 5} className="p-8 text-center text-slate-400">
-                    <div className="flex items-center justify-center gap-2">
-                      <div className="h-5 w-5 animate-spin rounded-full border-2 border-indigo-600 border-t-transparent" />
-                      <span>Cargando catálogo de productos...</span>
-                    </div>
+                  <td colSpan={canManage ? 6 : 5} className="p-4">
+                    <TableSkeleton cols={canManage ? 6 : 5} rows={5} />
                   </td>
                 </tr>
               ) : displayedItems.length === 0 ? (
@@ -464,14 +491,16 @@ export function ProductsPanel({ token, role, onError, onDataChanged, refreshKey 
                   </td>
                 </tr>
               ) : (
-                displayedItems.map((item) => (
+                displayedItems.map((item) => {
+                  const cellCls = density === 'compact' ? 'px-3 py-2' : 'p-3.5';
+                  return (
                   <tr key={item.id} className="hover:bg-slate-50/80 transition-colors">
-                    <td className="p-3.5">
+                    <td className={cellCls}>
                       <span className="rounded-lg bg-indigo-50 border border-indigo-200 px-2 py-1 font-mono font-bold text-indigo-800 text-[11px]">
                         {item.sku}
                       </span>
                     </td>
-                    <td className="p-3.5">
+                    <td className={cellCls}>
                       <p className="font-bold text-slate-900">{item.name}</p>
                       {item.barcode && (
                         <p className="text-[10px] font-mono text-slate-400">
@@ -479,13 +508,13 @@ export function ProductsPanel({ token, role, onError, onDataChanged, refreshKey 
                         </p>
                       )}
                     </td>
-                    <td className="p-3.5">
+                    <td className={cellCls}>
                       <span className="rounded-full bg-slate-100 px-2.5 py-0.5 text-[11px] font-semibold text-slate-700">
                         {item.category || 'General'}
                       </span>
                     </td>
-                    <td className="p-3.5 font-medium text-slate-600">{item.unit || 'unidad'}</td>
-                    <td className="p-3.5">
+                    <td className={`${cellCls} font-medium text-slate-600`}>{item.unit || 'unidad'}</td>
+                    <td className={cellCls}>
                       {item.active ? (
                         <span className="rounded-full bg-emerald-100 px-2.5 py-0.5 text-[11px] font-bold text-emerald-800 inline-flex items-center gap-1">
                           <span className="h-1.5 w-1.5 rounded-full bg-emerald-600" />
@@ -499,7 +528,7 @@ export function ProductsPanel({ token, role, onError, onDataChanged, refreshKey 
                       )}
                     </td>
                     {canManage && (
-                      <td className="p-3.5 text-right">
+                      <td className={`${cellCls} text-right`}>
                         <div className="flex items-center justify-end gap-1.5">
                           <button
                             type="button"
@@ -530,7 +559,8 @@ export function ProductsPanel({ token, role, onError, onDataChanged, refreshKey 
                       </td>
                     )}
                   </tr>
-                ))
+                  );
+                })
               )}
             </tbody>
           </table>
