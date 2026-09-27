@@ -109,7 +109,7 @@ export class DashboardService {
           product: { select: { id: true, sku: true, name: true, unit: true, category: true } },
           sourceLocation: { select: { id: true, code: true } },
           destinationLocation: { select: { id: true, code: true } },
-          user: { select: { id: true, name: true, email: true } },
+          user: { select: { id: true, name: true, role: true } },
         },
       }),
       this.prisma.location.findMany({
