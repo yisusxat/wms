@@ -1,34 +1,66 @@
 # WMS Enterprise — Warehouse Management System
 
-Sistema integral de gestión de almacenamiento e inventario logístico de grado empresarial (*Warehouse Management System*), diseñado para terminales móviles industriales (PDA), tablets y estaciones de trabajo de escritorio. Integra **Gemelo Digital 3D**, **Plano 2D Interactivo con Mapas de Calor**, **Escáner Universal con Visión Artificial y OCR**, **Control de Acceso Granular RBAC**, **Bitácora Inmutable de Auditoría** y **Diseño Swiss Enterprise**.
+Sistema integral de gestión de almacenamiento e inventario logístico de grado empresarial (*Warehouse Management System*), optimizado para terminales móviles industriales (PDA), tablets y estaciones de trabajo de escritorio. Integra **Gemelo Digital 3D**, **Plano 2D Interactivo con Mapas de Calor**, **Escáner Universal con Visión Artificial y OCR**, **Centro de Mando con KPIs Avanzados**, **Dashboard Operativo Simétrico 4×2**, **Sincronización Reactiva en Tiempo Real**, **Control de Acceso Granular RBAC** y **Diseño Swiss Enterprise**.
 
 ---
 
 ## ⚡ Aspectos Destacados
 
-- 🏭 **Gemelo Digital 3D & Plano 2D**: Visualización tridimensional inmersiva con Three.js / React Three Fiber y plano esquemático interactivo con mapas de calor logísticos, navegación por pasillos A–F y códigos semánticos de estado por casillero.
-- 🔍 **Mapeo y Conciliación Física**: Auditoría en tiempo real de casilleros, comparación de stock físico vs. lógico, detección de discrepancias y sincronización automática.
+- 🖥️ **Dashboard Operativo (Cockpit del Turno)**:
+  - **Cuadrícula Simétrica 4×2 de 8 Métricas Clave**: Productos activos, Ubicaciones mapeadas, Stock total en custodia, Ocupación global (%) con barra semafórica, Ocupadas, Disponibles, Entradas de hoy y Salidas de hoy, todas interactivas con enlace directo a sus respectivos módulos.
+  - **Estación de Acciones Rápidas (*Quick Workstation*)**: Botonera de acceso inmediato para recepción de mercancía, despacho/picking, transferencias internas, escaneo OCR, auditoría 2D y Centro de Mando.
+  - **Monitor de Actividad Reciente en Vivo (*Live Activity Stream*)**: Registro en tiempo real de los últimos movimientos del turno (tipo con badge, producto, SKU, cantidad, casilleros origen/destino y hora relativa).
+  - **Saturación Física por Pasillos (A y B)**: Monitoreo visual de capacidad y ocupación en tiempo real para Pasillo A (Norte) y Pasillo B (Sur).
+  - **Semáforo de Salud Operativa**: Estado de saturación, casilleros listos para estiba e integridad mecánica de la bodega.
+  - **Guía de Puesta en Marcha**: Onboarding interactivo persistente en `localStorage`.
+
+- 🔄 **Sincronización Reactiva en Tiempo Real (Event Bus Global)**:
+  - Bus de eventos `wms-data-changed`: Cualquier mutación (recepción, despacho, reubicación, ajuste de inventario, alta de SKU o mapeo físico) sincroniza instantáneamente el Dashboard, Centro de Mando, Plano 2D y Kardex sin recargar la página.
+  - Sincronización multi-pestaña mediante eventos de almacenamiento (`storage`).
+
+- 📊 **Centro de Mando & Inteligencia Logística (KPIs & BI)**:
+  - **Exactitud de Registro de Inventario (IRA)**: Cálculo riguroso y transparente de concordancia física vs. lógica sin penalizaciones artificiales.
+  - **Clasificación ABC Dinámica (Pareto)**: Segmentación automática de SKUs en Clases A, B y C según volumen de salidas y rotación.
+  - **DSI (*Days Sales of Inventory*) & Rotación de Stock**: Proyección de días de inventario restante y detección de stock estancado (*Dead Stock* >60 días).
+  - **Tiempos de Ciclo de Bodega**: Métricas *Dock-to-Stock* (horas desde recepción hasta estiba) y tiempo de ciclo de órdenes de picking.
+  - **Utilización Volumétrica Cúbica ($m^3$)**: Medición de metros cúbicos disponibles vs. ocupados en estanterías.
+  - **Afinidad y Co-ocurrencia de SKUs (*Smart Slotting*)**: Recomendaciones basadas en pedidos concurrentes para ubicar artículos complementarios en casilleros contiguos.
+  - **Filtro Reactivo por Categoría de Producto**: Telemetría segmentable por familias de producto.
+
+- 🏭 **Gemelo Digital 3D & Plano 2D Interactivo**:
+  - Visualización tridimensional inmersiva con Three.js / React Three Fiber.
+  - Plano esquemático 2D interactivo con mapas térmicos de saturación, navegación por pasillos A y B (racks Central y Pared) y selector visual de casilleros para entradas y salidas (`Entry2DModal`, `Exit2DModal`).
+
+- 🔍 **Mapeo y Conciliación Física**:
+  - Auditoría casillero por casillero en planta, comparación de inventario físico vs. lógico, detección de discrepancias y sincronización automática.
+
 - 📷 **Escáner Universal Triple Modo**:
-  - **Cámara (Imager 2D)**: Lectura rápida de códigos de barras (EAN-13, Code 128) y códigos QR con alternancia de cámara frontal/trasera.
-  - **Visión Artificial y OCR**: Pipeline de procesamiento con umbralizado adaptativo de Otsu, realce de contraste, inversión de polaridad y motor Tesseract en Web Worker para leer números de SKU impresos en cajas y empaques sin código de barras.
-  - **Modo Manual**: Entrada asistida por teclado para operarios con terminales industriales.
-- 📦 **Catálogo de SKUs & Gestión de Productos**: CRUD reactivo, filtros dinámicos, importación/exportación masiva en Excel/CSV con validación de esquemas y generación de etiquetas Zebra ZPL listas para imprimir.
-- 🔄 **Operaciones y Kardex**: Registro guiado de entradas, salidas, traslados entre racks y ajustes de inventario con selectores visuales 2D de casilleros (`Entry2DModal`, `Exit2DModal`).
-- 📊 **Centro de Mando & BI Logístico**: 5 paneles de analítica operativa (Ocupación, Rotación, Fill Rate, Salud del Stock y Rendimiento SLA) con exportación de balances e informes.
+  - **Cámara (Imager 2D)**: Lectura rápida de códigos de barras (EAN-13, Code 128) y códigos QR con alternancia de cámara frontal/trasera y control de linterna/flash.
+  - **Visión Artificial y OCR**: Pipeline de procesamiento digital con umbralizado adaptativo de Otsu, realce de contraste, inversión de polaridad y motor Tesseract en Web Worker para leer números de SKU impresos en cajas y empaques sin código de barras.
+  - **Modo Manual Asistido**: Entrada asistida por teclado para operarios con terminales industriales.
+
+- 📦 **Catálogo de SKUs & Gestión de Productos**:
+  - CRUD reactivo, filtros dinámicos, importación y exportación masiva en hojas de cálculo Excel/CSV con validación de esquemas y generación de etiquetas industriales Zebra ZPL listas para imprimir.
+
 - 🛡️ **Seguridad, Gobernanza y RBAC**:
-  - Control de acceso por roles (`ADMIN`, `SUPERVISOR`, `OPERATOR`, `AUDITOR`, `VIEWER`) y matriz granular de **24 permisos operativos**.
-  - Autenticación en dos pasos (**2FA TOTP**) mediante códigos QR y claves de respaldo.
+  - Control de acceso por roles (`ADMIN`, `SUPERVISOR`, `OPERATOR`, `VIEWER`) y matriz granular de **24 permisos operativos**.
+  - Autenticación en dos pasos (**2FA TOTP**) mediante códigos QR y códigos de respaldo.
   - **Bitácora Inmutable de Auditoría** con cálculo de firma criptográfica SHA-256 para trazabilidad total.
   - Revocación remota de sesiones activas en múltiples dispositivos.
-  - Cumplimiento de privacidad y derechos RGPD (descarga de expediente y derecho al olvido / anonimización).
-- 🛠️ **Mesa de Ayuda con Triple Redundancia**: Captura automática del contexto técnico (sección/pantalla activa, URL exacta con parámetro `?tab=...`, almacén, usuario, rol y resolución de pantalla) con despacho concurrente a **InsForge PostgreSQL**, **Sentry.io** y **Resend**.
+  - Cumplimiento de derechos RGPD (descarga de expediente y derecho al olvido / anonimización).
+
+- 🛠️ **Mesa de Ayuda con Triple Redundancia**:
+  - Captura automática del contexto técnico (sección/pantalla activa, URL exacta con parámetro `?tab=...`, almacén, usuario, rol y resolución de pantalla) con despacho concurrente a **InsForge PostgreSQL**, **Sentry.io** y **Resend**.
+
 - 🎨 **Sistema de Diseño Swiss Enterprise**:
-  - Set de iconos vectoriales SVG limpios (`lucide-react`) sin emojis.
-  - Jerarquía tipográfica con la fuente **Inter** y tokens semánticos oficiales (`#2563EB` primario, `#EA580C` acento/CTA de escaneo).
+  - Iconografía vectorial SVG técnica (`lucide-react`) sin emojis.
+  - Tipografía **Inter** con escala modular y paleta semántica oficial (`#2563EB` primario, `#EA580C` acento operativo de escaneo).
   - **Modo Oscuro Industrial** de alto contraste optimizado para entornos de baja iluminación en bodega.
   - Barra de navegación móvil ergonómica (*thumb-zone*) con botón FAB central elevado para escaneo inmediato.
   - **Paleta de Comandos Global (`Ctrl + K`)** para acceso rápido por teclado.
-- 📡 **Resiliencia Offline-First**: Detección continua de conectividad con banners informativos y almacenamiento de transacciones en búfer local ante caídas de red.
+
+- 📡 **Resiliencia Offline-First**:
+  - Detección continua de conectividad con cola local de transacciones pendientes y sincronización automática al restablecerse la red.
 
 ---
 
@@ -41,15 +73,17 @@ Sistema integral de gestión de almacenamiento e inventario logístico de grado 
                                │  - React Three Fiber / Three.js (Digital 3D) │
                                │  - Computer Vision & Tesseract.js (OCR)      │
                                │  - Lucide Icons (Swiss Enterprise UI)        │
+                               │  - Global Event Bus (Real-time reactivity)   │
                                └──────────────────────┬───────────────────────┘
                                                       │ HTTPS / JSON Web Token
                                                       ▼
                                ┌──────────────────────────────────────────────┐
                                │             WMS API (NestJS 11)              │
-                               │  - TypeScript / Prisma ORM / Helmet / CORS   │
+                               │  - TypeScript 5 / Prisma ORM 6 / Helmet      │
                                │  - Granular RBAC Guard / Swagger OpenAPI     │
                                │  - Audit Logging Engine (SHA-256 Hashes)     │
                                │  - ExcelJS Bulk Processor / Resend Client    │
+                               │  - Real-time Dashboard & KPI Analytics       │
                                └──────────────────────┬───────────────────────┘
                                                       │ Connection Pooling
                                                       ▼
@@ -71,6 +105,20 @@ Sistema integral de gestión de almacenamiento e inventario logístico de grado 
 
 ---
 
+## 🏛️ Topología Física de la Bodega
+
+El sistema modela fielmente la infraestructura real del almacén:
+- **1 Almacén Central**: Zona General de almacenamiento.
+- **2 Pasillos Físicos**: Pasillo A (Norte) y Pasillo B (Sur).
+- **4 Racks Principales**:
+  - `A-C`: Pasillo A — Rack Central (30 posiciones).
+  - `A-P`: Pasillo A — Rack Pared (44 posiciones).
+  - `B-C`: Pasillo B — Rack Central (30 posiciones).
+  - `B-P`: Pasillo B — Rack Pared (44 posiciones).
+- **Total**: Exactamente **148 posiciones físicas** organizadas en 5 niveles de estiba y casilleros codificados bajo el estándar industrial `[Pasillo]-[Rack]-[Nivel]-[Posición]` (ej. `A-C-01-05`).
+
+---
+
 ## 📁 Estructura del Monorepo
 
 ```text
@@ -79,10 +127,11 @@ wms/
 │   ├── api/                           # Backend NestJS
 │   │   ├── prisma/
 │   │   │   ├── schema.prisma          # Esquema relacional de base de datos
-│   │   │   └── seed.ts                # Inicialización de bodega, racks (148 ubicaciones) y SKUs
+│   │   │   └── seed.ts                # Semilla de bodega, 4 racks (148 ubicaciones) y SKUs
 │   │   ├── src/
 │   │   │   ├── audit/                 # Servicio de bitácora criptográfica SHA-256
 │   │   │   ├── auth/                  # Estrategias JWT y guards de autorización
+│   │   │   ├── dashboard/             # Telemetría de resumen, pasillos y KPIs avanzados
 │   │   │   ├── inventory/             # Lógica de stock por ubicación y producto
 │   │   │   ├── locations/             # Gestión de pasillos, racks y casilleros
 │   │   │   ├── movements/             # Entradas, salidas, traslados y ajustes
@@ -95,23 +144,29 @@ wms/
 │       ├── app/
 │       │   ├── api/support/           # Endpoint serverless para despacho de tickets
 │       │   ├── components/            # Componentes Swiss Enterprise
-│       │   │   ├── BarcodeScanner.tsx # Escáner triple (Cámara, Visión OCR, Manual)
+│       │   │   ├── BarcodeScanner.tsx # Escáner triple (Cámara, Visión OCR, Teclado)
 │       │   │   ├── CommandPalette.tsx # Paleta global de comandos (Ctrl+K)
-│       │   │   ├── Icon.tsx           # Wrapper de iconos SVG vectoriales
-│       │   │   ├── KPIPanel.tsx       # 5 vistas de inteligencia logística
-│       │   │   ├── MovementsPanel.tsx # Operaciones de stock y kardex
+│       │   │   ├── Dashboard.tsx      # Dashboard operativo simétrico 4x2, workstation y feed
+│       │   │   ├── Entry2DModal.tsx   # Asignación visual interactiva de entradas
+│       │   │   ├── Exit2DModal.tsx    # Selección visual de casillero para salidas/picking
+│       │   │   ├── KPIPanel.tsx       # 5 vistas de analítica logística profunda
+│       │   │   ├── MovementsPanel.tsx # Operaciones de stock, FIFO, Slotting y kardex
 │       │   │   ├── ProductsPanel.tsx  # Catálogo, importación/exportación y ZPL
 │       │   │   ├── SupportModal.tsx   # Mesa de ayuda con captura de sección y URL
-│       │   │   ├── UserMenu.tsx       # Menú desplegable de perfil y seguridad
-│       │   │   ├── Warehouse2D.tsx    # Plano esquemático 2D y mapa de calor
+│       │   │   ├── TeamPanel.tsx      # Gestión de usuarios y matriz RBAC
+│       │   │   ├── UserMenu.tsx       # Menú de perfil, 2FA y auditoría
+│       │   │   ├── Warehouse2D.tsx    # Plano esquemático 2D y mapas térmicos
 │       │   │   └── Warehouse3D.tsx    # Gemelo digital 3D interactivo
 │       │   ├── globals.css            # Tokens Swiss Enterprise y modo oscuro
 │       │   └── page.tsx               # Shell principal, navegación y barra móvil
 │       ├── lib/
-│       │   ├── api.ts                 # Cliente HTTP tipado para el backend
-│       │   └── ocrService.ts          # Pipeline de visión por computadora (Otsu + Tesseract)
-│       └── e2e/
-│           └── all-components.spec.ts # 20 pruebas Playwright de extremo a extremo
+│       │   ├── api.ts                 # Cliente HTTP tipado, fallback y event bus
+│       │   └── ocrService.ts          # Pipeline de visión artificial (Otsu + Tesseract)
+│       └── e2e/                       # 34 pruebas Playwright de extremo a extremo
+│           ├── all-components.spec.ts
+│           ├── cross-component-integration.spec.ts
+│           ├── e2e-complete-real-flows.spec.ts
+│           └── smoke.spec.ts
 │
 ├── design-system/
 │   └── wms-enterprise/
@@ -161,14 +216,11 @@ NEXT_PUBLIC_SENTRY_DSN="https://...@ingest.sentry.io/..."
 
 ### 3. Base de datos y datos de inicio
 
-Genera el cliente de Prisma y aplica la semilla inicial (crea 1 bodega central, pasillos A y B, racks A–F con 148 ubicaciones físicas y catálogo de productos base):
+Genera el cliente de Prisma y aplica la semilla inicial (crea 1 bodega central, pasillos A y B, 4 racks físicos con 148 ubicaciones y catálogo de productos base):
 
 ```bash
 # Generar tipos de Prisma
 npm run db:generate
-
-# Aplicar migraciones con InsForge CLI
-npx -y @insforge/cli db migrations up --all
 
 # Cargar bodega y catálogo inicial
 npm run db:seed
@@ -201,31 +253,31 @@ SET role = 'ADMIN', active = TRUE
 WHERE id = 'UUID_DE_TU_USUARIO';
 ```
 
-Una vez que tengas acceso como `ADMIN`, podrás invitar a más usuarios y modificar sus permisos directamente desde el **Panel de Equipo y Permisos RBAC** en la interfaz web.
+Una vez con el rol `ADMIN`, podrás invitar a más usuarios y modificar sus permisos directamente desde el **Panel de Equipo y Permisos RBAC** en la interfaz web.
 
 ---
 
 ## 🧪 Pruebas Automatizadas y Calidad
 
-El proyecto cuenta con suites exhaustivas de pruebas de integración y de extremo a extremo:
+El proyecto cuenta con suites exhaustivas de pruebas de integración y de extremo a extremo que se ejecutan en CI/CD:
 
 ### Pruebas de Backend y de Integración (Jest)
-Ejecuta la suite completa de 97 pruebas que validan autenticación, RBAC, movimientos de inventario, kardex, bitácora de auditoría SHA-256 y concurrencia:
+Ejecuta la suite completa de 97 pruebas que validan autenticación, RBAC, movimientos de inventario, kardex, bitácora de auditoría SHA-256, telemetría y concurrencia:
 ```bash
 npm run test:api
 ```
 > Resultado: **97 tests aprobados (100%)**.
 
 ### Pruebas End-to-End (Playwright)
-Ejecuta las 20 pruebas de extremo a extremo que validan todos los flujos reales de la aplicación sobre navegadores reales (Dashboard, Vista 2D/3D, Mapeo, Escáner OCR, Importación/Exportación, Kardex, KPIs, 2FA, Auditoría y Soporte):
+Ejecuta las 34 pruebas de extremo a extremo que validan todos los flujos reales de la aplicación sobre navegadores reales (Dashboard simétrico 4×2, Vista 2D/3D, Mapeo, Escáner OCR, Importación/Exportación, Kardex, KPIs, 2FA, Auditoría y Soporte):
 ```bash
 # Compilar frontend y ejecutar Playwright
 npm run test:e2e
 
-# O ejecutar directamente con el visor gráfico:
+# O ejecutar directamente con el visor gráfico interactivo:
 npx playwright test --ui
 ```
-> Resultado: **20 tests aprobados (100%)**.
+> Resultado: **33 tests aprobados, 1 omitido (100% de cobertura efectiva)**.
 
 ### Compilación para Producción
 ```bash
@@ -276,9 +328,9 @@ POST   /api/movements/exit
 POST   /api/movements/transfer
 POST   /api/movements/adjustment
 
-# Inteligencia Logística y Auditoría
+# Inteligencia Logística, Telemetría y Auditoría
 GET    /api/dashboard/summary
-GET    /api/kpis/overview
+GET    /api/dashboard/kpis?organizationId=&category=
 GET    /api/audit/logs
 ```
 
