@@ -86,13 +86,13 @@ export function MovementsPanel({
       loadMovements(),
     ])
       .then(([productPage, locationPage]) => {
-        setProducts(productPage.items);
-        setLocations(locationPage.items);
+        setProducts(Array.isArray(productPage?.items) ? productPage.items : []);
+        setLocations(Array.isArray(locationPage?.items) ? locationPage.items : []);
         setForm((current) => ({
           ...current,
-          productId: current.productId || productPage.items[0]?.id || "",
-          locationId: current.locationId || locationPage.items[0]?.id || "",
-          destinationLocationId: current.destinationLocationId || locationPage.items[1]?.id || "",
+          productId: current.productId || productPage?.items?.[0]?.id || "",
+          locationId: current.locationId || locationPage?.items?.[0]?.id || "",
+          destinationLocationId: current.destinationLocationId || locationPage?.items?.[1]?.id || "",
         }));
       })
       .catch((e: Error) => onError(e.message));
@@ -102,24 +102,28 @@ export function MovementsPanel({
   const allLocations = useMemo(() => {
     const map = new Map<string, Location>();
     // 1. Agregar seed locations de la bodega (148 posiciones completas)
-    const seed = getWarehouseSeedLocations();
+    const seed = getWarehouseSeedLocations() || [];
     for (const s of seed) {
       map.set(s.id, s);
     }
     // 2. Agregar ubicaciones traídas de la API (con estados actualizados)
-    for (const loc of locations) {
-      map.set(loc.id, loc);
+    if (Array.isArray(locations)) {
+      for (const loc of locations) {
+        map.set(loc.id, loc);
+      }
     }
     // 3. Agregar sugerencias de Smart Slotting
-    for (const sug of slottingSuggestions) {
-      if (sug.locationId && !map.has(sug.locationId)) {
-        map.set(sug.locationId, {
-          id: sug.locationId,
-          code: sug.locationCode,
-          status: "AVAILABLE",
-          level: sug.level,
-          position: sug.position,
-        });
+    if (Array.isArray(slottingSuggestions)) {
+      for (const sug of slottingSuggestions) {
+        if (sug?.locationId && !map.has(sug.locationId)) {
+          map.set(sug.locationId, {
+            id: sug.locationId,
+            code: sug.locationCode,
+            status: "AVAILABLE",
+            level: sug.level,
+            position: sug.position,
+          });
+        }
       }
     }
     return Array.from(map.values()).sort((a, b) => a.code.localeCompare(b.code));

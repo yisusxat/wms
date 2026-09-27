@@ -1,0 +1,11 @@
+{
+  "version": 1,
+  "skills": {
+    "insforge": {
+      "source": "insforge/insforge-skills",
+      "sourceType": "github",
+      "skillPath": "skills/insforge/SKILL.md",
+      "computedHash": "aa9eff7d98c2e6e7e60a31af427f02c6dc2ee5da554c585962e3ddc841fd0dd2"
+    }
+  }
+}
