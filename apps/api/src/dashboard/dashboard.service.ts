@@ -82,20 +82,59 @@ export class DashboardService {
   async summary() {
     const startOfDay = new Date();
     startOfDay.setHours(0, 0, 0, 0);
-    const [products, locations, occupied, available, stock, entries, issues, recentMovements] = await Promise.all([
+    const [products, locations, occupied, available, stock, entries, issues, recentMovements, allLocs] = await Promise.all([
       this.prisma.product.count({ where: { active: true } }),
       this.prisma.location.count(),
-      this.prisma.location.count({ where: { status: 'OCCUPIED' } }),
-      this.prisma.location.count({ where: { status: 'AVAILABLE' } }),
+      this.prisma.location.count({
+        where: {
+          OR: [
+            { status: 'OCCUPIED' },
+            { inventory: { some: { quantity: { gt: 0 } } } },
+          ],
+        },
+      }),
+      this.prisma.location.count({
+        where: {
+          status: 'AVAILABLE',
+          inventory: { none: { quantity: { gt: 0 } } },
+        },
+      }),
       this.prisma.inventory.aggregate({ _sum: { quantity: true } }),
       this.prisma.movement.count({ where: { type: MovementType.RECEIPT, createdAt: { gte: startOfDay } } }),
       this.prisma.movement.count({ where: { type: MovementType.ISSUE, createdAt: { gte: startOfDay } } }),
       this.prisma.movement.findMany({
-        take: 10,
+        take: 8,
         orderBy: { createdAt: 'desc' },
-        include: { product: true, sourceLocation: true, destinationLocation: true },
+        include: {
+          product: { select: { id: true, sku: true, name: true, unit: true, category: true } },
+          sourceLocation: { select: { id: true, code: true } },
+          destinationLocation: { select: { id: true, code: true } },
+          user: { select: { id: true, name: true, email: true } },
+        },
+      }),
+      this.prisma.location.findMany({
+        select: {
+          code: true,
+          status: true,
+          inventory: { select: { quantity: true } },
+        },
       }),
     ]);
+
+    let aisleAOcc = 0;
+    let aisleATot = 0;
+    let aisleBOcc = 0;
+    let aisleBTot = 0;
+    for (const loc of allLocs) {
+      const isOcc = loc.status === 'OCCUPIED' || (loc.inventory && loc.inventory.some((i: any) => i.quantity > 0));
+      if (loc.code.startsWith('A-')) {
+        aisleATot++;
+        if (isOcc) aisleAOcc++;
+      } else if (loc.code.startsWith('B-')) {
+        aisleBTot++;
+        if (isOcc) aisleBOcc++;
+      }
+    }
 
     return {
       products,
@@ -106,6 +145,22 @@ export class DashboardService {
       entriesToday: entries,
       issuesToday: issues,
       recentMovements,
+      aisles: {
+        aisleA: {
+          code: 'A',
+          name: 'Pasillo A (Norte)',
+          total: aisleATot || 74,
+          occupied: aisleAOcc,
+          rate: aisleATot > 0 ? Math.round((aisleAOcc / aisleATot) * 1000) / 10 : 0,
+        },
+        aisleB: {
+          code: 'B',
+          name: 'Pasillo B (Sur)',
+          total: aisleBTot || 74,
+          occupied: aisleBOcc,
+          rate: aisleBTot > 0 ? Math.round((aisleBOcc / aisleBTot) * 1000) / 10 : 0,
+        },
+      },
     };
   }
 

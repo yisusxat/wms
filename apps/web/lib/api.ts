@@ -42,6 +42,21 @@ export type CurrentUser = {
   active?: boolean;
 };
 
+export type Summary = {
+  products: number;
+  locations: number;
+  occupiedLocations: number;
+  availableLocations: number;
+  totalUnits: number;
+  entriesToday: number;
+  issuesToday: number;
+  recentMovements?: any[];
+  aisles?: {
+    aisleA: { code: string; name: string; total: number; occupied: number; rate: number };
+    aisleB: { code: string; name: string; total: number; occupied: number; rate: number };
+  };
+};
+
 export async function apiFetch<T>(path: string, token: string, init?: RequestInit): Promise<T> {
   const isClient = typeof window !== 'undefined';
   const isLocalHost = isClient && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
@@ -200,19 +215,51 @@ async function fallbackInsforge<T>(path: string, token: string, init?: RequestIn
   }
 
   if (cleanPath === '/dashboard/summary') {
-    const [locRes, prodRes, invRes] = await Promise.all([
-      fetch(`${insforgeUrl}/api/database/records/locations?select=id,status`, { headers }).catch(() => null),
-      fetch(`${insforgeUrl}/api/database/records/products?select=id`, { headers }).catch(() => null),
-      fetch(`${insforgeUrl}/api/database/records/inventory?select=quantity`, { headers }).catch(() => null),
+    const [locRes, prodRes, invRes, movRes] = await Promise.all([
+      fetch(`${insforgeUrl}/api/database/records/locations?select=id,status,code`, { headers }).catch(() => null),
+      fetch(`${insforgeUrl}/api/database/records/products?select=id,sku,name,unit`, { headers }).catch(() => null),
+      fetch(`${insforgeUrl}/api/database/records/inventory?select=id,location_id,product_id,quantity`, { headers }).catch(() => null),
+      fetch(`${insforgeUrl}/api/database/records/movements?select=id,type,product_id,quantity,source_location_id,destination_location_id,created_at&order=created_at.desc&limit=20`, { headers }).catch(() => null),
     ]);
 
     const locs: any[] = locRes && locRes.ok ? await locRes.json().catch(() => []) : [];
     const prods: any[] = prodRes && prodRes.ok ? await prodRes.json().catch(() => []) : [];
     const invs: any[] = invRes && invRes.ok ? await invRes.json().catch(() => []) : [];
+    const movs: any[] = movRes && movRes.ok ? await movRes.json().catch(() => []) : [];
 
-    const availableLocations = Array.isArray(locs) ? locs.filter((l) => l.status === 'AVAILABLE').length : 0;
+    const now = new Date();
+    const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+    const entriesToday = movs.filter((m) => m.type === 'RECEIPT' && new Date(m.created_at).getTime() >= startOfDay).length;
+    const issuesToday = movs.filter((m) => m.type === 'ISSUE' && new Date(m.created_at).getTime() >= startOfDay).length;
+
     const occupiedLocations = Array.isArray(locs) ? locs.filter((l) => l.status === 'OCCUPIED').length : 0;
+    const availableLocations = Array.isArray(locs) ? locs.filter((l) => l.status === 'AVAILABLE').length : 0;
     const totalUnits = Array.isArray(invs) ? invs.reduce((acc, i) => acc + (i.quantity || 0), 0) : 0;
+
+    let aisleAOcc = 0;
+    let aisleATot = 0;
+    let aisleBOcc = 0;
+    let aisleBTot = 0;
+    for (const l of locs) {
+      const code = l.code || '';
+      if (code.startsWith('A-')) {
+        aisleATot++;
+        if (l.status === 'OCCUPIED') aisleAOcc++;
+      } else if (code.startsWith('B-')) {
+        aisleBTot++;
+        if (l.status === 'OCCUPIED') aisleBOcc++;
+      }
+    }
+
+    const prodMap = new Map(prods.map((p) => [p.id, p]));
+    const locMap = new Map(locs.map((l) => [l.id, l]));
+
+    const recentMovements = movs.slice(0, 8).map((m) => ({
+      ...m,
+      product: prodMap.get(m.product_id) || { sku: 'SKU-N/A', name: 'Producto' },
+      sourceLocation: locMap.get(m.source_location_id) || null,
+      destinationLocation: locMap.get(m.destination_location_id) || null,
+    }));
 
     return {
       products: Array.isArray(prods) ? prods.length : 0,
@@ -220,8 +267,25 @@ async function fallbackInsforge<T>(path: string, token: string, init?: RequestIn
       occupiedLocations,
       availableLocations,
       totalUnits,
-      entriesToday: 0,
-      issuesToday: 0,
+      entriesToday,
+      issuesToday,
+      recentMovements,
+      aisles: {
+        aisleA: {
+          code: 'A',
+          name: 'Pasillo A (Norte)',
+          total: aisleATot || 74,
+          occupied: aisleAOcc,
+          rate: aisleATot > 0 ? Math.round((aisleAOcc / aisleATot) * 1000) / 10 : 0,
+        },
+        aisleB: {
+          code: 'B',
+          name: 'Pasillo B (Sur)',
+          total: aisleBTot || 74,
+          occupied: aisleBOcc,
+          rate: aisleBTot > 0 ? Math.round((aisleBOcc / aisleBTot) * 1000) / 10 : 0,
+        },
+      },
     } as T;
   }
 

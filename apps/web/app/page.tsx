@@ -33,11 +33,19 @@ import {
 } from 'lucide-react';
 import { insforge } from '../lib/insforge';
 import dynamic from 'next/dynamic';
-import { apiFetch, CurrentUser, InventoryItem, Location, Page, Product } from '../lib/api';
+import { apiFetch, CurrentUser, InventoryItem, Location, Page, Product, Summary } from '../lib/api';
 import { locationStatusClass, locationStatusLabel } from '../lib/locationStatus';
 import { MovementsPanel } from './components/MovementsPanel';
 import { ProductsPanel } from './components/ProductsPanel';
 import { RoleBadge, UserMenu } from './components/UserMenu';
+
+const Dashboard = dynamic(
+  () => import('./components/Dashboard').then((m) => m.Dashboard),
+  {
+    ssr: false,
+    loading: () => <DashboardSkeleton />,
+  }
+);
 
 const Warehouse3D = dynamic(
   () => import('./components/Warehouse3D').then((m) => m.Warehouse3D),
@@ -124,16 +132,6 @@ import { ThemeProvider, useTheme, ThemeToggle } from './components/ThemeContext'
 import CommandPalette from './components/CommandPalette';
 import { DashboardSkeleton } from './components/Skeleton';
 import { isSoundEnabled, setSoundEnabled } from '../lib/audioCues';
-
-type Summary = {
-  products: number;
-  locations: number;
-  occupiedLocations: number;
-  availableLocations: number;
-  totalUnits: number;
-  entriesToday: number;
-  issuesToday: number;
-};
 
 type Tab =
   | 'dashboard'
@@ -885,7 +883,16 @@ function HomePageContent() {
         ) : null}
 
         <div className="mt-6">
-          {tab === 'dashboard' ? <Dashboard summary={summary} onNavigate={changeTab} role={profile?.role} /> : null}
+          {tab === 'dashboard' ? (
+            <Dashboard
+              summary={summary}
+              onNavigate={(nextTab) => changeTab(nextTab as Tab)}
+              role={profile?.role}
+              token={token}
+              onOpenScanner={() => setGlobalScannerOpen(true)}
+              onRefresh={refreshSummary}
+            />
+          ) : null}
           {tab === 'kpis' ? <KPIPanel token={token} organizationId={profile?.organizationId} refreshKey={dataVersion} onNavigate={(nextTab) => changeTab(nextTab as Tab)} /> : null}
           {tab === 'reports' ? <ReportsPanel token={token} organizationId={profile?.organizationId} onDataChanged={refreshSummary} refreshKey={dataVersion} /> : null}
           {tab === 'products' ? <ProductsPanel token={token} role={profile?.role} onError={setError} onDataChanged={refreshSummary} refreshKey={dataVersion} /> : null}
@@ -1059,153 +1066,6 @@ export default function HomePage() {
     </ThemeProvider>
   );
 }
-
-function Dashboard({
-  summary,
-  onNavigate,
-  role,
-}: {
-  summary: Summary | null;
-  onNavigate: (tab: Tab) => void;
-  role?: CurrentUser['role'];
-}) {
-  if (!summary) {
-    return <DashboardSkeleton />;
-  }
-
-  const cards = summary
-    ? [
-        ['Productos', summary.products],
-        ['Ubicaciones', summary.locations],
-        ['Stock total', summary.totalUnits],
-        ['Ocupadas', summary.occupiedLocations],
-        ['Disponibles', summary.availableLocations],
-        ['Entradas hoy', summary.entriesToday],
-        ['Salidas hoy', summary.issuesToday],
-      ]
-    : [];
-
-  const [dismissed, setDismissed] = useState(false);
-
-  return (
-    <div className="space-y-6">
-      {!dismissed && (
-        <div className="relative overflow-hidden rounded-xl border border-blue-100 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
-          <div className="flex items-start justify-between">
-            <div>
-              <span className="inline-flex items-center gap-1.5 rounded-full bg-blue-100 px-3 py-1 text-xs font-semibold text-blue-800 dark:bg-blue-950 dark:text-blue-200">
-                Guía de puesta en marcha
-              </span>
-              <h2 className="mt-2 text-lg font-semibold text-slate-900 dark:text-white">Bienvenido al sistema WMS</h2>
-              <p className="mt-1 text-sm text-slate-600 dark:text-slate-400">
-                Sigue estos pasos esenciales para operar la bodega de forma eficiente y segura:
-              </p>
-            </div>
-            <button
-              onClick={() => setDismissed(true)}
-              className="inline-flex items-center gap-1 text-xs text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
-              title="Ocultar guía"
-            >
-              <X className="h-3.5 w-3.5" /> Ocultar
-            </button>
-          </div>
-
-          <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-            <div className="flex flex-col justify-between rounded-xl bg-white p-4 border border-blue-50 shadow-xs">
-              <div>
-                <div className="flex items-center gap-2 font-medium text-gray-800 text-sm">
-                  <span className="flex h-6 w-6 items-center justify-center rounded-full bg-blue-600 text-xs text-white font-bold">1</span>
-                  Explorar Layout 2D/3D
-                </div>
-                <p className="mt-2 text-xs text-gray-500">
-                  {summary ? summary.locations : 0} ubicaciones modeladas en racks A-F con pasillos y niveles.
-                </p>
-              </div>
-              <button
-                onClick={() => onNavigate('warehouse2d')}
-                className="mt-3 text-left text-xs font-semibold text-blue-600 hover:text-blue-800"
-              >
-                Abrir Vista 2D →
-              </button>
-            </div>
-
-            <div className="flex flex-col justify-between rounded-xl bg-white p-4 border border-blue-50 shadow-xs">
-              <div>
-                <div className="flex items-center gap-2 font-medium text-gray-800 text-sm">
-                  <span className="flex h-6 w-6 items-center justify-center rounded-full bg-blue-600 text-xs text-white font-bold">2</span>
-                  Catálogo de Productos
-                </div>
-                <p className="mt-2 text-xs text-gray-500">
-                  {summary?.products ? summary.products + " SKUs registrados." : 'Registra tus primeros artículos con SKU y unidad de medida.'}
-                </p>
-              </div>
-              <button
-                onClick={() => onNavigate('products')}
-                className="mt-3 text-left text-xs font-semibold text-blue-600 hover:text-blue-800"
-              >
-                Gestionar SKUs →
-              </button>
-            </div>
-
-            <div className="flex flex-col justify-between rounded-xl bg-white p-4 border border-blue-50 shadow-xs">
-              <div>
-                <div className="flex items-center gap-2 font-medium text-gray-800 text-sm">
-                  <span className="flex h-6 w-6 items-center justify-center rounded-full bg-blue-600 text-xs text-white font-bold">3</span>
-                  {role === 'ADMIN' ? 'Gestión de Equipo' : 'Niveles de Acceso'}
-                </div>
-                <p className="mt-2 text-xs text-gray-500">
-                  {role === 'ADMIN'
-                    ? 'Invita a supervisores y operarios asignando roles RBAC.'
-                    : "Tu rol actual es " + (role || 'OPERATOR') + ". Operaciones auditadas."}
-                </p>
-              </div>
-              {role === 'ADMIN' ? (
-                <button
-                  onClick={() => onNavigate('team')}
-                  className="mt-3 text-left text-xs font-semibold text-blue-600 hover:text-blue-800"
-                >
-                  Panel de Equipo →
-                </button>
-              ) : (
-                <span className="mt-3 text-xs font-medium text-emerald-600">Rol verificado</span>
-              )}
-            </div>
-
-            <div className="flex flex-col justify-between rounded-xl bg-white p-4 border border-blue-50 shadow-xs">
-              <div>
-                <div className="flex items-center gap-2 font-medium text-gray-800 text-sm">
-                  <span className="flex h-6 w-6 items-center justify-center rounded-full bg-blue-600 text-xs text-white font-bold">4</span>
-                  Movimientos de Stock
-                </div>
-                <p className="mt-2 text-xs text-gray-500">
-                  Registra entradas, salidas y transferencias guiadas entre ubicaciones.
-                </p>
-              </div>
-              <button
-                onClick={() => onNavigate('movements')}
-                className="mt-3 text-left text-xs font-semibold text-blue-600 hover:text-blue-800"
-              >
-                Registrar Movimiento →
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-2 sm:gap-4 lg:grid-cols-3 xl:grid-cols-4">
-        {cards.map(([label, value]) => (
-          <article key={label} className="rounded-xl border border-slate-200 bg-white p-3.5 shadow-sm sm:p-5 dark:border-slate-800 dark:bg-slate-900">
-            <p className="text-xs text-slate-500 sm:text-sm dark:text-slate-400">{label}</p>
-            <p className="mt-1 text-2xl font-semibold text-slate-900 sm:mt-2 sm:text-3xl dark:text-white">{value}</p>
-          </article>
-        ))}
-      </div>
-
-      {!summary && <p className="mt-8 text-gray-500">Cargando indicadores…</p>}
-    </div>
-  );
-}
-
 
 function Locations({ token, onError, refreshKey }: { token: string; onError: (value: string) => void; refreshKey?: number }) {
   const [data, setData] = useState<Page<Location> | null>(null);
