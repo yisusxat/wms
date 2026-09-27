@@ -40,28 +40,25 @@ ALTER TABLE public.user_profiles FORCE ROW LEVEL SECURITY;
 
 -- 3. Harden SECURITY DEFINER stock functions (prevent search_path hijacking & restrict anon execution)
 DO $$
+DECLARE
+  r RECORD;
 BEGIN
-  -- wms_issue_stock
-  IF EXISTS (SELECT 1 FROM pg_proc WHERE proname = 'wms_issue_stock') THEN
-    ALTER FUNCTION public.wms_issue_stock(uuid, uuid, integer, text) SET search_path = pg_catalog, public, pg_temp;
-    REVOKE EXECUTE ON FUNCTION public.wms_issue_stock(uuid, uuid, integer, text) FROM PUBLIC;
-    REVOKE EXECUTE ON FUNCTION public.wms_issue_stock(uuid, uuid, integer, text) FROM anon;
-    GRANT EXECUTE ON FUNCTION public.wms_issue_stock(uuid, uuid, integer, text) TO authenticated;
-  END IF;
+  FOR r IN (
+    SELECT n.nspname, p.proname, pg_get_function_identity_arguments(p.oid) AS args
+    FROM pg_proc p
+    JOIN pg_namespace n ON n.oid = p.pronamespace
+    WHERE n.nspname = 'public'
+      AND p.proname IN ('wms_issue_stock', 'wms_receive_stock', 'wms_transfer_stock', 'wms_adjust_stock')
+  ) LOOP
+    EXECUTE format('ALTER FUNCTION %I.%I(%s) SET search_path = pg_catalog, public, pg_temp', r.nspname, r.proname, r.args);
+    EXECUTE format('REVOKE EXECUTE ON FUNCTION %I.%I(%s) FROM PUBLIC', r.nspname, r.proname, r.args);
 
-  -- wms_receive_stock
-  IF EXISTS (SELECT 1 FROM pg_proc WHERE proname = 'wms_receive_stock') THEN
-    ALTER FUNCTION public.wms_receive_stock(uuid, uuid, integer, text) SET search_path = pg_catalog, public, pg_temp;
-    REVOKE EXECUTE ON FUNCTION public.wms_receive_stock(uuid, uuid, integer, text) FROM PUBLIC;
-    REVOKE EXECUTE ON FUNCTION public.wms_receive_stock(uuid, uuid, integer, text) FROM anon;
-    GRANT EXECUTE ON FUNCTION public.wms_receive_stock(uuid, uuid, integer, text) TO authenticated;
-  END IF;
+    IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'anon') THEN
+      EXECUTE format('REVOKE EXECUTE ON FUNCTION %I.%I(%s) FROM anon', r.nspname, r.proname, r.args);
+    END IF;
 
-  -- wms_transfer_stock
-  IF EXISTS (SELECT 1 FROM pg_proc WHERE proname = 'wms_transfer_stock') THEN
-    ALTER FUNCTION public.wms_transfer_stock(uuid, uuid, uuid, integer, text) SET search_path = pg_catalog, public, pg_temp;
-    REVOKE EXECUTE ON FUNCTION public.wms_transfer_stock(uuid, uuid, uuid, integer, text) FROM PUBLIC;
-    REVOKE EXECUTE ON FUNCTION public.wms_transfer_stock(uuid, uuid, uuid, integer, text) FROM anon;
-    GRANT EXECUTE ON FUNCTION public.wms_transfer_stock(uuid, uuid, uuid, integer, text) TO authenticated;
-  END IF;
+    IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'authenticated') THEN
+      EXECUTE format('GRANT EXECUTE ON FUNCTION %I.%I(%s) TO authenticated', r.nspname, r.proname, r.args);
+    END IF;
+  END LOOP;
 END $$;
