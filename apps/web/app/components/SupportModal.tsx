@@ -2,6 +2,19 @@
 
 import { useState } from 'react';
 import * as Sentry from '@sentry/nextjs';
+import {
+  LifeBuoy,
+  X,
+  CheckCircle2,
+  AlertTriangle,
+  Send,
+  Building2,
+  User,
+  Globe,
+  Monitor,
+  Sparkles,
+  Loader2,
+} from 'lucide-react';
 import { CurrentUser } from '../../lib/api';
 
 type SupportModalProps = {
@@ -9,9 +22,20 @@ type SupportModalProps = {
   onClose: () => void;
   user: { email?: string } | null;
   profile: CurrentUser | null;
+  currentTab?: string;
+  currentTabLabel?: string;
+  warehouseName?: string;
 };
 
-export function SupportModal({ isOpen, onClose, user, profile }: SupportModalProps) {
+export function SupportModal({
+  isOpen,
+  onClose,
+  user,
+  profile,
+  currentTab = 'dashboard',
+  currentTabLabel = 'Dashboard',
+  warehouseName = 'Bodega Central',
+}: SupportModalProps) {
   const [subject, setSubject] = useState('');
   const [category, setCategory] = useState<'INCIDENT' | 'BUG' | 'ACCESS' | 'SUGGESTION'>('INCIDENT');
   const [description, setDescription] = useState('');
@@ -21,7 +45,24 @@ export function SupportModal({ isOpen, onClose, user, profile }: SupportModalPro
 
   if (!isOpen) return null;
 
-  const currentUrl = typeof window !== 'undefined' ? window.location.href : '';
+  const tabName = currentTabLabel || 'Dashboard';
+  const tabKey = currentTab || 'dashboard';
+
+  // Construct dynamic full URL including current tab if not present
+  const currentUrl = typeof window !== 'undefined'
+    ? (() => {
+        try {
+          const u = new URL(window.location.href);
+          if (tabKey) {
+            u.searchParams.set('tab', tabKey);
+          }
+          return u.toString();
+        } catch {
+          return window.location.href;
+        }
+      })()
+    : '';
+
   const userAgent = typeof navigator !== 'undefined' ? navigator.userAgent : '';
   const screenResolution = typeof window !== 'undefined' ? `${window.innerWidth}x${window.innerHeight}` : '';
 
@@ -40,6 +81,9 @@ export function SupportModal({ isOpen, onClose, user, profile }: SupportModalPro
       subject,
       category,
       description,
+      section: tabName,
+      tab: tabKey,
+      warehouse: warehouseName,
       user: user?.email ?? 'Desconocido',
       role: profile?.role ?? 'VIEWER',
       url: currentUrl,
@@ -64,6 +108,9 @@ export function SupportModal({ isOpen, onClose, user, profile }: SupportModalPro
           subject,
           category,
           description,
+          section: tabName,
+          tab: tabKey,
+          warehouse: warehouseName,
           user: user?.email ?? 'anonymous',
           role: profile?.role ?? 'VIEWER',
           url: currentUrl,
@@ -126,9 +173,15 @@ export function SupportModal({ isOpen, onClose, user, profile }: SupportModalPro
         timestamp: Date.now() / 1000,
         platform: 'javascript',
         level: category === 'BUG' ? 'error' : 'info',
-        message: `[Soporte ${category}] ${subject}`,
+        message: `[Soporte ${category}] [${tabName}] ${subject}`,
         user: { email: user?.email ?? 'anonymous' },
-        tags: { category, role: profile?.role ?? 'VIEWER', source: 'wms_platform' },
+        tags: {
+          category,
+          section: tabKey,
+          sectionName: tabName,
+          role: profile?.role ?? 'VIEWER',
+          source: 'wms_platform',
+        },
         extra: { ...report },
       });
       const body = header + '\n' + itemHeader + '\n' + eventPayload + '\n';
@@ -151,9 +204,15 @@ export function SupportModal({ isOpen, onClose, user, profile }: SupportModalPro
 
       // Also try SDK capture
       try {
-        Sentry.captureMessage(`[Soporte ${category}] ${subject}`, {
+        Sentry.captureMessage(`[Soporte ${category}] [${tabName}] ${subject}`, {
           level: category === 'BUG' ? 'error' : 'info',
           extra: report,
+          tags: {
+            category,
+            section: tabKey,
+            sectionName: tabName,
+            role: profile?.role ?? 'VIEWER',
+          },
           user: { email: user?.email ?? 'anonymous' },
         });
       } catch (_) {}
@@ -229,52 +288,57 @@ export function SupportModal({ isOpen, onClose, user, profile }: SupportModalPro
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-slate-900/60 p-0 sm:p-4 backdrop-blur-sm animate-fadeIn">
-      <div className="w-full max-w-lg max-h-[92vh] sm:max-h-[90vh] overflow-y-auto rounded-t-3xl sm:rounded-3xl bg-white p-4 sm:p-6 shadow-2xl border border-slate-200">
-        <div className="mx-auto w-12 h-1.5 rounded-full bg-slate-200 mb-3 sm:hidden" />
-        <div className="flex items-start justify-between border-b border-slate-100 pb-3">
-          <div className="flex items-center gap-2 sm:gap-2.5">
-            <span className="flex h-8 w-8 sm:h-9 sm:w-9 shrink-0 items-center justify-center rounded-xl bg-blue-100 text-blue-900 text-base sm:text-lg">
-              🛠️
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-slate-900/60 p-0 sm:p-4 backdrop-blur-xs animate-fadeIn">
+      <div className="w-full max-w-lg max-h-[92vh] sm:max-h-[90vh] overflow-y-auto rounded-t-xl sm:rounded-xl bg-white p-4 sm:p-6 shadow-2xl border border-slate-200 dark:border-slate-800 dark:bg-slate-900">
+        <div className="mx-auto w-12 h-1 rounded-full bg-slate-200 mb-3 sm:hidden dark:bg-slate-700" />
+        <div className="flex items-start justify-between border-b border-slate-100 pb-3 dark:border-slate-800">
+          <div className="flex items-center gap-2.5">
+            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-300">
+              <LifeBuoy className="h-5 w-5" />
             </span>
             <div>
-              <h3 className="text-base sm:text-lg font-black text-slate-900">Mesa de Ayuda y Soporte WMS</h3>
-              <p className="text-[11px] sm:text-xs text-slate-500">Reportar incidencias operativas o solicitar asistencia</p>
+              <h3 className="text-base sm:text-lg font-semibold text-slate-900 dark:text-white">Mesa de Ayuda y Soporte WMS</h3>
+              <p className="text-[11px] sm:text-xs text-slate-500 dark:text-slate-400">Reportar incidencias operativas o solicitar asistencia técnica</p>
             </div>
           </div>
           <button
             onClick={handleClose}
-            className="rounded-full bg-slate-100 p-1.5 sm:p-2 text-slate-400 hover:bg-slate-200 hover:text-slate-700 transition"
+            className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-700 transition dark:hover:bg-slate-800 dark:hover:text-slate-200"
+            title="Cerrar ventana"
           >
-            ✕
+            <X className="h-4 w-4" />
           </button>
         </div>
 
         {sent ? (
           <div className="my-6 text-center space-y-4">
-            <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-emerald-100 text-emerald-600 text-2xl font-black">
-              ✓
+            <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-emerald-100 text-emerald-600 dark:bg-emerald-950/60 dark:text-emerald-400">
+              <CheckCircle2 className="h-6 w-6" />
             </div>
             <div>
-              <h4 className="text-lg font-bold text-slate-900">Reporte Despachado y Registrado</h4>
-              <p className="text-xs text-slate-500 max-w-sm mx-auto mt-1">
+              <h4 className="text-base font-semibold text-slate-900 dark:text-white">Reporte Despachado y Registrado</h4>
+              <p className="text-xs text-slate-500 max-w-sm mx-auto mt-1 dark:text-slate-400">
                 La incidencia ha sido procesada mediante la arquitectura de triple redundancia operativa.
               </p>
             </div>
 
             {/* Detailed multi-channel status list */}
-            <div className="rounded-2xl border border-slate-200 bg-slate-50/80 p-3.5 text-left space-y-2">
-              <p className="text-[11px] font-bold text-slate-700 uppercase tracking-wider">Estado de Canales de Recepción:</p>
+            <div className="rounded-xl border border-slate-200 bg-slate-50/80 p-3.5 text-left space-y-2 dark:border-slate-800 dark:bg-slate-800/50">
+              <p className="text-[11px] font-semibold text-slate-700 uppercase tracking-wider dark:text-slate-300">
+                Estado de Canales de Recepción:
+              </p>
               <div className="space-y-1.5 text-xs">
                 {deliveryDetails.map((item, idx) => (
-                  <div key={idx} className="flex items-start justify-between gap-2 p-1.5 rounded-lg bg-white border border-slate-100 shadow-sm">
+                  <div key={idx} className="flex items-start justify-between gap-2 p-2 rounded-lg bg-white border border-slate-200 shadow-xs dark:bg-slate-900 dark:border-slate-700">
                     <div className="flex items-center gap-2">
-                      <span className={item.status === 'ok' ? 'text-emerald-600 font-bold' : 'text-amber-500 font-bold'}>
-                        {item.status === 'ok' ? '✓' : '⚠️'}
-                      </span>
-                      <span className="font-semibold text-slate-800">{item.channel}</span>
+                      {item.status === 'ok' ? (
+                        <CheckCircle2 className="h-4 w-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
+                      ) : (
+                        <AlertTriangle className="h-4 w-4 text-amber-500 shrink-0" />
+                      )}
+                      <span className="font-medium text-slate-800 dark:text-slate-200">{item.channel}</span>
                     </div>
-                    <span className={`text-[11px] font-mono ${item.status === 'ok' ? 'text-emerald-700' : 'text-amber-700'} text-right truncate max-w-[210px]`}>
+                    <span className={`text-[11px] font-mono ${item.status === 'ok' ? 'text-emerald-700 dark:text-emerald-400' : 'text-amber-700 dark:text-amber-400'} text-right truncate max-w-[210px]`}>
                       {item.detail}
                     </span>
                   </div>
@@ -285,7 +349,7 @@ export function SupportModal({ isOpen, onClose, user, profile }: SupportModalPro
             <div className="pt-2">
               <button
                 onClick={handleClose}
-                className="w-full sm:w-auto rounded-xl bg-slate-900 px-7 py-2.5 text-xs font-bold text-white shadow hover:bg-slate-800 transition text-center"
+                className="w-full sm:w-auto rounded-lg bg-blue-600 px-6 py-2.5 text-xs font-semibold text-white shadow-sm hover:bg-blue-700 transition"
               >
                 Cerrar y Continuar
               </button>
@@ -294,11 +358,13 @@ export function SupportModal({ isOpen, onClose, user, profile }: SupportModalPro
         ) : (
           <form onSubmit={handleSubmit} className="mt-4 space-y-4">
             <div>
-              <label className="block text-xs font-bold text-slate-600 uppercase mb-1">Categoría</label>
+              <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-1">
+                Categoría
+              </label>
               <select
                 value={category}
                 onChange={(e) => setCategory(e.target.value as any)}
-                className="w-full rounded-xl border border-slate-200 bg-slate-50 p-2.5 text-xs font-medium focus:bg-white focus:border-blue-600 focus:outline-none"
+                className="w-full rounded-lg border border-slate-200 bg-white p-2.5 text-xs font-medium text-slate-900 shadow-xs focus:border-blue-600 focus:outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-white"
               >
                 <option value="INCIDENT">Incidencia operativa en bodega / Ubicación</option>
                 <option value="BUG">Fallo o error en el sistema web</option>
@@ -308,53 +374,89 @@ export function SupportModal({ isOpen, onClose, user, profile }: SupportModalPro
             </div>
 
             <div>
-              <label className="block text-xs font-bold text-slate-600 uppercase mb-1">Asunto / Título</label>
+              <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-1">
+                Asunto / Título
+              </label>
               <input
                 required
                 placeholder="Ej: Posición A-C-01-05 bloqueada físicamente..."
                 value={subject}
                 onChange={(e) => setSubject(e.target.value)}
-                className="w-full rounded-xl border border-slate-200 bg-slate-50 p-2.5 text-xs font-medium focus:bg-white focus:border-blue-600 focus:outline-none"
+                className="w-full rounded-lg border border-slate-200 bg-white p-2.5 text-xs font-medium text-slate-900 shadow-xs focus:border-blue-600 focus:outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-white"
               />
             </div>
 
             <div>
-              <label className="block text-xs font-bold text-slate-600 uppercase mb-1">Descripción detallada</label>
+              <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-1">
+                Descripción detallada
+              </label>
               <textarea
                 required
                 rows={4}
                 placeholder="Indica qué ocurrió, SKU involucrado o pasos para reproducir..."
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
-                className="w-full rounded-xl border border-slate-200 bg-slate-50 p-2.5 text-xs font-medium focus:bg-white focus:border-blue-600 focus:outline-none"
+                className="w-full rounded-lg border border-slate-200 bg-white p-2.5 text-xs font-medium text-slate-900 shadow-xs focus:border-blue-600 focus:outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-white"
               />
             </div>
 
-            {/* Auto captured metadata preview */}
-            <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50/70 p-3 text-[11px] text-slate-500 space-y-1">
-              <div className="flex items-center justify-between">
-                <span className="font-bold text-slate-600">Contexto técnico capturado automáticamente:</span>
-                <span className="text-[10px] text-emerald-600 font-bold">✓ Listo</span>
+            {/* Auto captured metadata preview with exact section and URL */}
+            <div className="rounded-xl border border-slate-200 bg-slate-50/80 p-3 text-xs text-slate-600 space-y-2 dark:border-slate-800 dark:bg-slate-800/60 dark:text-slate-300">
+              <div className="flex items-center justify-between pb-1.5 border-b border-slate-200 dark:border-slate-700">
+                <span className="font-semibold text-slate-800 dark:text-slate-200 flex items-center gap-1.5">
+                  <Sparkles className="h-3.5 w-3.5 text-blue-600 dark:text-blue-400" />
+                  Contexto técnico capturado automáticamente:
+                </span>
+                <span className="inline-flex items-center gap-1 text-[11px] text-emerald-600 font-semibold dark:text-emerald-400">
+                  <CheckCircle2 className="h-3.5 w-3.5" /> Listo
+                </span>
               </div>
-              <p>Usuario: <span className="font-mono text-slate-700">{user?.email ?? 'N/A'}</span> ({profile?.role ?? 'VIEWER'})</p>
-              <p className="truncate">URL: <span className="font-mono text-slate-700">{currentUrl}</span></p>
-              <p>Resolución: <span className="font-mono text-slate-700">{screenResolution}</span></p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-1.5 text-[11px]">
+                <div className="flex items-center gap-1.5">
+                  <Building2 className="h-3.5 w-3.5 text-slate-400 shrink-0" />
+                  <span className="text-slate-500 dark:text-slate-400">Sección:</span>
+                  <span className="font-semibold text-blue-700 dark:text-blue-300">{tabName}</span>
+                  <span className="font-mono text-[10px] text-slate-400 dark:text-slate-500">({tabKey})</span>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <User className="h-3.5 w-3.5 text-slate-400 shrink-0" />
+                  <span className="text-slate-500 dark:text-slate-400">Usuario:</span>
+                  <span className="font-mono text-slate-800 dark:text-slate-200 truncate">{user?.email ?? 'N/A'}</span>
+                  <span className="text-[10px] uppercase font-semibold text-slate-500">({profile?.role ?? 'OPERATOR'})</span>
+                </div>
+                <div className="flex items-center gap-1.5 sm:col-span-2">
+                  <Globe className="h-3.5 w-3.5 text-slate-400 shrink-0" />
+                  <span className="text-slate-500 dark:text-slate-400">URL:</span>
+                  <span className="font-mono text-slate-800 dark:text-slate-200 select-all truncate">{currentUrl}</span>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <Building2 className="h-3.5 w-3.5 text-slate-400 shrink-0" />
+                  <span className="text-slate-500 dark:text-slate-400">Almacén:</span>
+                  <span className="font-medium text-slate-800 dark:text-slate-200">{warehouseName}</span>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <Monitor className="h-3.5 w-3.5 text-slate-400 shrink-0" />
+                  <span className="text-slate-500 dark:text-slate-400">Resolución:</span>
+                  <span className="font-mono text-slate-800 dark:text-slate-200">{screenResolution}</span>
+                </div>
+              </div>
             </div>
 
             <div className="flex flex-col-reverse sm:flex-row justify-end gap-2 pt-2">
               <button
                 type="button"
                 onClick={handleClose}
-                className="w-full sm:w-auto rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-xs font-bold text-slate-600 hover:bg-slate-50 text-center"
+                className="w-full sm:w-auto rounded-lg border border-slate-200 bg-white px-4 py-2 text-xs font-semibold text-slate-700 shadow-xs hover:bg-slate-50 transition dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700"
               >
                 Cancelar
               </button>
               <button
                 type="submit"
                 disabled={loading}
-                className="w-full sm:w-auto rounded-xl bg-blue-900 px-5 py-2.5 text-xs font-bold text-white shadow hover:bg-blue-800 disabled:opacity-50 text-center"
+                className="inline-flex items-center justify-center gap-1.5 w-full sm:w-auto rounded-lg bg-blue-600 px-5 py-2 text-xs font-semibold text-white shadow-xs hover:bg-blue-700 disabled:opacity-50 transition"
               >
-                {loading ? 'Enviando...' : 'Enviar Reporte'}
+                {loading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5" />}
+                <span>{loading ? 'Enviando...' : 'Enviar Reporte'}</span>
               </button>
             </div>
           </form>

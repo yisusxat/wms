@@ -210,12 +210,17 @@ function HomePageContent() {
   const { isDark, toggleTheme } = useTheme();
   const { showToast } = useToast();
 
-  // Restore active tab from localStorage so page reload preserves the current section
+  // Restore active tab from URL or localStorage so page reload/direct link preserves current section
   const [tab, setTab] = useState<Tab>(() => {
     if (typeof window !== 'undefined') {
       try {
+        const urlParams = new URLSearchParams(window.location.search);
+        const fromUrl = urlParams.get('tab') as Tab;
+        if (fromUrl && baseTabs.some((t) => t.id === fromUrl)) {
+          return fromUrl;
+        }
         const saved = localStorage.getItem('wms_active_tab') as Tab;
-        if (saved && baseTabs.some(t => t.id === saved)) {
+        if (saved && baseTabs.some((t) => t.id === saved)) {
           return saved;
         }
       } catch {}
@@ -230,8 +235,26 @@ function HomePageContent() {
     setDataVersion((v) => v + 1);
     try {
       localStorage.setItem('wms_active_tab', newTab);
+      if (typeof window !== 'undefined') {
+        const url = new URL(window.location.href);
+        url.searchParams.set('tab', newTab);
+        window.history.replaceState({}, '', url.toString());
+      }
     } catch {}
   }, []);
+
+  // Keep browser address bar in sync with active tab
+  useEffect(() => {
+    if (typeof window !== 'undefined' && user) {
+      try {
+        const url = new URL(window.location.href);
+        if (url.searchParams.get('tab') !== tab) {
+          url.searchParams.set('tab', tab);
+          window.history.replaceState({}, '', url.toString());
+        }
+      } catch {}
+    }
+  }, [tab, user]);
 
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(true);
@@ -983,7 +1006,17 @@ function HomePageContent() {
       )}
 
       {/* Modals - Mounted only when active to save memory and avoid DOM overhead */}
-      {supportOpen ? <SupportModal isOpen={supportOpen} onClose={() => setSupportOpen(false)} user={user} profile={profile} /> : null}
+      {supportOpen ? (
+        <SupportModal
+          isOpen={supportOpen}
+          onClose={() => setSupportOpen(false)}
+          user={user}
+          profile={profile}
+          currentTab={tab}
+          currentTabLabel={visibleTabs.find((t) => t.id === tab)?.label ?? 'Dashboard'}
+          warehouseName="Bodega Central"
+        />
+      ) : null}
       {auditOpen ? <AuditLogsModal isOpen={auditOpen} onClose={() => setAuditOpen(false)} token={token} /> : null}
       {legalOpen ? <LegalModal isOpen={legalOpen} onClose={() => setLegalOpen(false)} token={token} onAnonymized={signOut} /> : null}
       {twoFactorOpen ? <TwoFactorModal isOpen={twoFactorOpen} onClose={() => setTwoFactorOpen(false)} userEmail={user?.email} /> : null}

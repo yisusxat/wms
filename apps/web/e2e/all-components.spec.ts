@@ -486,6 +486,7 @@ test.describe('7. Modales de Soporte, Legal, Auditoría y Seguridad', () => {
     await page.getByRole('button', { name: /Soporte/i }).first().click();
     await expect(page.getByRole('heading', { name: 'Mesa de Ayuda y Soporte WMS' })).toBeVisible();
     await expect(page.getByText('Contexto técnico capturado automáticamente')).toBeVisible();
+    await expect(page.getByText('Sección:')).toBeVisible();
     await page.getByRole('button', { name: 'Cancelar' }).click();
   });
 

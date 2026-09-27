@@ -8,7 +8,7 @@ const FALLBACK_RESEND_KEY = Buffer.from('cmVfR1JaMkZlOGRfQ1NlcE0xWURkTHpTS3FXR2l
 export async function POST(req: Request) {
   try {
     const body = await req.json();
-    const { subject, category, description, user, role, url, userAgent, screenResolution } = body;
+    const { subject, category, description, user, role, url, userAgent, screenResolution, section, tab, warehouse } = body;
 
     const resendApiKey = process.env.RESEND_API_KEY || FALLBACK_RESEND_KEY;
     const emailFrom = process.env.EMAIL_FROM || 'WMS Soporte <onboarding@resend.dev>';
@@ -29,7 +29,7 @@ export async function POST(req: Request) {
           body: JSON.stringify({
             from: emailFrom,
             to: [supportTarget],
-            subject: '[Ticket Soporte - ' + category + '] ' + subject,
+            subject: '[Ticket Soporte - ' + category + '] [' + (section || tab || 'General') + '] ' + subject,
             html: '<div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 24px; color: #1e293b; background: #ffffff; border: 1px solid #e2e8f0; border-radius: 12px;">' +
               '<div style="background-color: #1e3a8a; padding: 18px; border-radius: 8px; text-align: center; color: white;">' +
               '<h2 style="margin: 0; font-size: 20px;">Nueva Incidencia de Soporte WMS</h2>' +
@@ -37,6 +37,8 @@ export async function POST(req: Request) {
               '<div style="margin-top: 20px;">' +
               '<p style="font-size: 14px;"><strong>Asunto:</strong> ' + subject + '</p>' +
               '<p style="font-size: 14px;"><strong>Categoría:</strong> ' + category + '</p>' +
+              '<p style="font-size: 14px;"><strong>Sección / Pantalla:</strong> ' + (section || tab || 'Dashboard') + ' <span style="color:#64748b; font-family:monospace;">(' + (tab || 'dashboard') + ')</span></p>' +
+              '<p style="font-size: 14px;"><strong>Almacén:</strong> ' + (warehouse || 'Bodega Central') + '</p>' +
               '<p style="font-size: 14px;"><strong>Reportado por:</strong> ' + (user || 'Anónimo') + ' (' + (role || 'Usuario') + ')</p>' +
               '<div style="margin-top: 16px; padding: 14px; background: #f8fafc; border-left: 4px solid #2563eb; border-radius: 4px;">' +
               '<p style="margin: 0; font-size: 14px; font-weight: bold;">Descripción:</p>' +
@@ -44,7 +46,9 @@ export async function POST(req: Request) {
               '</div>' +
               '<div style="margin-top: 16px; padding: 12px; background: #f1f5f9; border-radius: 6px; font-size: 11px; color: #64748b;">' +
               '<p style="margin: 0;"><strong>Contexto técnico del reporte:</strong></p>' +
-              '<p style="margin: 4px 0 0 0;">URL: ' + (url || '-') + '</p>' +
+              '<p style="margin: 4px 0 0 0;">URL completa: ' + (url || '-') + '</p>' +
+              '<p style="margin: 2px 0 0 0;">Sección activa: ' + (section || tab || '-') + '</p>' +
+              '<p style="margin: 2px 0 0 0;">Almacén: ' + (warehouse || 'Bodega Central') + '</p>' +
               '<p style="margin: 2px 0 0 0;">Resolución: ' + (screenResolution || '-') + '</p>' +
               '<p style="margin: 2px 0 0 0;">Navegador: ' + (userAgent || '-') + '</p>' +
               '<p style="margin: 2px 0 0 0;">Fecha: ' + new Date().toISOString() + '</p>' +
@@ -82,6 +86,9 @@ export async function POST(req: Request) {
           subject,
           category,
           description,
+          section: section || tab || 'Dashboard',
+          tab: tab || 'dashboard',
+          warehouse: warehouse || 'Bodega Central',
           user: user || 'Anónimo',
           role: role || 'VIEWER',
           url,
