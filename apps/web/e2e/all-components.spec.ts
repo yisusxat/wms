@@ -561,6 +561,55 @@ test.describe('7. Modales de Soporte, Legal, Auditoría y Seguridad', () => {
     await expect(page.getByText('Aceite Premier 1000ml')).toBeVisible();
   });
 
+  test('BarcodeScanner: Visión OCR con API, Autofoco y Auto-entrega >= 90%', async ({ page }) => {
+    // 1. Test the OCR API endpoint directly
+    const apiRes = await page.request.post('/api/ocr', {
+      data: {
+        rawText: 'LOTE 49 FECHA 2026-10 SKU: BEV-OO1 PESO 12KG',
+        catalog: [
+          { sku: 'BEV-001', name: 'Cerveza Artesanal IPA' },
+          { sku: 'ACE-PRE-001', name: 'Aceite Premier 1000ml' },
+        ],
+      },
+    });
+
+    expect(apiRes.ok()).toBeTruthy();
+    const data = await apiRes.json();
+    expect(data.success).toBe(true);
+    expect(data.autoDeliver).toBe(true);
+    expect(data.accuracy).toBeGreaterThanOrEqual(90);
+    expect(data.winner).toBeTruthy();
+    expect(data.winner.code).toBe('BEV-001');
+    expect(data.winner.isKnownProduct).toBe(true);
+    expect(data.winner.productName).toBe('Cerveza Artesanal IPA');
+
+    // 2. Test warehouse location recognition
+    const locRes = await page.request.post('/api/ocr', {
+      data: {
+        rawText: 'RACK PRINCIPAL NIVEL 1 CASILLERO A-C-01-05',
+      },
+    });
+    const locData = await locRes.json();
+    expect(locData.success).toBe(true);
+    expect(locData.autoDeliver).toBe(true);
+    expect(locData.winner.code).toBe('A-C-01-05');
+    expect(locData.winner.confidence).toBeGreaterThanOrEqual(95);
+
+    // 3. Test scanner UI autofocus controls and OCR mode
+    await loginAndNavigate(page);
+    await page.getByRole('button', { name: /Escanear/i }).first().click();
+    await expect(page.getByText('Escáner de Código')).toBeVisible();
+
+    // Switch to OCR Vision tab
+    await page.getByRole('button', { name: /Visión OCR/i }).click();
+    await expect(page.getByRole('button', { name: /Capturar y Auto-Entregar/i })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Autofoco', exact: true })).toBeVisible();
+
+    // Close scanner
+    await page.getByTitle('Cerrar escáner').click();
+    await expect(page.getByText('Escáner de Código')).not.toBeVisible();
+  });
+
   test('UI/UX Avanzado: Paleta de Comandos Ctrl+K, Modo Oscuro/Industrial, Heatmap 2D y Stepper', async ({ page }) => {
     await loginAndNavigate(page);
 

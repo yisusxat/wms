@@ -58,6 +58,8 @@ import {
   Truck,
   ArrowDownLeft,
   EyeOff,
+  Focus,
+  Crosshair,
   LucideProps,
 } from "lucide-react";
 
@@ -131,7 +133,9 @@ export type IconName =
   | "arrow-left-right"
   | "package"
   | "eye-off"
-  | "eye";
+  | "eye"
+  | "focus"
+  | "crosshair";
 
 const iconMap: Record<IconName, React.ComponentType<LucideProps>> = {
   dashboard: LayoutDashboard,
@@ -204,6 +208,8 @@ const iconMap: Record<IconName, React.ComponentType<LucideProps>> = {
   package: Package,
   "eye-off": EyeOff,
   eye: Eye,
+  focus: Focus,
+  crosshair: Crosshair,
 };
 
 export interface IconProps extends LucideProps {

@@ -8,7 +8,9 @@ import {
   preprocessCanvasForOCR,
   extractSkuCandidates,
   recognizeTextFromCanvas,
+  getAutoDeliverWinner,
   SkuCandidate,
+  KnownProductLookup,
 } from "../../lib/ocrService";
 
 interface Props {
@@ -49,6 +51,14 @@ export default function BarcodeScanner({
   const [hasTorch, setHasTorch] = useState(false);
   const [facingMode, setFacingMode] = useState<"environment" | "user">("environment");
 
+  // Autofocus state
+  const [hasAutofocus, setHasAutofocus] = useState(false);
+  const [focusIndicator, setFocusIndicator] = useState<{ x: number; y: number; active: boolean } | null>(null);
+  const focusTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Active product catalog (auto-hydrated from API if caller provided none)
+  const [activeCatalog, setActiveCatalog] = useState<KnownProductLookup[]>(catalogProducts);
+
   // Computer Vision & OCR state
   const [ocrLoading, setOcrLoading] = useState(false);
   const [ocrProgress, setOcrProgress] = useState(0);
@@ -57,6 +67,41 @@ export default function BarcodeScanner({
   const [invertContrast, setInvertContrast] = useState(false);
   const [continuousOcr, setContinuousOcr] = useState(false);
   const [ocrRawText, setOcrRawText] = useState("");
+  const [autoDeliveredWinner, setAutoDeliveredWinner] = useState<SkuCandidate | null>(null);
+
+  // Auto-hydrate product catalog from backend if not provided
+  useEffect(() => {
+    if (catalogProducts && catalogProducts.length > 0) {
+      setActiveCatalog(catalogProducts);
+      return;
+    }
+
+    let isMounted = true;
+    const fetchCatalog = async () => {
+      try {
+        const res = await fetch("/api/products?pageSize=100");
+        if (res.ok) {
+          const json = await res.json();
+          if (isMounted && json && Array.isArray(json.items)) {
+            setActiveCatalog(
+              json.items.map((p: { sku: string; name: string; barcode?: string }) => ({
+                sku: p.sku,
+                name: p.name,
+                barcode: p.barcode,
+              }))
+            );
+          }
+        }
+      } catch {
+        // Non-blocking fallback
+      }
+    };
+
+    void fetchCatalog();
+    return () => {
+      isMounted = false;
+    };
+  }, [catalogProducts]);
 
   // Haptic feedback
   const triggerHaptic = useCallback(() => {
@@ -155,6 +200,48 @@ export default function BarcodeScanner({
     }
     setTorchOn(false);
     setHasTorch(false);
+    setHasAutofocus(false);
+    setFocusIndicator(null);
+  }, []);
+
+  // Autofocus trigger function (supports coordinates or center)
+  const triggerAutofocus = useCallback(async (x?: number, y?: number) => {
+    const track = streamRef.current?.getVideoTracks()[0];
+    if (focusTimeoutRef.current) {
+      clearTimeout(focusTimeoutRef.current);
+    }
+
+    setFocusIndicator({
+      x: x ?? 140,
+      y: y ?? 100,
+      active: true,
+    });
+
+    if (track) {
+      try {
+        const caps = (track.getCapabilities?.() || {}) as Record<string, unknown>;
+        if (caps && "focusMode" in caps) {
+          // Cycle auto then continuous to force immediate hardware lens refocus
+          await track.applyConstraints({
+            advanced: [{ focusMode: "auto" } as MediaTrackConstraintSet],
+          } as MediaTrackConstraints);
+
+          setTimeout(async () => {
+            try {
+              await track.applyConstraints({
+                advanced: [{ focusMode: "continuous" } as MediaTrackConstraintSet],
+              } as MediaTrackConstraints);
+            } catch {}
+          }, 600);
+        }
+      } catch {
+        // Ignore constraint application error
+      }
+    }
+
+    focusTimeoutRef.current = setTimeout(() => {
+      setFocusIndicator((prev) => (prev ? { ...prev, active: false } : null));
+    }, 1200);
   }, []);
 
   const startCamera = useCallback(async () => {
@@ -169,11 +256,19 @@ export default function BarcodeScanner({
     }
 
     try {
+      // Configure camera with continuous autofocus, continuous exposure, and high resolution
       const stream = await navigator.mediaDevices.getUserMedia({
         video: {
           facingMode: { ideal: facingMode },
-          width: { ideal: 1280 },
-          height: { ideal: 720 },
+          width: { ideal: 1920, min: 1280 },
+          height: { ideal: 1080, min: 720 },
+          advanced: [
+            {
+              focusMode: "continuous",
+              exposureMode: "continuous",
+              whiteBalanceMode: "continuous",
+            } as any,
+          ],
         },
       });
       streamRef.current = stream;
@@ -184,9 +279,22 @@ export default function BarcodeScanner({
       video.srcObject = stream;
       await video.play();
 
-      // Check torch capability
       const track = stream.getVideoTracks()[0];
-      const caps = track?.getCapabilities?.() as Record<string, unknown> | undefined;
+      const caps = (track?.getCapabilities?.() || {}) as Record<string, unknown>;
+
+      // Check and apply hardware continuous autofocus
+      if (caps && "focusMode" in caps) {
+        setHasAutofocus(true);
+        try {
+          await track.applyConstraints({
+            advanced: [{ focusMode: "continuous" } as MediaTrackConstraintSet],
+          } as MediaTrackConstraints);
+        } catch {
+          // Ignore constraint error
+        }
+      }
+
+      // Check torch capability
       if (caps && "torch" in caps) {
         setHasTorch(true);
       }
@@ -286,9 +394,13 @@ export default function BarcodeScanner({
     try {
       setOcrLoading(true);
       setOcrProgress(15);
-      setOcrStatusText("Capturando cuadro de cámara...");
+      setOcrStatusText("Enfocando y capturando cuadro...");
+      setAutoDeliveredWinner(null);
 
-      // Compute bounding box for reticle (middle 70% width, 35% height)
+      // Trigger automatic lens refocus before capturing frame
+      await triggerAutofocus();
+
+      // Compute bounding box for reticle (middle 75% width, 38% height)
       const vWidth = video.videoWidth || 1280;
       const vHeight = video.videoHeight || 720;
       const cropWidth = Math.round(vWidth * 0.75);
@@ -296,7 +408,7 @@ export default function BarcodeScanner({
       const cropX = Math.round((vWidth - cropWidth) / 2);
       const cropY = Math.round((vHeight - cropHeight) / 2);
 
-      setOcrStatusText("Aplicando visión artificial (Otsu & contraste)...");
+      setOcrStatusText("Aplicando filtros de nitidez y contraste (Otsu & Laplacian)...");
       setOcrProgress(30);
 
       // Preprocess frame via Computer Vision Canvas algorithms
@@ -308,41 +420,104 @@ export default function BarcodeScanner({
           contrast: 1.6,
           binarize: true,
           scaleFactor: 2.2,
+          sharpen: true,
         }
       );
 
-      setOcrStatusText("Reconociendo formas de dígitos y texto...");
+      setOcrStatusText("Analizando patrones con motor OCR...");
       setOcrProgress(50);
 
-      // Execute AI OCR Character Recognition
-      const ocrResult = await recognizeTextFromCanvas(processedCanvas, (pct, msg) => {
-        setOcrProgress(pct);
-        setOcrStatusText(msg);
-      });
+      // Convert canvas to image base64 for API transmission
+      const dataUrl = processedCanvas.toDataURL("image/jpeg", 0.85);
 
-      setOcrRawText(ocrResult.text);
+      let apiWinner: SkuCandidate | null = null;
+      let apiCandidates: SkuCandidate[] = [];
 
-      // Extract SKU Candidates using regex & database cross-referencing
-      const candidates = extractSkuCandidates(ocrResult.text, catalogProducts);
-      setOcrCandidates(candidates);
+      // 1. Check with backend OCR API Route
+      try {
+        const apiResponse = await fetch("/api/ocr", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            image: dataUrl,
+            catalog: activeCatalog,
+          }),
+        });
 
+        if (apiResponse.ok) {
+          const apiData = await apiResponse.json();
+          if (apiData.candidates && Array.isArray(apiData.candidates) && apiData.candidates.length > 0) {
+            apiCandidates = apiData.candidates;
+            apiWinner = apiData.winner || null;
+            if (apiData.rawText) {
+              setOcrRawText(apiData.rawText);
+            }
+          }
+        }
+      } catch (apiErr) {
+        console.warn("[BarcodeScanner] API OCR fallback to local worker:", apiErr);
+      }
+
+      // 2. If API didn't return high confidence, run client-side Tesseract.js with full fuzzy engine
+      let finalCandidates = apiCandidates;
+      let winner = apiWinner;
+
+      if (!winner || winner.confidence < 90) {
+        setOcrProgress(65);
+        setOcrStatusText("Refinando reconocimiento neuronal en cliente...");
+
+        const ocrResult = await recognizeTextFromCanvas(processedCanvas, (pct, msg) => {
+          setOcrProgress(Math.round(65 + pct * 0.3));
+          setOcrStatusText(msg);
+        });
+
+        setOcrRawText(ocrResult.text);
+
+        // Extract SKU Candidates using regex, location validation, confusion correction & catalog
+        const localCandidates = extractSkuCandidates(ocrResult.text, activeCatalog);
+        const localWinner = getAutoDeliverWinner(localCandidates);
+
+        // Choose best between API and local
+        if (localWinner && (!winner || localWinner.confidence > winner.confidence)) {
+          winner = localWinner;
+        }
+
+        // Merge candidates uniquely
+        const mergedMap = new Map<string, SkuCandidate>();
+        for (const c of [...localCandidates, ...apiCandidates]) {
+          const ex = mergedMap.get(c.code);
+          if (!ex || ex.confidence < c.confidence) {
+            mergedMap.set(c.code, c);
+          }
+        }
+        finalCandidates = Array.from(mergedMap.values()).sort((a, b) => b.confidence - a.confidence);
+      }
+
+      setOcrCandidates(finalCandidates);
       setOcrLoading(false);
       setOcrProgress(100);
 
-      if (candidates.length === 1 && candidates[0].confidence >= 90) {
-        // High confidence single match: auto-confirm
-        handleDetectedCode(candidates[0].code);
-      } else if (candidates.length > 0) {
-        setOcrStatusText(`Se detectaron ${candidates.length} posibles códigos de SKU.`);
+      // 3. AUTO-ENTREGA AL SUPERAR EL 90% DE ACIERTO
+      if (winner && winner.confidence >= 90) {
+        setAutoDeliveredWinner(winner);
+        setOcrStatusText(
+          `✓ ${winner.confidence}% Precisión · Auto-entregado: ${winner.code}${winner.productName ? ` (${winner.productName})` : ""}`
+        );
+        handleDetectedCode(winner.code, true);
+      } else if (finalCandidates.length > 0) {
+        const topAcc = finalCandidates[0].confidence;
+        setOcrStatusText(
+          `Se detectaron ${finalCandidates.length} posibles códigos (${topAcc}% de acierto máx). Toca para seleccionar.`
+        );
       } else {
-        setOcrStatusText("No se detectó un SKU legible. Ajusta la distancia o iluminación.");
+        setOcrStatusText("No se detectó un SKU legible. Toca la pantalla para re-enfocar.");
       }
     } catch (err: unknown) {
       console.warn("OCR recognition error:", err);
       setOcrLoading(false);
-      setOcrStatusText("Error al procesar OCR. Verifica la conexión o usa ingreso manual.");
+      setOcrStatusText("Error al procesar OCR. Toca para enfocar o usa ingreso manual.");
     }
-  }, [catalogProducts, handleDetectedCode, invertContrast, ocrLoading]);
+  }, [activeCatalog, handleDetectedCode, invertContrast, ocrLoading, triggerAutofocus]);
 
   // Continuous OCR interval listener
   useEffect(() => {
@@ -373,6 +548,7 @@ export default function BarcodeScanner({
       setOcrLoading(true);
       setOcrStatusText("Cargando fotografía de alta resolución...");
       setOcrProgress(20);
+      setAutoDeliveredWinner(null);
 
       const img = new Image();
       img.src = URL.createObjectURL(file);
@@ -384,23 +560,54 @@ export default function BarcodeScanner({
       const processedCanvas = preprocessCanvasForOCR(
         img,
         { x: 0, y: 0, width: img.naturalWidth, height: img.naturalHeight },
-        { invert: invertContrast, contrast: 1.5, binarize: true, scaleFactor: 1 }
+        { invert: invertContrast, contrast: 1.5, binarize: true, scaleFactor: 1, sharpen: true }
       );
 
-      const ocrResult = await recognizeTextFromCanvas(processedCanvas, (pct, msg) => {
-        setOcrProgress(pct);
-        setOcrStatusText(msg);
-      });
+      // Check API route first
+      const dataUrl = processedCanvas.toDataURL("image/jpeg", 0.9);
+      let candidates: SkuCandidate[] = [];
+      let winner: SkuCandidate | null = null;
 
-      setOcrRawText(ocrResult.text);
-      const candidates = extractSkuCandidates(ocrResult.text, catalogProducts);
+      try {
+        const apiResponse = await fetch("/api/ocr", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            image: dataUrl,
+            catalog: activeCatalog,
+          }),
+        });
+
+        if (apiResponse.ok) {
+          const apiData = await apiResponse.json();
+          if (apiData.candidates && Array.isArray(apiData.candidates) && apiData.candidates.length > 0) {
+            candidates = apiData.candidates;
+            winner = apiData.winner;
+          }
+        }
+      } catch {}
+
+      if (!winner || winner.confidence < 90) {
+        const ocrResult = await recognizeTextFromCanvas(processedCanvas, (pct, msg) => {
+          setOcrProgress(pct);
+          setOcrStatusText(msg);
+        });
+
+        setOcrRawText(ocrResult.text);
+        const localCandidates = extractSkuCandidates(ocrResult.text, activeCatalog);
+        candidates = localCandidates;
+        winner = getAutoDeliverWinner(localCandidates);
+      }
+
       setOcrCandidates(candidates);
-
       setOcrLoading(false);
       setOcrProgress(100);
 
-      if (candidates.length === 1 && candidates[0].confidence >= 90) {
-        handleDetectedCode(candidates[0].code);
+      // AUTO-ENTREGA >= 90%
+      if (winner && winner.confidence >= 90) {
+        setAutoDeliveredWinner(winner);
+        setOcrStatusText(`✓ ${winner.confidence}% Precisión · Auto-entregado: ${winner.code}`);
+        handleDetectedCode(winner.code, true);
       }
     } catch {
       setOcrLoading(false);
@@ -434,6 +641,14 @@ export default function BarcodeScanner({
     }
   };
 
+  // Viewfinder tap-to-focus handler
+  const handleViewfinderClick = (e: React.MouseEvent<HTMLDivElement>) => {
+    const rect = e.currentTarget.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
+    void triggerAutofocus(x, y);
+  };
+
   return (
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/75 p-0 sm:p-4 backdrop-blur-xs">
       <div className="bg-white dark:bg-slate-900 rounded-t-2xl sm:rounded-xl w-full max-w-md shadow-2xl overflow-hidden animate-fadeIn border border-slate-200 dark:border-slate-800">
@@ -441,6 +656,28 @@ export default function BarcodeScanner({
         <div className="pt-2 pb-1 flex justify-center sm:hidden bg-slate-900">
           <div className="w-10 h-1 rounded-full bg-slate-600" />
         </div>
+
+        {/* Auto-delivery banner when >= 90% match detected */}
+        {autoDeliveredWinner && (
+          <div className="bg-emerald-600 text-white px-4 py-2.5 flex items-center justify-between text-xs animate-fadeIn border-b border-emerald-500 shadow-md">
+            <div className="flex items-center gap-2">
+              <Icon name="check-circle" size={16} className="text-emerald-100" />
+              <div>
+                <span className="font-bold">{autoDeliveredWinner.confidence}% Precisión</span>
+                <span className="mx-1.5 opacity-75">·</span>
+                <span className="font-mono font-semibold">{autoDeliveredWinner.code}</span>
+                {autoDeliveredWinner.productName && (
+                  <span className="ml-1 opacity-90 truncate max-w-[140px] inline-block align-bottom">
+                    ({autoDeliveredWinner.productName})
+                  </span>
+                )}
+              </div>
+            </div>
+            <span className="bg-emerald-800/80 px-2 py-0.5 rounded text-[10px] font-semibold uppercase tracking-wider">
+              Auto-entregado
+            </span>
+          </div>
+        )}
 
         {/* Header */}
         <div className="flex items-center justify-between px-4 py-3 bg-slate-900 text-white">
@@ -452,6 +689,18 @@ export default function BarcodeScanner({
             </div>
           </div>
           <div className="flex items-center gap-1.5">
+            {/* Autofocus manual trigger button */}
+            {(mode === "camera" || mode === "ocr") && status !== "error" && (
+              <button
+                type="button"
+                onClick={() => void triggerAutofocus()}
+                className="p-2 bg-slate-800 hover:bg-slate-700 text-slate-200 hover:text-white rounded-lg transition-colors min-h-[38px] min-w-[38px] flex items-center justify-center cursor-pointer"
+                title="Autofoco continuo / Re-enfocar lente"
+              >
+                <Icon name="focus" size={16} className="text-amber-400" />
+              </button>
+            )}
+
             {(mode === "camera" || mode === "ocr") && status !== "error" && (
               <button
                 type="button"
@@ -510,7 +759,7 @@ export default function BarcodeScanner({
             }`}
           >
             <Icon name="ocr" size={15} />
-            <span>Visión OCR</span>
+            <span>Visión OCR API</span>
           </button>
 
           <button
@@ -532,7 +781,7 @@ export default function BarcodeScanner({
 
         {/* 1. Barcode 2D Imager Camera Mode */}
         {mode === "camera" && (
-          <div className="relative bg-black">
+          <div className="relative bg-black" onClick={handleViewfinderClick}>
             {status === "error" ? (
               <div className="p-6 text-center space-y-4 bg-slate-900 text-white min-h-[240px] flex flex-col items-center justify-center">
                 <div className="w-10 h-10 rounded-full bg-red-500/20 text-red-400 flex items-center justify-center">
@@ -545,7 +794,7 @@ export default function BarcodeScanner({
                 <div className="flex gap-2 w-full pt-2">
                   <button
                     type="button"
-                    onClick={() => startCamera()}
+                    onClick={() => void startCamera()}
                     className="flex-1 py-2 px-3 bg-slate-700 hover:bg-slate-600 rounded-lg text-xs font-medium text-white transition-colors min-h-[40px] flex items-center justify-center gap-1.5 cursor-pointer"
                   >
                     <Icon name="refresh" size={14} /> Reintentar
@@ -564,8 +813,20 @@ export default function BarcodeScanner({
               </div>
             ) : (
               <>
-                <video ref={videoRef} className="w-full h-64 sm:h-56 object-cover" playsInline muted />
-                
+                <video ref={videoRef} className="w-full h-64 sm:h-56 object-cover cursor-crosshair" playsInline muted />
+
+                {/* Tap-to-Focus Indicator Ring */}
+                {focusIndicator && focusIndicator.active && (
+                  <div
+                    className="absolute pointer-events-none -translate-x-1/2 -translate-y-1/2 border-2 border-emerald-400 rounded-lg w-14 h-14 flex items-center justify-center animate-ping"
+                    style={{ left: focusIndicator.x, top: focusIndicator.y }}
+                  >
+                    <span className="text-[10px] text-emerald-300 font-mono font-bold bg-black/60 px-1 rounded">
+                      AF
+                    </span>
+                  </div>
+                )}
+
                 {/* Aiming Reticle for Barcode / QR */}
                 <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
                   <div
@@ -577,7 +838,7 @@ export default function BarcodeScanner({
                     <div className="absolute top-0 right-0 w-6 h-6 border-t-4 border-r-4 rounded-tr-lg border-blue-500" />
                     <div className="absolute bottom-0 left-0 w-6 h-6 border-b-4 border-l-4 rounded-bl-lg border-blue-500" />
                     <div className="absolute bottom-0 right-0 w-6 h-6 border-b-4 border-r-4 rounded-br-lg border-blue-500" />
-                    
+
                     {status === "scanning" && (
                       <div className="absolute inset-x-0 top-0 h-0.5 bg-blue-400 shadow-[0_0_8px_#60a5fa] animate-[scan-line_2s_linear_infinite]" />
                     )}
@@ -587,12 +848,12 @@ export default function BarcodeScanner({
                 <div className="absolute bottom-3 inset-x-0 text-center px-4 pointer-events-none">
                   {status === "starting" && (
                     <span className="text-white text-xs bg-black/75 px-3 py-1 rounded-full font-medium inline-block">
-                      Iniciando 2D Imager...
+                      Iniciando 2D Imager & Autofoco...
                     </span>
                   )}
                   {status === "scanning" && (
                     <span className="text-white text-xs bg-black/75 px-3 py-1 rounded-full font-medium inline-block">
-                      Apunta al código de barras o QR
+                      Apunta al código o toca para enfocar
                     </span>
                   )}
                   {status === "detected" && (
@@ -609,8 +870,20 @@ export default function BarcodeScanner({
         {/* 2. Computer Vision & OCR Mode (Printed Numbers / Non-barcoded SKUs) */}
         {mode === "ocr" && (
           <div className="relative bg-black flex flex-col">
-            <div className="relative overflow-hidden">
+            <div className="relative overflow-hidden cursor-crosshair" onClick={handleViewfinderClick}>
               <video ref={videoRef} className="w-full h-56 sm:h-52 object-cover" playsInline muted />
+
+              {/* Tap-to-Focus Indicator Ring */}
+              {focusIndicator && focusIndicator.active && (
+                <div
+                  className="absolute pointer-events-none -translate-x-1/2 -translate-y-1/2 border-2 border-amber-400 rounded-lg w-14 h-14 flex items-center justify-center animate-ping"
+                  style={{ left: focusIndicator.x, top: focusIndicator.y }}
+                >
+                  <span className="text-[10px] text-amber-300 font-mono font-bold bg-black/60 px-1 rounded">
+                    AF
+                  </span>
+                </div>
+              )}
 
               {/* OCR Targeted Text Reticle */}
               <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
@@ -637,7 +910,7 @@ export default function BarcodeScanner({
               {/* Overlay Guidance */}
               <div className="absolute top-2 inset-x-0 text-center px-4 pointer-events-none">
                 <span className="text-white text-[11px] bg-slate-900/85 px-2.5 py-1 rounded-md font-medium inline-block border border-slate-700">
-                  Enfoca el número o SKU impreso en la caja
+                  Enfoque continuo activo · Toca para re-enfocar
                 </span>
               </div>
             </div>
@@ -657,10 +930,20 @@ export default function BarcodeScanner({
                   title="Activa si el texto es blanco sobre fondo oscuro"
                 >
                   <Icon name="sliders" size={13} />
-                  <span>{invertContrast ? "Fondo Oscuro (Activo)" : "Invertir Contraste"}</span>
+                  <span>{invertContrast ? "Fondo Oscuro" : "Invertir"}</span>
                 </button>
 
                 <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => void triggerAutofocus()}
+                    className="px-2.5 py-1.5 bg-amber-500/10 hover:bg-amber-500/20 text-amber-700 dark:text-amber-400 border border-amber-300 dark:border-amber-700/50 rounded-lg flex items-center gap-1.5 cursor-pointer transition-colors"
+                    title="Forzar re-enfoque de cámara"
+                  >
+                    <Icon name="focus" size={13} />
+                    <span>Autofoco</span>
+                  </button>
+
                   <label className="flex items-center gap-1.5 text-slate-600 dark:text-slate-400 cursor-pointer text-xs">
                     <input
                       type="checkbox"
@@ -692,7 +975,7 @@ export default function BarcodeScanner({
               {/* Primary OCR Capture Trigger Button (Industrial CTA Orange) */}
               <button
                 type="button"
-                onClick={() => captureAndRecognizeOcr()}
+                onClick={() => void captureAndRecognizeOcr()}
                 disabled={ocrLoading}
                 className="w-full bg-orange-600 hover:bg-orange-700 active:bg-orange-800 text-white font-semibold py-2.5 px-4 rounded-lg shadow-sm flex items-center justify-center gap-2 transition-all cursor-pointer min-h-[44px] disabled:opacity-50"
               >
@@ -704,7 +987,7 @@ export default function BarcodeScanner({
                 ) : (
                   <>
                     <Icon name="camera" size={16} />
-                    <span>Capturar y Reconocer SKU</span>
+                    <span>Capturar y Auto-Entregar (&ge; 90%)</span>
                   </>
                 )}
               </button>
@@ -722,9 +1005,14 @@ export default function BarcodeScanner({
               {/* Detected Candidate Badges */}
               {ocrCandidates.length > 0 && (
                 <div className="space-y-1.5 pt-1">
-                  <p className="text-[11px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
-                    Códigos SKU detectados (Toca para seleccionar):
-                  </p>
+                  <div className="flex items-center justify-between">
+                    <p className="text-[11px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
+                      Códigos reconocidos ({ocrCandidates[0].confidence}% máx):
+                    </p>
+                    <span className="text-[10px] text-slate-400">
+                      {ocrCandidates[0].confidence >= 90 ? "Auto-entregando..." : "Toca para elegir"}
+                    </span>
+                  </div>
                   <div className="flex flex-wrap gap-1.5 max-h-32 overflow-y-auto">
                     {ocrCandidates.map((candidate) => (
                       <button
@@ -732,9 +1020,11 @@ export default function BarcodeScanner({
                         type="button"
                         onClick={() => handleDetectedCode(candidate.code, true)}
                         className={`text-left px-2.5 py-1.5 rounded-lg border text-xs font-mono transition-all flex items-center gap-2 cursor-pointer ${
-                          candidate.isKnownProduct
-                            ? "bg-emerald-50 dark:bg-emerald-950/40 border-emerald-400 text-emerald-800 dark:text-emerald-300 font-bold"
-                            : "bg-blue-50 dark:bg-blue-950/40 border-blue-300 text-blue-800 dark:text-blue-300"
+                          candidate.confidence >= 90
+                            ? "bg-emerald-50 dark:bg-emerald-950/40 border-emerald-400 text-emerald-800 dark:text-emerald-300 font-bold shadow-xs"
+                            : candidate.isKnownProduct
+                            ? "bg-blue-50 dark:bg-blue-950/40 border-blue-400 text-blue-800 dark:text-blue-300"
+                            : "bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300"
                         }`}
                       >
                         <span className="font-bold">{candidate.code}</span>
@@ -743,7 +1033,13 @@ export default function BarcodeScanner({
                             ({candidate.productName})
                           </span>
                         )}
-                        <span className="text-[10px] opacity-75 font-sans">
+                        <span
+                          className={`text-[10px] font-sans px-1 rounded ${
+                            candidate.confidence >= 90
+                              ? "bg-emerald-200 dark:bg-emerald-900/60 text-emerald-900 dark:text-emerald-200 font-bold"
+                              : "opacity-75"
+                          }`}
+                        >
                           {candidate.confidence}%
                         </span>
                       </button>
