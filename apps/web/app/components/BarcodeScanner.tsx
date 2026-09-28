@@ -113,9 +113,7 @@ export default function BarcodeScanner({
   const [inventoryList, setInventoryList] = useState<ScannedInventoryProduct[]>(
     inventoryProducts && inventoryProducts.length > 0 ? inventoryProducts : DEFAULT_INVENTORY_SEED
   );
-  const [inventorySearchQuery, setInventorySearchQuery] = useState("");
   const [liveScannedQuery, setLiveScannedQuery] = useState("");
-  const [showInventoryTray, setShowInventoryTray] = useState(true);
 
   // Computer Vision & OCR state
   const [ocrLoading, setOcrLoading] = useState(false);
@@ -207,21 +205,7 @@ export default function BarcodeScanner({
     };
   }, [inventoryProducts]);
 
-  // Combined live filter query: manual query > input query > scanner live query
-  const effectiveFilterQuery = useMemo(() => {
-    if (mode === "manual" && manualValue.trim()) {
-      return manualValue.trim();
-    }
-    if (inventorySearchQuery.trim()) {
-      return inventorySearchQuery.trim();
-    }
-    return liveScannedQuery.trim();
-  }, [inventorySearchQuery, liveScannedQuery, manualValue, mode]);
 
-  // Reactive filtered inventory list recalculated on every keystroke, frame, or OCR candidate
-  const filteredInventory = useMemo(() => {
-    return filterInventoryByScan(inventoryList, effectiveFilterQuery, ocrCandidates);
-  }, [effectiveFilterQuery, inventoryList, ocrCandidates]);
 
   // Haptic feedback
   const triggerHaptic = useCallback(() => {
@@ -1324,137 +1308,6 @@ export default function BarcodeScanner({
               </button>
             </form>
           )}
-
-          {/* 4. REAL-TIME INVENTORY FILTERING TRAY */}
-          <div className="p-3.5 bg-slate-50 dark:bg-slate-800/80 border-t border-slate-200 dark:border-slate-800 space-y-2.5">
-            {/* Tray Header */}
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-1.5">
-                <Icon name="boxes" size={15} className="text-blue-600 dark:text-blue-400" />
-                <span className="text-xs font-bold text-slate-800 dark:text-slate-200">
-                  Inventario Filtrado en Tiempo Real ({filteredInventory.length})
-                </span>
-              </div>
-              <div className="flex items-center gap-2">
-                {effectiveFilterQuery && (
-                  <span className="flex items-center gap-1 text-[10px] text-emerald-600 dark:text-emerald-400 font-semibold bg-emerald-50 dark:bg-emerald-950/60 px-1.5 py-0.5 rounded border border-emerald-300 dark:border-emerald-800 animate-pulse">
-                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
-                    Filtrando por: &quot;{effectiveFilterQuery}&quot;
-                  </span>
-                )}
-                <button
-                  type="button"
-                  onClick={() => setShowInventoryTray((prev) => !prev)}
-                  className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 p-0.5 cursor-pointer"
-                  title="Expandir / Contraer lista de inventario"
-                >
-                  <Icon name={showInventoryTray ? "chevron-down" : "chevron-right"} size={14} />
-                </button>
-              </div>
-            </div>
-
-            {/* Quick Interactive Search / Filter Bar */}
-            <div className="relative">
-              <input
-                type="text"
-                value={inventorySearchQuery}
-                onChange={(e) => setInventorySearchQuery(e.target.value)}
-                placeholder="Filtro rápido en inventario (ej. arroz, BEV-001, A-C-01)..."
-                className="w-full bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg pl-8 pr-7 py-1.5 text-xs text-slate-900 dark:text-slate-100 placeholder-slate-400 focus:outline-none focus:ring-1 focus:ring-blue-500"
-              />
-              <div className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none">
-                <Icon name="search" size={13} />
-              </div>
-              {inventorySearchQuery && (
-                <button
-                  type="button"
-                  onClick={() => setInventorySearchQuery("")}
-                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 cursor-pointer"
-                  title="Limpiar búsqueda"
-                >
-                  <Icon name="close" size={12} />
-                </button>
-              )}
-            </div>
-
-            {/* Live Filtered Inventory Product Cards */}
-            {showInventoryTray && (
-              <div className="max-h-44 overflow-y-auto space-y-1.5 pr-0.5">
-                {filteredInventory.length === 0 ? (
-                  <div className="text-center py-4 bg-white dark:bg-slate-900 rounded-lg border border-dashed border-slate-300 dark:border-slate-700">
-                    <p className="text-xs text-slate-500 dark:text-slate-400">
-                      No se encontraron productos en inventario con &quot;{effectiveFilterQuery}&quot;.
-                    </p>
-                    <p className="text-[10px] text-slate-400 mt-0.5">
-                      Prueba con otro SKU, nombre de artículo o código de casillero.
-                    </p>
-                  </div>
-                ) : (
-                  filteredInventory.map((item) => (
-                    <button
-                      key={`${item.sku}-${item.locationCode || ""}`}
-                      type="button"
-                      onClick={() =>
-                        handleDetectedCode(item.sku, true, {
-                          productName: item.name,
-                          locationCode: item.locationCode,
-                          quantity: item.quantity,
-                          score: item.matchScore || 100,
-                        })
-                      }
-                      className={`w-full text-left p-2 rounded-lg border transition-all flex items-center justify-between gap-2 cursor-pointer shadow-2xs ${
-                        (item.matchScore || 0) >= 90
-                          ? "bg-emerald-50/70 dark:bg-emerald-950/40 border-emerald-400 hover:bg-emerald-100/70"
-                          : (item.matchScore || 0) > 0
-                          ? "bg-blue-50/50 dark:bg-blue-950/30 border-blue-300 dark:border-blue-800 hover:bg-blue-100/50"
-                          : "bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700/80 hover:border-slate-400"
-                      }`}
-                    >
-                      <div className="min-w-0 flex-1">
-                        <div className="flex items-center gap-1.5 flex-wrap">
-                          <span className="font-mono font-bold text-xs text-blue-700 dark:text-blue-400">
-                            {item.sku}
-                          </span>
-                          {item.locationCode && (
-                            <span className="text-[10px] bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 px-1.5 py-0.2 rounded font-mono border border-slate-200 dark:border-slate-700">
-                              📍 {item.locationCode}
-                            </span>
-                          )}
-                          {(item.matchScore || 0) > 0 && (
-                            <span
-                              className={`text-[9px] px-1.5 py-0.2 rounded font-semibold ${
-                                (item.matchScore || 0) >= 90
-                                  ? "bg-emerald-200 dark:bg-emerald-900/60 text-emerald-900 dark:text-emerald-200 font-bold"
-                                  : "bg-blue-100 dark:bg-blue-900/40 text-blue-800 dark:text-blue-300"
-                              }`}
-                            >
-                              {item.matchScore}%
-                            </span>
-                          )}
-                        </div>
-                        <p className="text-xs font-medium text-slate-800 dark:text-slate-200 truncate mt-0.5">
-                          {item.name}
-                        </p>
-                        {item.matchedReason && (
-                          <p className="text-[9px] text-slate-500 dark:text-slate-400 truncate">
-                            {item.matchedReason}
-                          </p>
-                        )}
-                      </div>
-                      <div className="text-right shrink-0">
-                        <span className="text-xs font-bold text-emerald-600 dark:text-emerald-400 block">
-                          {item.quantity ?? 0} {item.unit || "uds"}
-                        </span>
-                        <span className="text-[9px] text-slate-400 uppercase tracking-wider">
-                          Disponible
-                        </span>
-                      </div>
-                    </button>
-                  ))
-                )}
-              </div>
-            )}
-          </div>
         </div>
 
         {/* Last scanned feedback bar */}

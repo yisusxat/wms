@@ -602,22 +602,22 @@ test.describe('7. Modales de Soporte, Legal, Auditoría y Seguridad', () => {
     expect(invData.success).toBe(true);
     expect(invData.items.length).toBeGreaterThan(0);
 
-    // 4. Test scanner UI autofocus controls, OCR mode and live inventory filtering
+    // 4. Test scanner UI autofocus controls, OCR mode and clean modal interface
     await loginAndNavigate(page);
     await page.getByRole('button', { name: /Escanear/i }).first().click();
     await expect(page.getByText('Escáner de Código')).toBeVisible();
 
-    // Verify live inventory filtering tray is visible
-    await expect(page.getByText(/Inventario Filtrado en Tiempo Real/i)).toBeVisible();
-
-    // Type in live filter input to test progressive filtering by inventory
-    await page.getByPlaceholder(/Filtro rápido en inventario/i).fill('arroz');
-    await expect(page.getByText('Arroz Diana Especial 1kg')).toBeVisible();
+    // Verify the modal is focused on scanning without cluttering full inventory list
+    await expect(page.getByText(/Inventario Filtrado en Tiempo Real/i)).not.toBeVisible();
 
     // Switch to OCR Vision tab
     await page.getByRole('button', { name: /Visión OCR/i }).click();
     await expect(page.getByRole('button', { name: /Capturar y Auto-Entregar/i })).toBeVisible();
     await expect(page.getByRole('button', { name: 'Autofoco', exact: true })).toBeVisible();
+
+    // Switch to Manual tab
+    await page.getByRole('button', { name: /Manual/i }).click();
+    await expect(page.getByPlaceholder(/Escribe o pega el código/i)).toBeVisible();
 
     // Close scanner
     await page.getByTitle('Cerrar escáner').click();
