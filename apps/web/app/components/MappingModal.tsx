@@ -1,6 +1,22 @@
 "use client";
 import { useState, useEffect, useMemo, useCallback, Component, ErrorInfo, ReactNode } from "react";
-import { apiFetch, Location, Product, InventoryItem, getWarehouseSeedLocations, resolveLocationUuid, normalizeLocationCode } from "../../lib/api";
+import dynamic from "next/dynamic";
+import {
+  apiFetch,
+  Location,
+  Product,
+  InventoryItem,
+  getWarehouseSeedLocations,
+  resolveLocationUuid,
+  normalizeLocationCode,
+  isWarehouseLocationCode,
+} from "../../lib/api";
+import { Icon } from "./Icon";
+
+const BarcodeScanner = dynamic(
+  () => import("./BarcodeScanner").then((mod) => mod.BarcodeScanner),
+  { ssr: false }
+);
 
 // Error boundary to protect the UI
 class ModalErrorBoundary extends Component<
@@ -187,6 +203,11 @@ function MappingModalInner({
   // Direct modification state and feedback
   const [isApplyingDirect, setIsApplyingDirect] = useState(false);
   const [directFeedback, setDirectFeedback] = useState<{ type: "success" | "error"; message: string } | null>(null);
+
+  // Scanner state
+  const [scannerOpen, setScannerOpen] = useState(false);
+  const [scannerContext, setScannerContext] = useState<"TOOLBAR" | "INSPECTOR_PRODUCT">("TOOLBAR");
+  const [scanFeedback, setScanFeedback] = useState<string | null>(null);
 
   // Reusable function to load and refresh mapping data from backend / InsForge
   const loadData = useCallback(() => {
@@ -437,6 +458,83 @@ function MappingModalInner({
   const selectedProduct = useMemo(() => {
     return safeProducts.find((p) => p.id === editForm.physicalProductId);
   }, [safeProducts, editForm.physicalProductId]);
+
+  // Catalog products for BarcodeScanner matcher
+  const catalogProducts = useMemo(() => {
+    return safeProducts.map((p) => ({
+      sku: p.sku || "",
+      name: p.name || "",
+      barcode: (p as any).barcode || "",
+    }));
+  }, [safeProducts]);
+
+  const handleScan = (scannedCode: string) => {
+    const raw = (scannedCode || "").trim();
+    const clean = raw.toUpperCase();
+    if (!clean) return;
+
+    if (scannerContext === "TOOLBAR") {
+      // 1. If it's a warehouse location code (e.g. A-C-1-05)
+      if (isWarehouseLocationCode(clean)) {
+        const found = allLocationCodes.find(
+          (c) => c.toUpperCase() === clean || normalizeLocationCode(c) === clean
+        );
+        if (found) {
+          setSelectedLocationCode(found);
+          setEditingCode(found);
+          setScanFeedback(`✓ Posición ${found} localizada e inspeccionada.`);
+          setTimeout(() => setScanFeedback(null), 4000);
+          setScannerOpen(false);
+          return;
+        }
+      }
+
+      // 2. If it's a product SKU or barcode or name
+      const matchedProd = safeProducts.find(
+        (p) =>
+          p.sku?.toUpperCase() === clean ||
+          (p as any).barcode?.toUpperCase() === clean ||
+          p.name.toUpperCase().includes(clean)
+      );
+
+      setSearch(clean);
+      if (matchedProd) {
+        setScanFeedback(`✓ Filtrando almacén por producto [${matchedProd.sku}] ${matchedProd.name}`);
+      } else {
+        setScanFeedback(`Filtrando almacén por "${raw}".`);
+      }
+      setTimeout(() => setScanFeedback(null), 4000);
+      setScannerOpen(false);
+      return;
+    }
+
+    if (scannerContext === "INSPECTOR_PRODUCT") {
+      // Search in safeProducts
+      const matched = safeProducts.find(
+        (p) =>
+          p.sku?.toUpperCase() === clean ||
+          (p as any).barcode?.toUpperCase() === clean ||
+          p.name.toUpperCase().includes(clean)
+      );
+
+      if (matched) {
+        setEditForm((prev) => ({
+          ...prev,
+          physicalProductId: matched.id,
+          differentProduct: true,
+        }));
+        setProductSearchQuery(matched.name);
+        setIsProductDropdownOpen(false);
+        setScanFeedback(`✓ Producto asignado: [${matched.sku}] ${matched.name}`);
+      } else {
+        setProductSearchQuery(raw);
+        setIsProductDropdownOpen(true);
+        setScanFeedback(`Código "${raw}" introducido en el buscador de productos.`);
+      }
+      setTimeout(() => setScanFeedback(null), 4000);
+      setScannerOpen(false);
+    }
+  };
 
   // Quick Action: Mark as Matched (Physical matches system)
   const handleMarkMatched = (locationCode: string, autoAdvance = true) => {
@@ -1369,25 +1467,40 @@ function MappingModalInner({
           <div className="flex-1 overflow-hidden flex flex-col">
             {/* Top Toolbar: View Switch, Levels, Search, Legend */}
             <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 bg-white px-6 py-2.5 text-xs">
-              {/* View Switcher */}
-              <div className="inline-flex rounded-xl border border-slate-200 bg-slate-50 p-1 font-bold">
+              {/* View Switcher and Global Scanner */}
+              <div className="flex items-center gap-2 flex-wrap">
+                <div className="inline-flex rounded-xl border border-slate-200 bg-slate-50 p-1 font-bold">
+                  <button
+                    onClick={() => setViewMode("LAYOUT_2D")}
+                    className={`px-3 py-1 rounded-lg transition flex items-center gap-1.5 cursor-pointer ${
+                      viewMode === "LAYOUT_2D" ? "bg-indigo-600 text-white shadow-xs" : "text-slate-600 hover:text-slate-900"
+                    }`}
+                  >
+                    <Icon name="layout-dashboard" size={13} />
+                    <span>Plano 2D Oficial</span>
+                  </button>
+                  <button
+                    onClick={() => setViewMode("TABLE")}
+                    className={`px-3 py-1 rounded-lg transition flex items-center gap-1.5 cursor-pointer ${
+                      viewMode === "TABLE" ? "bg-indigo-600 text-white shadow-xs" : "text-slate-600 hover:text-slate-900"
+                    }`}
+                  >
+                    <Icon name="table" size={13} />
+                    <span>Vista Lista ({items.length})</span>
+                  </button>
+                </div>
+
                 <button
-                  onClick={() => setViewMode("LAYOUT_2D")}
-                  className={`px-3 py-1 rounded-lg transition flex items-center gap-1.5 ${
-                    viewMode === "LAYOUT_2D" ? "bg-indigo-600 text-white shadow-sm" : "text-slate-600 hover:text-slate-900"
-                  }`}
+                  type="button"
+                  onClick={() => {
+                    setScannerContext("TOOLBAR");
+                    setScannerOpen(true);
+                  }}
+                  className="flex items-center gap-1.5 rounded-xl bg-orange-600 hover:bg-orange-700 active:bg-orange-800 text-white px-3 py-1.5 text-xs font-bold shadow-xs transition cursor-pointer active:scale-95 shrink-0"
+                  title="Escanear etiqueta de rack o código de producto para auditar con cámara / OCR / manual"
                 >
-                  <span>🗺️</span>
-                  <span>Plano 2D Oficial</span>
-                </button>
-                <button
-                  onClick={() => setViewMode("TABLE")}
-                  className={`px-3 py-1 rounded-lg transition flex items-center gap-1.5 ${
-                    viewMode === "TABLE" ? "bg-indigo-600 text-white shadow-sm" : "text-slate-600 hover:text-slate-900"
-                  }`}
-                >
-                  <span>📋</span>
-                  <span>Vista Lista ({items.length})</span>
+                  <Icon name="scan-barcode" size={13} />
+                  <span>Escanear Código</span>
                 </button>
               </div>
 
@@ -1424,7 +1537,7 @@ function MappingModalInner({
 
                   <button
                     onClick={() => setOrderAsc(!orderAsc)}
-                    className="rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-[11px] font-bold text-slate-700 hover:bg-slate-50"
+                    className="rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-[11px] font-bold text-slate-700 hover:bg-slate-50 cursor-pointer"
                   >
                     {orderAsc ? "Orden: Entrada (01) → Fondo" : "Orden: Fondo (01) → Entrada"}
                   </button>
@@ -1440,7 +1553,7 @@ function MappingModalInner({
                     title="Alternar entre vista compacta y vista con productos y cantidades en el plano 2D"
                   >
                     <span className="flex h-5 w-5 items-center justify-center rounded-lg bg-indigo-500/20 text-xs">
-                      {showProductDetails ? "👁️" : "📦"}
+                      {showProductDetails ? <Icon name="eye-off" size={12} /> : <Icon name="boxes" size={12} />}
                     </span>
                     <span>
                       {showProductDetails ? "Ocultar Productos y Cantidades" : "Mostrar Productos y Cantidades"}
@@ -1476,6 +1589,23 @@ function MappingModalInner({
                 </span>
               </div>
             </div>
+
+            {/* Scan Feedback Banner */}
+            {scanFeedback && (
+              <div className="mx-6 mt-2 rounded-xl border border-emerald-300 bg-emerald-50 px-3 py-2 text-xs font-bold text-emerald-900 flex items-center justify-between animate-fadeIn">
+                <div className="flex items-center gap-2">
+                  <Icon name="check" size={14} className="text-emerald-700" />
+                  <span>{scanFeedback}</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setScanFeedback(null)}
+                  className="text-emerald-700 hover:text-emerald-950 font-bold text-xs cursor-pointer"
+                >
+                  ✕
+                </button>
+              </div>
+            )}
 
             {/* Content Area */}
             <div className={`flex flex-col ${inline ? "min-h-[750px]" : "flex-1 overflow-hidden"}`}>
@@ -2085,35 +2215,50 @@ function MappingModalInner({
                             Escribe para buscar y filtrar el producto:
                           </label>
 
-                          {/* Campo de búsqueda interactivo */}
-                          <div className="relative flex items-center">
-                            <span className="absolute left-3 text-slate-400 text-xs pointer-events-none">
-                              🔍
-                            </span>
-                            <input
-                              type="text"
-                              value={productSearchQuery}
-                              onChange={(e) => {
-                                setProductSearchQuery(e.target.value);
-                                setIsProductDropdownOpen(true);
-                              }}
-                              onFocus={() => setIsProductDropdownOpen(true)}
-                              placeholder="Escribe el nombre o SKU del producto..."
-                              className="w-full rounded-xl border-2 border-indigo-200 bg-white py-2.5 pl-8 pr-8 text-xs font-bold text-slate-800 placeholder-slate-400 focus:border-indigo-600 focus:outline-none shadow-xs"
-                            />
-                            {productSearchQuery && (
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  setProductSearchQuery("");
+                          {/* Campo de búsqueda interactivo y botón de escáner */}
+                          <div className="flex items-center gap-2">
+                            <div className="relative flex-1 flex items-center">
+                              <span className="absolute left-3 text-slate-400 pointer-events-none flex items-center justify-center">
+                                <Icon name="search" size={13} />
+                              </span>
+                              <input
+                                type="text"
+                                value={productSearchQuery}
+                                onChange={(e) => {
+                                  setProductSearchQuery(e.target.value);
                                   setIsProductDropdownOpen(true);
                                 }}
-                                className="absolute right-2.5 text-slate-400 hover:text-slate-600 text-xs font-bold p-0.5 cursor-pointer"
-                                title="Limpiar búsqueda"
-                              >
-                                ✕
-                              </button>
-                            )}
+                                onFocus={() => setIsProductDropdownOpen(true)}
+                                placeholder="Escribe el nombre o SKU del producto..."
+                                className="w-full rounded-xl border-2 border-indigo-200 bg-white py-2.5 pl-8 pr-8 text-xs font-bold text-slate-800 placeholder-slate-400 focus:border-indigo-600 focus:outline-none shadow-xs"
+                              />
+                              {productSearchQuery && (
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setProductSearchQuery("");
+                                    setIsProductDropdownOpen(true);
+                                  }}
+                                  className="absolute right-2.5 text-slate-400 hover:text-slate-600 text-xs font-bold p-0.5 cursor-pointer"
+                                  title="Limpiar búsqueda"
+                                >
+                                  ✕
+                                </button>
+                              )}
+                            </div>
+
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setScannerContext("INSPECTOR_PRODUCT");
+                                setScannerOpen(true);
+                              }}
+                              className="flex items-center gap-1 rounded-xl bg-orange-600 hover:bg-orange-700 active:bg-orange-800 text-white px-3 py-2.5 text-xs font-bold shadow-xs transition cursor-pointer active:scale-95 shrink-0"
+                              title="Escanear código de barras o SKU del producto con cámara / OCR / manual"
+                            >
+                              <Icon name="scan-barcode" size={14} />
+                              <span>Escanear</span>
+                            </button>
                           </div>
 
                           {/* Lista filtrada en tiempo real */}
@@ -2555,9 +2700,9 @@ function MappingModalInner({
               <button
                 onClick={handleConfirmModifications}
                 disabled={submitting}
-                className="rounded-xl bg-indigo-600 px-6 py-2.5 font-bold text-white shadow-lg hover:bg-indigo-700 transition hover:scale-105 active:scale-95 disabled:opacity-50"
+                className="rounded-xl bg-indigo-600 px-6 py-2.5 font-bold text-white shadow-lg hover:bg-indigo-700 transition hover:scale-105 active:scale-95 disabled:opacity-50 cursor-pointer"
               >
-                {submitting ? "Aplicando modificaciones..." : "🚀 Confirmar y Aplicar Modificaciones"}
+                {submitting ? "Aplicando modificaciones..." : "Confirmar y Aplicar Modificaciones"}
               </button>
             </>
           )}
@@ -2568,9 +2713,9 @@ function MappingModalInner({
                 onClick={() => {
                   if (typeof window !== "undefined") window.print();
                 }}
-                className="rounded-xl border border-indigo-200 bg-indigo-50 px-4 py-2 font-bold text-indigo-700 hover:bg-indigo-100 transition flex items-center gap-1.5 shadow-sm"
+                className="rounded-xl border border-indigo-200 bg-indigo-50 px-4 py-2 font-bold text-indigo-700 hover:bg-indigo-100 transition flex items-center gap-1.5 shadow-xs cursor-pointer"
               >
-                <span>🖨️</span>
+                <Icon name="printer" size={14} />
                 <span>Imprimir / Guardar PDF</span>
               </button>
 
@@ -2579,7 +2724,7 @@ function MappingModalInner({
                   onSuccess();
                   onClose();
                 }}
-                className="rounded-xl bg-slate-900 px-6 py-2.5 font-bold text-white shadow-md hover:bg-slate-800 transition"
+                className="rounded-xl bg-slate-900 px-6 py-2.5 font-bold text-white shadow-md hover:bg-slate-800 transition cursor-pointer"
               >
                 {inline ? "Finalizar y Cerrar Sección" : "Finalizar y Volver al Plano 2D"}
               </button>
@@ -2590,13 +2735,43 @@ function MappingModalInner({
     );
 
     if (inline) {
-      return renderContent();
+      return (
+        <>
+          {renderContent()}
+          {scannerOpen && (
+            <BarcodeScanner
+              onScan={handleScan}
+              onClose={() => setScannerOpen(false)}
+              label={
+                scannerContext === "INSPECTOR_PRODUCT"
+                  ? `Escanear producto físico para posición ${selectedLocationCode || ""}`
+                  : "Escanear posición o código de producto para auditar"
+              }
+              catalogProducts={catalogProducts}
+            />
+          )}
+        </>
+      );
     }
 
     return (
-      <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/70 p-2 sm:p-4 backdrop-blur-sm animate-fadeIn">
-        {renderContent()}
-      </div>
+      <>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/70 p-2 sm:p-4 backdrop-blur-sm animate-fadeIn">
+          {renderContent()}
+        </div>
+        {scannerOpen && (
+          <BarcodeScanner
+            onScan={handleScan}
+            onClose={() => setScannerOpen(false)}
+            label={
+              scannerContext === "INSPECTOR_PRODUCT"
+                ? `Escanear producto físico para posición ${selectedLocationCode || ""}`
+                : "Escanear posición o código de producto para auditar"
+            }
+            catalogProducts={catalogProducts}
+          />
+        )}
+      </>
     );
   }
 

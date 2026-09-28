@@ -55,6 +55,9 @@ import {
   Copy,
   FolderOpen,
   Filter,
+  Truck,
+  ArrowDownLeft,
+  EyeOff,
   LucideProps,
 } from "lucide-react";
 
@@ -115,7 +118,20 @@ export type IconName =
   | "smartphone"
   | "copy"
   | "folder"
-  | "filter";
+  | "filter"
+  | "bar-chart-2"
+  | "truck"
+  | "alert-triangle"
+  | "printer"
+  | "layout-dashboard"
+  | "table"
+  | "map"
+  | "map-pin"
+  | "arrow-down-left"
+  | "arrow-left-right"
+  | "package"
+  | "eye-off"
+  | "eye";
 
 const iconMap: Record<IconName, React.ComponentType<LucideProps>> = {
   dashboard: LayoutDashboard,
@@ -175,16 +191,29 @@ const iconMap: Record<IconName, React.ComponentType<LucideProps>> = {
   copy: Copy,
   folder: FolderOpen,
   filter: Filter,
+  "bar-chart-2": FileBarChart,
+  truck: Truck,
+  "alert-triangle": AlertTriangle,
+  printer: Printer,
+  "layout-dashboard": LayoutDashboard,
+  table: Grid3X3,
+  map: MapPin,
+  "map-pin": MapPin,
+  "arrow-down-left": ArrowDownLeft,
+  "arrow-left-right": ArrowLeftRight,
+  package: Package,
+  "eye-off": EyeOff,
+  eye: Eye,
 };
 
-interface IconProps extends LucideProps {
+export interface IconProps extends LucideProps {
   name: IconName;
   size?: number | string;
   strokeWidth?: number;
   className?: string;
 }
 
-export default function Icon({
+export function Icon({
   name,
   size = 18,
   strokeWidth = 2,
@@ -201,3 +230,5 @@ export default function Icon({
     />
   );
 }
+
+export default Icon;

@@ -1,12 +1,27 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { apiFetch, getWarehouseSeedLocations, Location, Page, resolveLocationUuid, InventoryItem, normalizeLocationCode } from '../../lib/api';
+import dynamic from 'next/dynamic';
+import {
+  apiFetch,
+  getWarehouseSeedLocations,
+  Location,
+  Page,
+  resolveLocationUuid,
+  InventoryItem,
+  normalizeLocationCode,
+  isWarehouseLocationCode,
+} from '../../lib/api';
 import { Entry2DModal } from './Entry2DModal';
 import { Exit2DModal } from './Exit2DModal';
 import { MappingModal } from './MappingModal';
 
 import Icon from './Icon';
+
+const BarcodeScanner = dynamic(
+  () => import('./BarcodeScanner').then((mod) => mod.BarcodeScanner),
+  { ssr: false }
+);
 
 const STATUS_CONFIG: Record<
   string,
@@ -86,6 +101,7 @@ export function Warehouse2D({ token, onError, onNavigate, onDataChanged, refresh
   const [entrySelectedCodes, setEntrySelectedCodes] = useState<Set<string>>(new Set());
   const [successBanner, setSuccessBanner] = useState<string | null>(null);
   const [heatmapMode, setHeatmapMode] = useState(false);
+  const [scannerOpen, setScannerOpen] = useState(false);
 
   const refreshLocations = () => {
     Promise.all([
@@ -192,6 +208,79 @@ export function Warehouse2D({ token, onError, onNavigate, onDataChanged, refresh
     });
     const picked = sorted.slice(0, Math.max(1, entryPositionsCount));
     setEntrySelectedCodes(new Set(picked.map((l) => l.code)));
+  };
+
+  // Catalog products for BarcodeScanner matcher
+  const catalogProducts = useMemo(() => {
+    const seen = new Set<string>();
+    const list: Array<{ sku: string; name: string; barcode?: string }> = [];
+    inventoryMap.forEach((inv) => {
+      if (inv.product && !seen.has(inv.product.id)) {
+        seen.add(inv.product.id);
+        list.push({
+          sku: inv.product.sku || '',
+          name: inv.product.name || '',
+          barcode: (inv.product as any).barcode || '',
+        });
+      }
+    });
+    return list;
+  }, [inventoryMap]);
+
+  const handleScan = (scannedCode: string) => {
+    const clean = (scannedCode || '').trim().toUpperCase();
+    if (!clean) return;
+
+    // 1. Check if it's a warehouse location code
+    if (isWarehouseLocationCode(clean)) {
+      const loc = locations.find(
+        (l) => normalizeLocationCode(l.code) === clean || l.code.toUpperCase() === clean
+      );
+
+      if (isEntrySelectionMode) {
+        // In entry selection mode: add this location to the selection set
+        setEntrySelectedCodes((prev) => {
+          const next = new Set(prev);
+          next.add(clean);
+          return next;
+        });
+        setSuccessBanner(`Ubicación ${clean} añadida a la selección de entrada.`);
+        setTimeout(() => setSuccessBanner(null), 4000);
+        setScannerOpen(false);
+        return;
+      }
+
+      if (loc) {
+        setSelected(loc);
+        setSuccessBanner(`Ubicación ${loc.code} localizada e inspeccionada en el plano 2D.`);
+        setTimeout(() => setSuccessBanner(null), 4000);
+        setScannerOpen(false);
+        return;
+      }
+    }
+
+    // 2. Otherwise treat as product SKU or barcode or general search
+    let matchingCount = 0;
+    inventoryMap.forEach((inv) => {
+      const p = inv.product;
+      if (
+        p &&
+        (p.sku?.toUpperCase() === clean ||
+          (p as any).barcode?.toUpperCase() === clean ||
+          p.name?.toUpperCase().includes(clean))
+      ) {
+        matchingCount++;
+      }
+    });
+
+    setSearchQuery(clean);
+    if (matchingCount > 0) {
+      setSuccessBanner(`Código "${clean}" encontrado en ${matchingCount} posición(es) en el plano 2D.`);
+    } else {
+      setSuccessBanner(`Filtrando plano 2D por "${clean}".`);
+    }
+    setTimeout(() => setSuccessBanner(null), 4000);
+    setScannerOpen(false);
   };
 
   const getLocation = (aisle: string, rack: string, level: number, position: number): Location => {
@@ -590,6 +679,15 @@ export function Warehouse2D({ token, onError, onNavigate, onDataChanged, refresh
           </button>
 
           <button
+            onClick={() => setScannerOpen(true)}
+            className="flex items-center gap-1.5 rounded-lg bg-orange-600 hover:bg-orange-700 active:bg-orange-800 text-white px-3.5 py-1.5 text-xs font-semibold shadow-xs transition cursor-pointer active:scale-95"
+            title="Escanear etiqueta de rack o código de barras de producto con cámara / OCR / manual"
+          >
+            <Icon name="scan-barcode" size={14} />
+            <span>Escanear Código</span>
+          </button>
+
+          <button
             onClick={() => {
               if (onNavigate) {
                 onNavigate('mapping');
@@ -663,8 +761,8 @@ export function Warehouse2D({ token, onError, onNavigate, onDataChanged, refresh
           {/* Header row */}
           <div className="flex flex-wrap items-center justify-between gap-3 border-b border-blue-100 pb-3">
             <div className="flex items-center gap-2.5">
-              <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-blue-600 text-white text-base font-bold shadow-sm">
-                📥
+              <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-blue-600 text-white text-base font-bold shadow-xs">
+                <Icon name="arrow-down-left" size={16} />
               </span>
               <div>
                 <h3 className="text-xs sm:text-sm font-black text-blue-950 uppercase tracking-wide">
@@ -717,7 +815,11 @@ export function Warehouse2D({ token, onError, onNavigate, onDataChanged, refresh
                     : 'bg-amber-100 text-amber-800 border border-amber-300'
                 }`}
               >
-                <span>{entrySelectedCodes.size >= entryPositionsCount ? '✓' : '⏳'}</span>
+                {entrySelectedCodes.size >= entryPositionsCount ? (
+                  <Icon name="check" size={13} className="text-emerald-700" />
+                ) : (
+                  <Icon name="clock" size={13} className="text-amber-700" />
+                )}
                 <span>
                   {entrySelectedCodes.size} de {entryPositionsCount} seleccionadas
                 </span>
@@ -751,7 +853,7 @@ export function Warehouse2D({ token, onError, onNavigate, onDataChanged, refresh
                           return next;
                         });
                       }}
-                      className="ml-1 rounded text-blue-200 hover:text-white font-bold"
+                      className="ml-1 rounded text-blue-200 hover:text-white font-bold cursor-pointer"
                       title="Quitar casillero"
                     >
                       ✕
@@ -764,7 +866,7 @@ export function Warehouse2D({ token, onError, onNavigate, onDataChanged, refresh
                 <button
                   type="button"
                   onClick={() => setEntrySelectedCodes(new Set())}
-                  className="text-[11px] font-bold text-rose-600 hover:underline ml-2"
+                  className="text-[11px] font-bold text-rose-600 hover:underline ml-2 cursor-pointer"
                 >
                   Limpiar todas
                 </button>
@@ -775,11 +877,22 @@ export function Warehouse2D({ token, onError, onNavigate, onDataChanged, refresh
             <div className="flex flex-wrap items-center gap-2">
               <button
                 type="button"
+                onClick={() => setScannerOpen(true)}
+                className="flex items-center gap-1.5 rounded-xl border border-orange-200 bg-orange-50 px-3 py-1.5 text-xs font-bold text-orange-700 hover:bg-orange-100 transition shadow-2xs cursor-pointer active:scale-95"
+                title="Escanear etiqueta de casillero o posición física con cámara / OCR / manual"
+              >
+                <Icon name="scan-barcode" size={13} />
+                <span>Escanear Casillero</span>
+              </button>
+
+              <button
+                type="button"
                 onClick={handleAutoSelectNearest}
-                className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs font-bold text-slate-700 hover:bg-slate-100 transition shadow-2xs"
+                className="flex items-center gap-1.5 rounded-xl border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs font-bold text-slate-700 hover:bg-slate-100 transition shadow-2xs cursor-pointer"
                 title="Sugerir automáticamente las posiciones disponibles más cercanas al portón de entrada"
               >
-                ⚡ Sugerir {entryPositionsCount} más cercanas
+                <Icon name="sparkles" size={13} className="text-amber-500" />
+                <span>Sugerir {entryPositionsCount} más cercanas</span>
               </button>
 
               <button
@@ -788,7 +901,7 @@ export function Warehouse2D({ token, onError, onNavigate, onDataChanged, refresh
                   setIsEntrySelectionMode(false);
                   setEntrySelectedCodes(new Set());
                 }}
-                className="rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs font-bold text-slate-600 hover:bg-slate-50 transition"
+                className="rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs font-bold text-slate-600 hover:bg-slate-50 transition cursor-pointer"
               >
                 Cancelar
               </button>
@@ -803,7 +916,7 @@ export function Warehouse2D({ token, onError, onNavigate, onDataChanged, refresh
                     : 'bg-slate-200 text-slate-400 cursor-not-allowed'
                 }`}
               >
-                <span>✓</span>
+                <Icon name="check" size={14} />
                 <span>
                   Aceptar Selección ({entrySelectedCodes.size}) y Confirmar Productos →
                 </span>
@@ -1437,11 +1550,11 @@ export function Warehouse2D({ token, onError, onNavigate, onDataChanged, refresh
                 assignedCodes.has(loc.code) ? { ...loc, status: 'TRANSIT' } : loc
               )
             );
-            setSuccessBanner(`🚚 Se apartaron ${assigned.length} posiciones en estado 'En Tránsito'.`);
+            setSuccessBanner(`Se apartaron ${assigned.length} posiciones en estado 'En Tránsito'.`);
           } else {
             refreshLocations();
             onDataChanged?.();
-            setSuccessBanner(`✅ Entrada confirmada exitosamente en ${assigned.length} ubicaciones del almacén.`);
+            setSuccessBanner(`Entrada confirmada exitosamente en ${assigned.length} ubicaciones del almacén.`);
           }
           setTimeout(() => setSuccessBanner(null), 6000);
         }}
@@ -1457,6 +1570,20 @@ export function Warehouse2D({ token, onError, onNavigate, onDataChanged, refresh
           onDataChanged?.();
         }}
       />
+
+      {/* 6. Code Scanner Modal */}
+      {scannerOpen && (
+        <BarcodeScanner
+          onScan={handleScan}
+          onClose={() => setScannerOpen(false)}
+          label={
+            isEntrySelectionMode
+              ? 'Escanear etiqueta de casillero o posición para entrada'
+              : 'Escanear etiqueta de ubicación (ej. A-C-1-05) o código de producto'
+          }
+          catalogProducts={catalogProducts}
+        />
+      )}
     </section>
   );
 }

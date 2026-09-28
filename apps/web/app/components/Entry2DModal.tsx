@@ -1,7 +1,14 @@
 "use client";
 
 import React, { useState, useEffect, useMemo } from "react";
+import dynamic from "next/dynamic";
 import { apiFetch, Product, Location, resolveLocationUuid } from "../../lib/api";
+import Icon from "./Icon";
+
+const BarcodeScanner = dynamic(
+  () => import("./BarcodeScanner"),
+  { ssr: false }
+);
 
 interface Props {
   isOpen: boolean;
@@ -42,6 +49,9 @@ export function Entry2DModal({
   const [loadingProducts, setLoadingProducts] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [scannerOpen, setScannerOpen] = useState(false);
+  const [scannerTargetLocation, setScannerTargetLocation] = useState<string | null>(null);
+  const [scanFeedback, setScanFeedback] = useState<string | null>(null);
 
   // Load products catalog
   useEffect(() => {
@@ -172,6 +182,35 @@ export function Entry2DModal({
     });
   };
 
+  const handleProductScanned = (code: string) => {
+    const clean = code.trim().toLowerCase();
+    if (!clean) return;
+
+    const matchedProduct = products.find(
+      (p) =>
+        p.sku?.toLowerCase() === clean ||
+        p.barcode?.toLowerCase() === clean ||
+        p.name?.toLowerCase().includes(clean)
+    );
+
+    if (matchedProduct) {
+      if (scannerTargetLocation) {
+        updateLocationAssignment(scannerTargetLocation, { productId: matchedProduct.id });
+        setScanFeedback(`Producto asignado a ${scannerTargetLocation}: ${matchedProduct.name} (${matchedProduct.sku})`);
+      } else {
+        setSelectedProductId(matchedProduct.id);
+        setSearchProduct(matchedProduct.sku);
+        setScanFeedback(`Producto seleccionado: ${matchedProduct.name} (${matchedProduct.sku})`);
+      }
+    } else {
+      setSearchProduct(code.trim());
+      setScanFeedback(`Código escaneado: "${code.trim()}". Búsqueda aplicada en catálogo.`);
+    }
+
+    setScannerOpen(false);
+    setScannerTargetLocation(null);
+  };
+
   const handleConfirm = async (submitMode: "CONFIRMED" | "TRANSIT") => {
     if (safeLocations.length === 0) {
       setErrorMsg("No hay ubicaciones seleccionadas para almacenar.");
@@ -291,11 +330,30 @@ export function Entry2DModal({
         <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-4 sm:space-y-5">
           {errorMsg && (
             <div className="rounded-xl border border-rose-200 bg-rose-50 p-3 text-xs font-semibold text-rose-800 flex items-center justify-between animate-fadeIn">
-              <span>⚠️ {errorMsg}</span>
+              <div className="flex items-center gap-2">
+                <Icon name="warning" size={14} className="text-rose-600 shrink-0" />
+                <span>{errorMsg}</span>
+              </div>
               <button
                 type="button"
                 onClick={() => setErrorMsg(null)}
-                className="text-rose-600 hover:text-rose-900 ml-2 font-bold"
+                className="text-rose-600 hover:text-rose-900 ml-2 font-bold cursor-pointer"
+              >
+                ✕
+              </button>
+            </div>
+          )}
+
+          {scanFeedback && (
+            <div className="rounded-xl border border-blue-200 bg-blue-50 p-3 text-xs font-semibold text-blue-900 flex items-center justify-between animate-fadeIn">
+              <div className="flex items-center gap-2">
+                <Icon name="scan-barcode" size={15} className="text-orange-600 shrink-0" />
+                <span>{scanFeedback}</span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setScanFeedback(null)}
+                className="text-blue-500 hover:text-blue-800 ml-2 font-bold cursor-pointer"
               >
                 ✕
               </button>
@@ -306,14 +364,14 @@ export function Entry2DModal({
           <div className="rounded-2xl border-2 border-blue-200 bg-blue-50/50 p-4">
             <div className="flex items-center justify-between mb-2">
               <span className="text-xs font-extrabold uppercase tracking-wider text-blue-900 flex items-center gap-1.5">
-                <span>📍</span>
+                <Icon name="locations" size={14} className="text-blue-700" />
                 <span>Posiciones Seleccionadas en el Plano ({safeLocations.length})</span>
               </span>
               {onReturnToPlan && (
                 <button
                   type="button"
                   onClick={onReturnToPlan}
-                  className="inline-flex items-center gap-1 text-xs font-bold text-blue-700 hover:text-blue-900 hover:underline"
+                  className="inline-flex items-center gap-1 text-xs font-bold text-blue-700 hover:text-blue-900 hover:underline cursor-pointer"
                 >
                   <span>← Modificar en el plano 2D</span>
                 </button>
@@ -397,15 +455,31 @@ export function Entry2DModal({
                   <p className="text-xs text-slate-500 py-2">Cargando catálogo de productos...</p>
                 ) : (
                   <div className="space-y-2">
-                    <div className="relative">
-                      <input
-                        type="text"
-                        placeholder="Filtrar por nombre o SKU..."
-                        value={searchProduct}
-                        onChange={(e) => setSearchProduct(e.target.value)}
-                        className="w-full rounded-xl border border-slate-200 bg-slate-50/70 pl-8 pr-3 py-2 text-xs focus:bg-white focus:border-blue-600 focus:outline-none"
-                      />
-                      <span className="absolute left-2.5 top-2.5 text-xs text-slate-400">🔍</span>
+                    <div className="flex items-center gap-2">
+                      <div className="relative flex-1">
+                        <input
+                          type="text"
+                          placeholder="Filtrar por nombre o SKU..."
+                          value={searchProduct}
+                          onChange={(e) => setSearchProduct(e.target.value)}
+                          className="w-full rounded-xl border border-slate-200 bg-slate-50/70 pl-8 pr-3 py-2 text-xs focus:bg-white focus:border-blue-600 focus:outline-none"
+                        />
+                        <span className="absolute left-2.5 top-2.5 text-xs text-slate-400">
+                          <Icon name="search" size={13} />
+                        </span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setScannerTargetLocation(null);
+                          setScannerOpen(true);
+                        }}
+                        className="flex items-center gap-1.5 rounded-xl bg-orange-600 hover:bg-orange-700 active:bg-orange-800 text-white px-3 py-2 text-xs font-bold shadow-xs transition cursor-pointer active:scale-95 shrink-0"
+                        title="Escanear código de barras o SKU del producto con cámara / OCR / manual"
+                      >
+                        <Icon name="scan-barcode" size={14} />
+                        <span>Escanear</span>
+                      </button>
                     </div>
 
                     <select
@@ -481,7 +555,8 @@ export function Entry2DModal({
                 {positionsCount > 0 && (
                   <div className="rounded-xl border border-emerald-200 bg-emerald-50/80 p-3 text-xs text-emerald-900">
                     <div className="flex items-center gap-2 font-bold">
-                      <span>📦 Reparto Automático:</span>
+                      <Icon name="boxes" className="h-4 w-4 text-emerald-700 shrink-0" />
+                      <span>Reparto Automático:</span>
                       <span>
                         {remainderUnits === 0
                           ? `${unitsPerLoc} ${selectedProduct?.unit || "uds"} en cada una de las ${positionsCount} posiciones`
@@ -531,15 +606,30 @@ export function Entry2DModal({
                           </span>
                         </div>
 
-                        {/* Copy to all button */}
-                        <button
-                          type="button"
-                          onClick={() => copyToAll(loc.code)}
-                          className="text-[11px] font-bold text-blue-700 hover:text-blue-900 hover:underline flex items-center gap-1"
-                          title="Copiar este producto y cantidad a todas las demás posiciones"
-                        >
-                          <span>📋 Copiar a todas</span>
-                        </button>
+                        {/* Actions */}
+                        <div className="flex items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setScannerTargetLocation(loc.code);
+                              setScannerOpen(true);
+                            }}
+                            className="flex items-center gap-1 rounded-lg border border-orange-200 bg-orange-50 px-2 py-1 text-[11px] font-bold text-orange-700 hover:bg-orange-100 transition shadow-2xs cursor-pointer active:scale-95"
+                            title="Escanear código de producto para esta posición"
+                          >
+                            <Icon name="scan-barcode" className="h-3 w-3" />
+                            <span>Escanear</span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => copyToAll(loc.code)}
+                            className="text-[11px] font-bold text-blue-700 hover:text-blue-900 hover:underline flex items-center gap-1"
+                            title="Copiar este producto y cantidad a todas las demás posiciones"
+                          >
+                            <Icon name="copy" className="h-3 w-3" />
+                            <span>Copiar a todas</span>
+                          </button>
+                        </div>
                       </div>
 
                       {/* Product Selector and Quantity Inputs */}
@@ -585,7 +675,10 @@ export function Entry2DModal({
 
               {/* Summary of per-location entry */}
               <div className="rounded-xl border border-blue-200 bg-blue-50 p-3 text-xs text-blue-950 font-bold flex items-center justify-between">
-                <span>📊 Resumen total de la entrada:</span>
+                <span className="flex items-center gap-1.5">
+                  <Icon name="bar-chart-2" className="h-4 w-4 text-blue-700" />
+                  <span>Resumen total de la entrada:</span>
+                </span>
                 <span className="font-black text-blue-900">
                   {totalPerLocationUnits} unidades en total ({distinctProductCount} producto(s) diferente(s))
                 </span>
@@ -628,7 +721,7 @@ export function Entry2DModal({
             type="button"
             disabled={submitting}
             onClick={onClose}
-            className="w-full sm:w-auto rounded-xl border border-slate-300 bg-white px-4 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50 transition text-center"
+            className="w-full sm:w-auto rounded-xl border border-slate-300 bg-white px-4 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50 transition text-center cursor-pointer"
           >
             Cancelar
           </button>
@@ -638,10 +731,11 @@ export function Entry2DModal({
               type="button"
               disabled={submitting || safeLocations.length === 0}
               onClick={() => handleConfirm("TRANSIT")}
-              className="w-full sm:w-auto rounded-xl border border-sky-300 bg-sky-50 px-3.5 py-2 text-xs font-bold text-sky-800 hover:bg-sky-100 transition shadow-xs disabled:opacity-50 text-center"
+              className="w-full sm:w-auto flex items-center justify-center gap-1.5 rounded-xl border border-sky-300 bg-sky-50 px-3.5 py-2 text-xs font-bold text-sky-800 hover:bg-sky-100 transition shadow-2xs disabled:opacity-50 text-center cursor-pointer"
               title="Apartar las posiciones como 'En Tránsito' temporalmente"
             >
-              🚚 Dejar en Tránsito
+              <Icon name="truck" className="h-3.5 w-3.5" />
+              <span>Dejar en Tránsito</span>
             </button>
 
             <button
@@ -652,7 +746,7 @@ export function Entry2DModal({
                 (assignmentMode === "SAME_PRODUCT" && !selectedProductId)
               }
               onClick={() => handleConfirm("CONFIRMED")}
-              className="w-full sm:w-auto flex items-center justify-center gap-2 rounded-xl bg-emerald-600 px-5 py-2 text-xs font-black text-white shadow-md hover:bg-emerald-700 active:scale-95 transition disabled:opacity-50 disabled:cursor-not-allowed"
+              className="w-full sm:w-auto flex items-center justify-center gap-2 rounded-xl bg-emerald-600 px-5 py-2 text-xs font-black text-white shadow-md hover:bg-emerald-700 active:scale-95 transition disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
             >
               {submitting ? (
                 <>
@@ -661,7 +755,7 @@ export function Entry2DModal({
                 </>
               ) : (
                 <>
-                  <span>✅</span>
+                  <Icon name="check" className="h-4 w-4" />
                   <span>Confirmar Entrada Inmediata</span>
                 </>
               )}
@@ -669,6 +763,27 @@ export function Entry2DModal({
           </div>
         </div>
       </div>
+
+      {/* Barcode / OCR Scanner Modal */}
+      {scannerOpen && (
+        <BarcodeScanner
+          onScan={handleProductScanned}
+          onClose={() => {
+            setScannerOpen(false);
+            setScannerTargetLocation(null);
+          }}
+          label={
+            scannerTargetLocation
+              ? `Escanear producto para posición ${scannerTargetLocation}`
+              : "Escanear producto para la entrada"
+          }
+          catalogProducts={products.map((p) => ({
+            sku: p.sku || "",
+            name: p.name || "",
+            barcode: p.barcode || "",
+          }))}
+        />
+      )}
     </div>
   );
 }

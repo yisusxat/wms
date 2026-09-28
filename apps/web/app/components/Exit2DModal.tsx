@@ -1,12 +1,19 @@
 "use client";
 
 import React, { useState, useEffect, useMemo } from "react";
+import dynamic from "next/dynamic";
 import { apiFetch, Location } from "../../lib/api";
+import { Icon } from "./Icon";
+
+const BarcodeScanner = dynamic(
+  () => import("./BarcodeScanner").then((mod) => mod.BarcodeScanner),
+  { ssr: false }
+);
 
 interface InventoryLocationItem {
   id: string;
   quantity: number;
-  product: { id: string; sku: string; name: string; unit: string; category?: string };
+  product: { id: string; sku: string; name: string; unit: string; category?: string; barcode?: string };
   location: Location;
 }
 
@@ -83,6 +90,14 @@ export function Exit2DModal({ isOpen, onClose, token, onSuccess }: Props) {
   const [submitting, setSubmitting] = useState(false);
   const [generatedReport, setGeneratedReport] = useState<GeneratedReport | null>(null);
 
+  // Scanner & Search State
+  const [scannerOpen, setScannerOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [scanFeedback, setScanFeedback] = useState<{
+    type: "success" | "error" | "info";
+    message: string;
+  } | null>(null);
+
   useEffect(() => {
     if (isOpen) {
       setLoading(true);
@@ -116,6 +131,96 @@ export function Exit2DModal({ isOpen, onClose, token, onSuccess }: Props) {
         .finally(() => setLoading(false));
     }
   }, [isOpen, token]);
+
+  // Filtered items based on search query
+  const filteredItems = useMemo(() => {
+    if (!searchQuery.trim()) return items;
+    const q = searchQuery.toLowerCase().trim();
+    return items.filter(
+      (item) =>
+        item.location.code.toLowerCase().includes(q) ||
+        item.product.sku.toLowerCase().includes(q) ||
+        item.product.name.toLowerCase().includes(q) ||
+        (item.product.barcode && item.product.barcode.toLowerCase().includes(q))
+    );
+  }, [items, searchQuery]);
+
+  // Catalog products for BarcodeScanner matcher
+  const catalogProducts = useMemo(() => {
+    const seen = new Set<string>();
+    const list: Array<{ sku: string; name: string; barcode?: string }> = [];
+    items.forEach((it) => {
+      if (!seen.has(it.product.id)) {
+        seen.add(it.product.id);
+        list.push({
+          sku: it.product.sku,
+          name: it.product.name,
+          barcode: it.product.barcode || "",
+        });
+      }
+    });
+    return list;
+  }, [items]);
+
+  const handleCodeScanned = (scannedRaw: string) => {
+    const raw = (scannedRaw || "").trim();
+    if (!raw) return;
+
+    // 1. Check if it matches location code
+    const matchingLocationItems = items.filter(
+      (item) => item.location.code.toUpperCase() === raw.toUpperCase()
+    );
+
+    if (matchingLocationItems.length > 0) {
+      setSelectedItemIds((prev) => {
+        const next = new Set(prev);
+        matchingLocationItems.forEach((it) => next.add(it.id));
+        return next;
+      });
+      setScanFeedback({
+        type: "success",
+        message: `Ubicación ${matchingLocationItems[0].location.code} seleccionada (${matchingLocationItems[0].product.name}, ${matchingLocationItems[0].quantity} uds)`,
+      });
+      setTimeout(() => setScanFeedback(null), 4000);
+      setScannerOpen(false);
+      return;
+    }
+
+    // 2. Check if it matches product SKU or barcode or name
+    const matchingProductItems = items.filter((item) => {
+      const p = item.product;
+      const cleanSku = (p.sku || "").toUpperCase();
+      const cleanRaw = raw.toUpperCase();
+      return (
+        cleanSku === cleanRaw ||
+        (p.barcode && p.barcode.toUpperCase() === cleanRaw) ||
+        p.name.toUpperCase().includes(cleanRaw)
+      );
+    });
+
+    if (matchingProductItems.length > 0) {
+      setSelectedItemIds((prev) => {
+        const next = new Set(prev);
+        matchingProductItems.forEach((it) => next.add(it.id));
+        return next;
+      });
+      setScanFeedback({
+        type: "success",
+        message: `Producto ${matchingProductItems[0].product.sku} (${matchingProductItems[0].product.name}) seleccionado en ${matchingProductItems.length} posición(es)`,
+      });
+      setTimeout(() => setScanFeedback(null), 4000);
+      setScannerOpen(false);
+      return;
+    }
+
+    // 3. Not found in occupied locations
+    setScanFeedback({
+      type: "error",
+      message: `No se encontró inventario disponible para el código o ubicación "${raw}".`,
+    });
+    setTimeout(() => setScanFeedback(null), 5000);
+    setScannerOpen(false);
+  };
 
   // Selected items sorted from closest to farthest
   const sortedSelectedItems = useMemo(() => {
@@ -248,8 +353,8 @@ export function Exit2DModal({ isOpen, onClose, token, onSuccess }: Props) {
           {/* Header */}
           <div className="flex items-center justify-between border-b px-4 sm:px-6 py-3.5 sm:py-4 bg-orange-50 text-orange-950">
             <div className="flex items-center gap-3">
-              <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-orange-600 text-white shadow-sm font-bold text-lg shrink-0">
-                📤
+              <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-orange-600 text-white shadow-xs font-bold shrink-0">
+                <Icon name="arrow-left-right" className="h-5 w-5" />
               </span>
               <div>
                 <h3 className="font-black text-sm sm:text-base">Salida y Despacho de Productos (Layout 2D)</h3>
@@ -262,7 +367,7 @@ export function Exit2DModal({ isOpen, onClose, token, onSuccess }: Props) {
             </div>
             <button
               onClick={onClose}
-              className="p-1.5 rounded-full text-orange-800 hover:bg-orange-200/60 transition"
+              className="p-1.5 rounded-full text-orange-800 hover:bg-orange-200/60 transition cursor-pointer"
             >
               ✕
             </button>
@@ -271,13 +376,75 @@ export function Exit2DModal({ isOpen, onClose, token, onSuccess }: Props) {
           {/* STEP 1: SELECT ITEMS */}
           {step === "SELECT" && (
             <div className="p-4 sm:p-6 overflow-y-auto space-y-4 flex-1 text-sm">
+              {/* Scan Feedback Notification */}
+              {scanFeedback && (
+                <div
+                  className={`flex items-center gap-2 rounded-xl p-3 text-xs font-bold border transition animate-fadeIn ${
+                    scanFeedback.type === "success"
+                      ? "border-emerald-300 bg-emerald-50 text-emerald-900"
+                      : scanFeedback.type === "error"
+                      ? "border-rose-300 bg-rose-50 text-rose-900"
+                      : "border-blue-300 bg-blue-50 text-blue-900"
+                  }`}
+                >
+                  <Icon
+                    name={
+                      scanFeedback.type === "success"
+                        ? "check"
+                        : scanFeedback.type === "error"
+                        ? "alert-triangle"
+                        : "info"
+                    }
+                    className="h-4 w-4 shrink-0"
+                  />
+                  <span>{scanFeedback.message}</span>
+                </div>
+              )}
+
+              {/* Search & Code Scanner Bar */}
+              <div className="flex flex-col sm:flex-row gap-2">
+                <div className="relative flex-1">
+                  <Icon
+                    name="search"
+                    className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400"
+                  />
+                  <input
+                    type="text"
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    placeholder="Filtrar por posición (ej. A-C-1-05), SKU o producto..."
+                    className="w-full rounded-xl border border-slate-200 bg-slate-50/70 pl-9 pr-8 py-2 text-xs focus:bg-white focus:border-orange-500 focus:outline-none"
+                  />
+                  {searchQuery && (
+                    <button
+                      type="button"
+                      onClick={() => setSearchQuery("")}
+                      className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 text-xs font-bold cursor-pointer"
+                    >
+                      ✕
+                    </button>
+                  )}
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => setScannerOpen(true)}
+                  className="flex items-center justify-center gap-1.5 rounded-xl bg-orange-600 hover:bg-orange-700 active:bg-orange-800 text-white px-3.5 py-2 text-xs font-bold shadow-xs transition cursor-pointer active:scale-95 shrink-0"
+                  title="Escanear etiqueta de rack o código de barras del producto"
+                >
+                  <Icon name="scan-barcode" size={14} />
+                  <span>Escanear Código</span>
+                </button>
+              </div>
+
               <div className="flex flex-wrap items-center justify-between gap-2 border-b pb-3">
                 <div className="space-y-0.5">
                   <span className="text-xs font-black uppercase tracking-wider text-slate-700">
                     Posiciones con inventario disponible:
                   </span>
-                  <p className="text-[11px] text-slate-500">
-                    🧭 Listadas automáticamente en orden de proximidad: desde la entrada (01) hasta el fondo.
+                  <p className="text-[11px] text-slate-500 flex items-center gap-1">
+                    <Icon name="map-pin" className="h-3 w-3 text-orange-600 shrink-0" />
+                    <span>Listadas en orden de proximidad: desde la entrada (01) hasta el fondo.</span>
                   </p>
                 </div>
 
@@ -285,7 +452,7 @@ export function Exit2DModal({ isOpen, onClose, token, onSuccess }: Props) {
                   <button
                     type="button"
                     onClick={selectAll}
-                    className="rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-100"
+                    className="rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-100 cursor-pointer"
                   >
                     Seleccionar todas
                   </button>
@@ -293,7 +460,7 @@ export function Exit2DModal({ isOpen, onClose, token, onSuccess }: Props) {
                     <button
                       type="button"
                       onClick={clearSelection}
-                      className="rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-xs font-semibold text-rose-600 hover:bg-rose-50"
+                      className="rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-xs font-semibold text-rose-600 hover:bg-rose-50 cursor-pointer"
                     >
                       Limpiar
                     </button>
@@ -313,9 +480,14 @@ export function Exit2DModal({ isOpen, onClose, token, onSuccess }: Props) {
                 <div className="p-8 text-center bg-slate-50 rounded-2xl border border-dashed text-slate-500 text-xs">
                   No hay stock disponible en los racks actualmente para despachar.
                 </div>
+              ) : filteredItems.length === 0 ? (
+                <div className="p-8 text-center bg-slate-50 rounded-2xl border border-dashed text-slate-500 text-xs space-y-1">
+                  <p className="font-bold text-slate-700">No se encontraron posiciones ni productos que coincidan.</p>
+                  <p className="text-[11px] text-slate-400">Prueba con otro código, SKU o limpia el buscador.</p>
+                </div>
               ) : (
                 <div className="divide-y border rounded-2xl overflow-hidden max-h-[380px] overflow-y-auto">
-                  {items.map((item, index) => {
+                  {filteredItems.map((item, index) => {
                     const isChecked = selectedItemIds.has(item.id);
                     const pos = item.location.position;
                     const prox = getProximityLabel(pos);
@@ -380,15 +552,17 @@ export function Exit2DModal({ isOpen, onClose, token, onSuccess }: Props) {
             <div className="p-4 sm:p-6 overflow-y-auto space-y-4 flex-1 text-sm">
               <div className="rounded-2xl border border-amber-300 bg-amber-50 p-4 text-amber-950 text-xs space-y-1">
                 <div className="flex items-center gap-2 font-bold">
-                  <span>⚠️ Confirmación de Salida Física y Ruta de Picking:</span>
+                  <Icon name="alert-triangle" className="h-4 w-4 text-amber-700 shrink-0" />
+                  <span>Confirmación de Salida Física y Ruta de Picking:</span>
                 </div>
                 <p>
                   Estás a punto de confirmar el despacho de{" "}
                   <strong>{totalUnitsToExit} unidades</strong> distribuidas en{" "}
                   <strong>{sortedSelectedItems.length} posiciones</strong>.
                 </p>
-                <p className="font-semibold text-amber-800">
-                  🧭 La tabla está organizada en **orden de recorrido óptimo**: desde la posición más cercana a la puerta de entrada hasta la más profunda.
+                <p className="font-semibold text-amber-800 flex items-center gap-1">
+                  <Icon name="map-pin" className="h-3.5 w-3.5 text-amber-700 shrink-0" />
+                  <span>La tabla está organizada en orden de recorrido óptimo: desde la posición más cercana a la entrada hasta la más profunda.</span>
                 </p>
               </div>
 
@@ -454,7 +628,7 @@ export function Exit2DModal({ isOpen, onClose, token, onSuccess }: Props) {
           {step === "SUCCESS" && generatedReport && (
             <div className="p-6 overflow-y-auto space-y-5 flex-1 text-sm">
               <div className="rounded-2xl border border-emerald-300 bg-emerald-50 p-4 text-center">
-                <span className="text-3xl">🎉</span>
+                <Icon name="check-circle" className="h-9 w-9 text-emerald-600 mx-auto mb-1" />
                 <h4 className="font-black text-emerald-900 text-base mt-1">
                   ¡Salida y Despacho Registrados con Éxito!
                 </h4>
@@ -489,8 +663,9 @@ export function Exit2DModal({ isOpen, onClose, token, onSuccess }: Props) {
                   <h4 className="font-extrabold text-xs uppercase tracking-wider text-slate-700">
                     Detalle de Posiciones y Productos Despachados:
                   </h4>
-                  <span className="text-[11px] font-bold text-blue-700">
-                    🧭 Ordenado desde la más cercana (Entrada) hasta la más lejana (Fondo)
+                  <span className="text-[11px] font-bold text-blue-700 flex items-center gap-1">
+                    <Icon name="map-pin" className="h-3 w-3 text-blue-700 shrink-0" />
+                    <span>Ordenado desde la más cercana (Entrada) hasta la más lejana (Fondo)</span>
                   </span>
                 </div>
 
@@ -546,7 +721,7 @@ export function Exit2DModal({ isOpen, onClose, token, onSuccess }: Props) {
             <button
               type="button"
               onClick={onClose}
-              className="w-full sm:w-auto px-4 py-2 text-xs font-semibold text-slate-600 hover:text-slate-800 text-center"
+              className="w-full sm:w-auto px-4 py-2 text-xs font-semibold text-slate-600 hover:text-slate-800 text-center cursor-pointer"
             >
               {step === "SUCCESS" ? "Cerrar" : "Cancelar"}
             </button>
@@ -556,7 +731,7 @@ export function Exit2DModal({ isOpen, onClose, token, onSuccess }: Props) {
                 type="button"
                 onClick={handleProceedToPreReport}
                 disabled={sortedSelectedItems.length === 0}
-                className="w-full sm:w-auto rounded-xl bg-orange-600 px-5 py-2.5 text-xs font-bold text-white hover:bg-orange-700 shadow transition disabled:opacity-50 text-center"
+                className="w-full sm:w-auto rounded-xl bg-orange-600 px-5 py-2.5 text-xs font-bold text-white hover:bg-orange-700 shadow-xs transition disabled:opacity-50 text-center cursor-pointer"
               >
                 Continuar a Verificación de Ruta ({sortedSelectedItems.length}) →
               </button>
@@ -567,7 +742,7 @@ export function Exit2DModal({ isOpen, onClose, token, onSuccess }: Props) {
                 <button
                   type="button"
                   onClick={() => setStep("SELECT")}
-                  className="w-full sm:w-auto px-3 py-2 text-xs font-bold text-slate-600 hover:text-slate-800 text-center"
+                  className="w-full sm:w-auto px-3 py-2 text-xs font-bold text-slate-600 hover:text-slate-800 text-center cursor-pointer"
                 >
                   ← Modificar Selección
                 </button>
@@ -575,7 +750,7 @@ export function Exit2DModal({ isOpen, onClose, token, onSuccess }: Props) {
                   type="button"
                   onClick={handleConfirmExit}
                   disabled={submitting}
-                  className="w-full sm:w-auto rounded-xl bg-orange-600 px-5 py-2.5 text-xs font-bold text-white hover:bg-orange-700 shadow transition disabled:opacity-50 flex items-center justify-center gap-2"
+                  className="w-full sm:w-auto rounded-xl bg-orange-600 px-5 py-2.5 text-xs font-bold text-white hover:bg-orange-700 shadow-xs transition disabled:opacity-50 flex items-center justify-center gap-2 cursor-pointer"
                 >
                   {submitting ? (
                     <>
@@ -593,9 +768,9 @@ export function Exit2DModal({ isOpen, onClose, token, onSuccess }: Props) {
               <button
                 type="button"
                 onClick={() => window.print()}
-                className="w-full sm:w-auto flex items-center justify-center gap-2 rounded-xl bg-blue-600 px-5 py-2.5 text-xs font-bold text-white hover:bg-blue-700 shadow transition hover:scale-105 active:scale-95"
+                className="w-full sm:w-auto flex items-center justify-center gap-2 rounded-xl bg-blue-600 px-5 py-2.5 text-xs font-bold text-white hover:bg-blue-700 shadow-xs transition hover:scale-105 active:scale-95 cursor-pointer"
               >
-                <span>🖨️</span>
+                <Icon name="printer" className="h-4 w-4" />
                 <span>Imprimir Reporte Oficial (Hoja de Picking)</span>
               </button>
             )}
@@ -648,7 +823,7 @@ export function Exit2DModal({ isOpen, onClose, token, onSuccess }: Props) {
             {/* Picking Route Instruction */}
             <div className="mt-3 rounded-lg border border-slate-400 bg-slate-100 p-2 text-xs font-bold text-slate-800 flex items-center justify-between">
               <span>
-                🧭 CRITERIO DE RUTA: Ordenado por proximidad desde el portón de entrada (Casillero 01) hasta el fondo del almacén.
+                CRITERIO DE RUTA: Ordenado por proximidad desde el portón de entrada (Casillero 01) hasta el fondo del almacén.
               </span>
               <span className="text-[11px] text-slate-600">Total ítems: {generatedReport.items.length}</span>
             </div>
@@ -738,6 +913,16 @@ export function Exit2DModal({ isOpen, onClose, token, onSuccess }: Props) {
             </div>
           </div>
         </div>
+      )}
+
+      {/* Barcode / OCR Scanner Modal */}
+      {scannerOpen && (
+        <BarcodeScanner
+          onScan={handleCodeScanned}
+          onClose={() => setScannerOpen(false)}
+          label="Escanear etiqueta de posición o SKU de producto para salida"
+          catalogProducts={catalogProducts}
+        />
       )}
     </>
   );

@@ -808,3 +808,5 @@ export default function BarcodeScanner({
     </div>
   );
 }
+
+export { BarcodeScanner };
