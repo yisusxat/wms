@@ -1,10 +1,17 @@
 'use client';
 
-import { useState, useEffect, useMemo, FormEvent } from 'react';
+import { useState, useEffect, useMemo, useRef, FormEvent } from 'react';
+import dynamic from 'next/dynamic';
 import { apiFetch, CurrentUser, Page, Product } from '../../lib/api';
 import { ProductImportModal, ProductExportMenu } from './ProductImportExportModal';
 import { TableSkeleton } from './Skeleton';
 import Icon from './Icon';
+import { ChevronLeft, ChevronRight, Pause, Play } from 'lucide-react';
+
+const BarcodeScanner = dynamic(
+  () => import('./BarcodeScanner'),
+  { ssr: false }
+);
 
 interface ProductsPanelProps {
   token: string;
@@ -12,12 +19,24 @@ interface ProductsPanelProps {
   onError: (value: string) => void;
   onDataChanged?: () => void;
   refreshKey?: number;
+  initialSearch?: string;
+  onClearInitialSearch?: () => void;
 }
 
-export function ProductsPanel({ token, role, onError, onDataChanged, refreshKey }: ProductsPanelProps) {
+export function ProductsPanel({
+  token,
+  role,
+  onError,
+  onDataChanged,
+  refreshKey,
+  initialSearch,
+  onClearInitialSearch,
+}: ProductsPanelProps) {
   const [data, setData] = useState<Page<Product> | null>(null);
   const [allProducts, setAllProducts] = useState<Product[]>([]);
-  const [search, setSearch] = useState('');
+  const [search, setSearch] = useState(initialSearch || '');
+  const [isFilterFromScan, setIsFilterFromScan] = useState(Boolean(initialSearch));
+  const [scannerOpen, setScannerOpen] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState('ALL');
   const [selectedStatus, setSelectedStatus] = useState<'ALL' | 'ACTIVE' | 'INACTIVE'>('ALL');
   const [page, setPage] = useState(1);
@@ -25,6 +44,7 @@ export function ProductsPanel({ token, role, onError, onDataChanged, refreshKey 
   const [density, setDensity] = useState<'comfortable' | 'compact'>('comfortable');
   const [showAddForm, setShowAddForm] = useState(false);
   const [importModalOpen, setImportModalOpen] = useState(false);
+  const initialSearchHandledRef = useRef(false);
 
   // Form for creating a new product
   const [form, setForm] = useState({
@@ -50,11 +70,11 @@ export function ProductsPanel({ token, role, onError, onDataChanged, refreshKey 
   const canManage = role !== 'VIEWER';
 
   // Load paginated products with search query
-  const load = async () => {
+  const load = async (query = search, targetPage = page) => {
     setLoading(true);
     try {
       const res = await apiFetch<Page<Product>>(
-        `/products?search=${encodeURIComponent(search)}&page=${page}&pageSize=20`,
+        `/products?search=${encodeURIComponent(query)}&page=${targetPage}&pageSize=20`,
         token
       );
       setData(res);
@@ -72,8 +92,32 @@ export function ProductsPanel({ token, role, onError, onDataChanged, refreshKey 
   };
 
   useEffect(() => {
-    void load();
+    if (initialSearch !== undefined && initialSearch !== '') {
+      initialSearchHandledRef.current = true;
+      setSearch(initialSearch);
+      setSelectedCategory('ALL');
+      setSelectedStatus('ALL');
+      setPage(1);
+      setIsFilterFromScan(true);
+      void load(initialSearch, 1);
+    }
+  }, [initialSearch]);
+
+  useEffect(() => {
+    if (initialSearchHandledRef.current) {
+      initialSearchHandledRef.current = false;
+      return;
+    }
+    void load(search, page);
   }, [page, refreshKey]);
+
+  const handleClearSearch = () => {
+    setSearch('');
+    setIsFilterFromScan(false);
+    setPage(1);
+    onClearInitialSearch?.();
+    void load('', 1);
+  };
 
   // Extract all unique categories
   const categories = useMemo(() => {
@@ -369,30 +413,44 @@ export function ProductsPanel({ token, role, onError, onDataChanged, refreshKey 
                 className="w-full rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50/70 dark:bg-slate-800 py-2.5 pl-9 pr-4 text-xs font-medium text-slate-900 dark:text-slate-100 focus:bg-white dark:focus:bg-slate-900 focus:border-blue-600 focus:outline-none shadow-2xs"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                onKeyDown={(e) => e.key === 'Enter' && (setPage(1), void load())}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    setPage(1);
+                    setIsFilterFromScan(false);
+                    void load(search, 1);
+                  }
+                }}
               />
               {search && (
                 <button
                   type="button"
-                  onClick={() => {
-                    setSearch('');
-                    setPage(1);
-                    void load();
-                  }}
-                  className="absolute right-3 top-2.5 text-slate-400 hover:text-slate-600 font-bold text-xs"
+                  onClick={handleClearSearch}
+                  className="absolute right-3 top-2.5 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 font-bold text-xs cursor-pointer"
+                  title="Limpiar búsqueda"
                 >
                   ✕
                 </button>
               )}
             </div>
             <button
+              type="button"
               onClick={() => {
                 setPage(1);
-                void load();
+                setIsFilterFromScan(false);
+                void load(search, 1);
               }}
-              className="rounded-2xl border border-slate-300 bg-white px-4 py-2.5 text-xs font-bold text-slate-700 hover:bg-slate-50 shadow-2xs transition"
+              className="rounded-2xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-4 py-2.5 text-xs font-bold text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 shadow-2xs transition cursor-pointer"
             >
               Buscar
+            </button>
+            <button
+              type="button"
+              onClick={() => setScannerOpen(true)}
+              className="flex items-center gap-1.5 rounded-2xl bg-orange-600 hover:bg-orange-700 active:bg-orange-800 text-white px-3.5 py-2.5 text-xs font-bold shadow-2xs transition cursor-pointer active:scale-95 shrink-0"
+              title="Escanear SKU o código de barras con cámara / OCR / manual"
+            >
+              <Icon name="scan-barcode" size={15} />
+              <span className="hidden sm:inline">Escanear</span>
             </button>
           </div>
 
@@ -453,10 +511,34 @@ export function ProductsPanel({ token, role, onError, onDataChanged, refreshKey 
           </div>
         </div>
 
+        {/* Active Scan / Search Filter Banner */}
+        {search && (
+          <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg bg-blue-50 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-900/60 px-3.5 py-2 text-xs">
+            <div className="flex items-center gap-2 text-blue-900 dark:text-blue-200">
+              <Icon name="scan-barcode" size={16} className="text-orange-600 dark:text-orange-400 shrink-0" />
+              <span>
+                {isFilterFromScan ? 'Filtro por escáner activo:' : 'Filtrando catálogo por:'}{' '}
+                <strong className="font-mono font-bold bg-white dark:bg-slate-900 px-2 py-0.5 rounded border border-blue-300 dark:border-blue-800 text-blue-800 dark:text-blue-300">
+                  {search}
+                </strong>
+                {data ? ` (${data.total} ${data.total === 1 ? 'producto encontrado' : 'productos encontrados'})` : ''}
+              </span>
+            </div>
+            <button
+              type="button"
+              onClick={handleClearSearch}
+              className="font-semibold text-blue-700 hover:text-blue-900 dark:text-blue-300 dark:hover:text-blue-100 hover:underline flex items-center gap-1 cursor-pointer"
+            >
+              <Icon name="close" size={12} />
+              <span>Mostrar todos los productos</span>
+            </button>
+          </div>
+        )}
+
         {/* Products Table */}
-        <div className="overflow-x-auto rounded-2xl border border-slate-200 bg-white">
+        <div className="overflow-x-auto rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900">
           <table className="w-full text-left text-xs min-w-[620px]">
-            <thead className="border-b bg-slate-50 text-[11px] font-bold uppercase tracking-wider text-slate-500">
+            <thead className="border-b border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/60 text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
               <tr>
                 <th className={density === 'compact' ? 'px-3 py-2' : 'p-3.5'}>SKU</th>
                 <th className={density === 'compact' ? 'px-3 py-2' : 'p-3.5'}>Nombre del Producto</th>
@@ -466,7 +548,7 @@ export function ProductsPanel({ token, role, onError, onDataChanged, refreshKey 
                 {canManage && <th className={(density === 'compact' ? 'px-3 py-2' : 'p-3.5') + ' text-right'}>Acciones</th>}
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-100">
+            <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
               {loading ? (
                 <tr>
                   <td colSpan={canManage ? 6 : 5} className="p-4">
@@ -477,30 +559,44 @@ export function ProductsPanel({ token, role, onError, onDataChanged, refreshKey 
                 <tr>
                   <td colSpan={canManage ? 6 : 5} className="p-8 text-center text-slate-400">
                     <div className="space-y-2">
-                      <span className="text-3xl">📭</span>
-                      <p className="font-bold text-slate-700">No se encontraron productos</p>
-                      <p className="text-xs text-slate-500 max-w-sm mx-auto">
+                      <div className="flex h-12 w-12 mx-auto items-center justify-center rounded-full bg-slate-100 dark:bg-slate-800 text-slate-400">
+                        <Icon name="search" size={24} />
+                      </div>
+                      <p className="font-bold text-slate-700 dark:text-slate-200">No se encontraron productos</p>
+                      <p className="text-xs text-slate-500 dark:text-slate-400 max-w-sm mx-auto">
                         {search
                           ? `No se encontraron coincidencias para "${search}". Prueba ajustando tu búsqueda o limpiando los filtros.`
                           : 'Aún no hay productos registrados en el catálogo de tu bodega.'}
                       </p>
                       <div className="pt-3 flex flex-wrap justify-center items-center gap-2.5">
+                        {search && (
+                          <button
+                            type="button"
+                            onClick={handleClearSearch}
+                            className="rounded-xl bg-slate-100 hover:bg-slate-200 border border-slate-300 dark:border-slate-700 dark:bg-slate-800 dark:hover:bg-slate-700 px-3.5 py-2 text-xs font-semibold text-slate-700 dark:text-slate-200 transition flex items-center gap-1.5 cursor-pointer"
+                          >
+                            <Icon name="close" size={14} />
+                            <span>Limpiar búsqueda</span>
+                          </button>
+                        )}
                         <button
                           type="button"
                           onClick={() => setImportModalOpen(true)}
                           className="rounded-xl bg-emerald-600 hover:bg-emerald-500 px-4 py-2 text-xs font-bold text-white shadow-sm transition flex items-center gap-1.5 cursor-pointer active:scale-95"
                         >
-                          <span>📥</span>
+                          <Icon name="upload" size={14} />
                           <span>Importar Productos (Excel / CSV / JSON)</span>
                         </button>
-                        <button
-                          type="button"
-                          onClick={() => setShowAddForm(true)}
-                          className="rounded-xl bg-blue-50 border border-blue-200 px-3.5 py-2 text-xs font-bold text-blue-700 hover:bg-blue-100 transition flex items-center gap-1.5 cursor-pointer active:scale-95"
-                        >
-                          <span>➕</span>
-                          <span>Registrar Nuevo Producto</span>
-                        </button>
+                        {canManage && (
+                          <button
+                            type="button"
+                            onClick={() => setShowAddForm(true)}
+                            className="rounded-xl bg-blue-50 border border-blue-200 px-3.5 py-2 text-xs font-bold text-blue-700 hover:bg-blue-100 transition flex items-center gap-1.5 cursor-pointer active:scale-95 dark:bg-blue-950/40 dark:border-blue-800 dark:text-blue-300"
+                          >
+                            <Icon name="plus" size={14} />
+                            <span>Registrar Nuevo Producto</span>
+                          </button>
+                        )}
                       </div>
                     </div>
                   </td>
@@ -509,34 +605,34 @@ export function ProductsPanel({ token, role, onError, onDataChanged, refreshKey 
                 displayedItems.map((item) => {
                   const cellCls = density === 'compact' ? 'px-3 py-2' : 'p-3.5';
                   return (
-                  <tr key={item.id} className="hover:bg-slate-50/80 transition-colors">
+                  <tr key={item.id} className="hover:bg-slate-50/80 dark:hover:bg-slate-800/50 transition-colors">
                     <td className={cellCls}>
-                      <span className="rounded-lg bg-indigo-50 border border-indigo-200 px-2 py-1 font-mono font-bold text-indigo-800 text-[11px]">
+                      <span className="rounded-lg bg-indigo-50 dark:bg-indigo-950/50 border border-indigo-200 dark:border-indigo-800 px-2 py-1 font-mono font-bold text-indigo-800 dark:text-indigo-300 text-[11px]">
                         {item.sku}
                       </span>
                     </td>
                     <td className={cellCls}>
-                      <p className="font-bold text-slate-900">{item.name}</p>
+                      <p className="font-bold text-slate-900 dark:text-white">{item.name}</p>
                       {item.barcode && (
-                        <p className="text-[10px] font-mono text-slate-400">
+                        <p className="text-[10px] font-mono text-slate-400 dark:text-slate-500">
                           Barra: {item.barcode}
                         </p>
                       )}
                     </td>
                     <td className={cellCls}>
-                      <span className="rounded-full bg-slate-100 px-2.5 py-0.5 text-[11px] font-semibold text-slate-700">
+                      <span className="rounded-full bg-slate-100 dark:bg-slate-800 px-2.5 py-0.5 text-[11px] font-semibold text-slate-700 dark:text-slate-300">
                         {item.category || 'General'}
                       </span>
                     </td>
-                    <td className={`${cellCls} font-medium text-slate-600`}>{item.unit || 'unidad'}</td>
+                    <td className={`${cellCls} font-medium text-slate-600 dark:text-slate-300`}>{item.unit || 'unidad'}</td>
                     <td className={cellCls}>
                       {item.active ? (
-                        <span className="rounded-full bg-emerald-100 px-2.5 py-0.5 text-[11px] font-bold text-emerald-800 inline-flex items-center gap-1">
-                          <span className="h-1.5 w-1.5 rounded-full bg-emerald-600" />
+                        <span className="rounded-full bg-emerald-100 dark:bg-emerald-950/50 px-2.5 py-0.5 text-[11px] font-bold text-emerald-800 dark:text-emerald-300 inline-flex items-center gap-1">
+                          <span className="h-1.5 w-1.5 rounded-full bg-emerald-600 dark:bg-emerald-400" />
                           Activo
                         </span>
                       ) : (
-                        <span className="rounded-full bg-slate-100 px-2.5 py-0.5 text-[11px] font-semibold text-slate-500 inline-flex items-center gap-1">
+                        <span className="rounded-full bg-slate-100 dark:bg-slate-800 px-2.5 py-0.5 text-[11px] font-semibold text-slate-500 dark:text-slate-400 inline-flex items-center gap-1">
                           <span className="h-1.5 w-1.5 rounded-full bg-slate-400" />
                           Inactivo
                         </span>
@@ -557,18 +653,22 @@ export function ProductsPanel({ token, role, onError, onDataChanged, refreshKey 
                                 barcode: item.barcode || '',
                               });
                             }}
-                            className="rounded-lg p-1.5 text-slate-500 hover:bg-indigo-50 hover:text-indigo-700 transition"
+                            className="rounded-lg p-1.5 text-slate-500 hover:bg-indigo-50 hover:text-indigo-700 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-indigo-300 transition cursor-pointer"
                             title="Editar producto"
                           >
-                            ✏️
+                            <Icon name="edit" size={14} />
                           </button>
                           <button
                             type="button"
                             onClick={() => handleToggleActive(item)}
-                            className="rounded-lg p-1.5 text-slate-500 hover:bg-slate-200 transition text-[11px]"
+                            className="rounded-lg p-1.5 text-slate-500 hover:bg-slate-200 dark:text-slate-400 dark:hover:bg-slate-800 transition text-[11px] cursor-pointer"
                             title={item.active ? 'Desactivar producto' : 'Activar producto'}
                           >
-                            {item.active ? '⏸️' : '▶️'}
+                            {item.active ? (
+                              <Pause className="h-3.5 w-3.5 text-amber-600 dark:text-amber-400" />
+                            ) : (
+                              <Play className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
+                            )}
                           </button>
                         </div>
                       </td>
@@ -583,7 +683,7 @@ export function ProductsPanel({ token, role, onError, onDataChanged, refreshKey 
 
         {/* Pager Pagination */}
         {data && data.total > 0 && (
-          <div className="flex items-center justify-between border-t border-slate-100 pt-3 text-xs text-slate-500">
+          <div className="flex items-center justify-between border-t border-slate-100 dark:border-slate-800 pt-3 text-xs text-slate-500 dark:text-slate-400">
             <span>
               Mostrando {displayedItems.length} de {data.total} productos
             </span>
@@ -591,19 +691,21 @@ export function ProductsPanel({ token, role, onError, onDataChanged, refreshKey 
               <button
                 disabled={page <= 1}
                 onClick={() => setPage((p) => Math.max(1, p - 1))}
-                className="rounded-lg border px-2.5 py-1 text-xs font-bold hover:bg-slate-50 disabled:opacity-40"
+                className="rounded-lg border border-slate-300 dark:border-slate-700 px-2.5 py-1 text-xs font-bold hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-40 flex items-center gap-1 cursor-pointer"
               >
-                ◀ Ant
+                <ChevronLeft className="h-3.5 w-3.5" />
+                <span>Ant</span>
               </button>
-              <span className="px-2 font-bold text-slate-800">
+              <span className="px-2 font-bold text-slate-800 dark:text-slate-200">
                 Pág. {page} / {Math.max(1, Math.ceil(data.total / (data.pageSize || 20)))}
               </span>
               <button
                 disabled={page >= Math.ceil(data.total / (data.pageSize || 20))}
                 onClick={() => setPage((p) => p + 1)}
-                className="rounded-lg border px-2.5 py-1 text-xs font-bold hover:bg-slate-50 disabled:opacity-40"
+                className="rounded-lg border border-slate-300 dark:border-slate-700 px-2.5 py-1 text-xs font-bold hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-40 flex items-center gap-1 cursor-pointer"
               >
-                Sig ▶
+                <span>Sig</span>
+                <ChevronRight className="h-3.5 w-3.5" />
               </button>
             </div>
           </div>
@@ -722,6 +824,27 @@ export function ProductsPanel({ token, role, onError, onDataChanged, refreshKey 
           onDataChanged?.();
         }}
       />
+
+      {/* In-Panel Barcode & OCR Scanner Modal */}
+      {scannerOpen && (
+        <BarcodeScanner
+          label="Escanear SKU o Código de Barras"
+          catalogProducts={allProducts.map((p) => ({ sku: p.sku, name: p.name, barcode: p.barcode }))}
+          onClose={() => setScannerOpen(false)}
+          onScan={(code) => {
+            setScannerOpen(false);
+            const clean = code.trim();
+            if (!clean) return;
+            setSearch(clean);
+            setSelectedCategory('ALL');
+            setSelectedStatus('ALL');
+            setPage(1);
+            setIsFilterFromScan(true);
+            void load(clean, 1);
+            onClearInitialSearch?.();
+          }}
+        />
+      )}
     </section>
   );
 }

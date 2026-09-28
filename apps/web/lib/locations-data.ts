@@ -210,3 +210,12 @@ export function getWarehouseSeedLocations(): Location[] {
     )
   );
 }
+
+export function isWarehouseLocationCode(code?: string | null): boolean {
+  if (!code) return false;
+  const trimmed = code.trim().toUpperCase();
+  if (LOCATION_CODE_TO_UUID[trimmed]) return true;
+  // Warehouse format: Passillo-Tipo-Nivel-Posicion, e.g., A-C-01-05, B-P-02-14
+  return /^[A-Z]-[CP]-\d{1,2}-\d{1,2}$/i.test(trimmed);
+}
+

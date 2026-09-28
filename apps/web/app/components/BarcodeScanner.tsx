@@ -98,12 +98,12 @@ export default function BarcodeScanner({
 
   // Handle scanned code with debouncing
   const handleDetectedCode = useCallback(
-    (code: string) => {
+    (code: string, force = false) => {
       const clean = code.trim();
       if (!clean) return;
 
       const now = Date.now();
-      if (now - lastScanTimeRef.current < 1500) {
+      if (!force && now - lastScanTimeRef.current < 1500) {
         return; // Prevent duplicate reads in under 1.5s
       }
       lastScanTimeRef.current = now;
@@ -429,7 +429,7 @@ export default function BarcodeScanner({
   const handleManualSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (manualValue.trim()) {
-      handleDetectedCode(manualValue.trim());
+      handleDetectedCode(manualValue.trim(), true);
       setManualValue("");
     }
   };
@@ -730,7 +730,7 @@ export default function BarcodeScanner({
                       <button
                         key={candidate.code}
                         type="button"
-                        onClick={() => handleDetectedCode(candidate.code)}
+                        onClick={() => handleDetectedCode(candidate.code, true)}
                         className={`text-left px-2.5 py-1.5 rounded-lg border text-xs font-mono transition-all flex items-center gap-2 cursor-pointer ${
                           candidate.isKnownProduct
                             ? "bg-emerald-50 dark:bg-emerald-950/40 border-emerald-400 text-emerald-800 dark:text-emerald-300 font-bold"

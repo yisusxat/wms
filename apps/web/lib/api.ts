@@ -4,6 +4,7 @@ import {
   resolveLocationUuid,
   normalizeLocationCode,
   LOCATION_CODE_TO_UUID,
+  isWarehouseLocationCode,
 } from './locations-data';
 
 export {
@@ -12,6 +13,7 @@ export {
   resolveLocationUuid,
   normalizeLocationCode,
   LOCATION_CODE_TO_UUID,
+  isWarehouseLocationCode,
 };
 
 const configuredApiUrl = process.env.NEXT_PUBLIC_API_URL;
@@ -566,6 +568,7 @@ async function fallbackInsforge<T>(path: string, token: string, init?: RequestIn
       list = list.filter((p: any) =>
         (p.name && String(p.name).toLowerCase().includes(search)) ||
         (p.sku && String(p.sku).toLowerCase().includes(search)) ||
+        (p.barcode && String(p.barcode).toLowerCase().includes(search)) ||
         (p.category && String(p.category).toLowerCase().includes(search))
       );
     }

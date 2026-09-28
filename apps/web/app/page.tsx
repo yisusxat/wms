@@ -33,7 +33,7 @@ import {
 } from 'lucide-react';
 import { insforge } from '../lib/insforge';
 import dynamic from 'next/dynamic';
-import { apiFetch, CurrentUser, InventoryItem, Location, Page, Product, Summary } from '../lib/api';
+import { apiFetch, CurrentUser, InventoryItem, Location, Page, Product, Summary, isWarehouseLocationCode } from '../lib/api';
 import { locationStatusClass, locationStatusLabel } from '../lib/locationStatus';
 import { MovementsPanel } from './components/MovementsPanel';
 import { ProductsPanel } from './components/ProductsPanel';
@@ -265,6 +265,7 @@ function HomePageContent() {
   const [legalOpen, setLegalOpen] = useState(false);
   const [twoFactorOpen, setTwoFactorOpen] = useState(false);
   const [mappingInitialLocation, setMappingInitialLocation] = useState<string | null>(null);
+  const [productInitialSearch, setProductInitialSearch] = useState('');
   const [globalScannerOpen, setGlobalScannerOpen] = useState(false);
   const [isOnline, setIsOnline] = useState(true);
   const [showReconnected, setShowReconnected] = useState(false);
@@ -895,7 +896,17 @@ function HomePageContent() {
           ) : null}
           {tab === 'kpis' ? <KPIPanel token={token} organizationId={profile?.organizationId} refreshKey={dataVersion} onNavigate={(nextTab) => changeTab(nextTab as Tab)} /> : null}
           {tab === 'reports' ? <ReportsPanel token={token} organizationId={profile?.organizationId} onDataChanged={refreshSummary} refreshKey={dataVersion} /> : null}
-          {tab === 'products' ? <ProductsPanel token={token} role={profile?.role} onError={setError} onDataChanged={refreshSummary} refreshKey={dataVersion} /> : null}
+          {tab === 'products' ? (
+            <ProductsPanel
+              token={token}
+              role={profile?.role}
+              onError={setError}
+              onDataChanged={refreshSummary}
+              refreshKey={dataVersion}
+              initialSearch={productInitialSearch}
+              onClearInitialSearch={() => setProductInitialSearch('')}
+            />
+          ) : null}
           {tab === 'locations' ? <Locations token={token} onError={setError} refreshKey={dataVersion} /> : null}
           {tab === 'inventory' ? <Inventory token={token} onError={setError} refreshKey={dataVersion} /> : null}
           {tab === 'movements' ? <MovementsPanel token={token} role={profile?.role} onError={setError} onDataChanged={refreshSummary} refreshKey={dataVersion} /> : null}
@@ -1005,10 +1016,14 @@ function HomePageContent() {
           onClose={() => setGlobalScannerOpen(false)}
           onScan={(code) => {
             setGlobalScannerOpen(false);
-            if (code.includes('-')) {
-              setMappingInitialLocation(code);
+            const clean = code.trim();
+            if (!clean) return;
+
+            if (isWarehouseLocationCode(clean)) {
+              setMappingInitialLocation(clean);
               changeTab('warehouse2d');
             } else {
+              setProductInitialSearch(clean);
               changeTab('products');
             }
           }}

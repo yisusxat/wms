@@ -182,10 +182,23 @@ async function setupMockApiRoutes(page: Page) {
         if (method === 'POST') {
           return route.fulfill({ status: 201, headers: corsHeaders, contentType: 'application/json', body: JSON.stringify({ id: 'prod-new', sku: 'NEW-001', name: 'Nuevo Producto Test', unit: 'unidad', active: true }) });
         }
+        let items = MOCK_PRODUCTS;
+        try {
+          const parsedUrl = new URL(url);
+          const search = parsedUrl.searchParams.get('search')?.toLowerCase().trim();
+          if (search) {
+            items = items.filter(p =>
+              p.name.toLowerCase().includes(search) ||
+              p.sku.toLowerCase().includes(search) ||
+              (p.barcode && p.barcode.toLowerCase().includes(search)) ||
+              (p.category && p.category.toLowerCase().includes(search))
+            );
+          }
+        } catch {}
         if (url.includes('records/products')) {
-          return route.fulfill({ status: 200, headers: corsHeaders, contentType: 'application/json', body: JSON.stringify(MOCK_PRODUCTS) });
+          return route.fulfill({ status: 200, headers: corsHeaders, contentType: 'application/json', body: JSON.stringify(items) });
         }
-        return route.fulfill({ status: 200, headers: corsHeaders, contentType: 'application/json', body: JSON.stringify({ items: MOCK_PRODUCTS, total: MOCK_PRODUCTS.length, page: 1, pageSize: 50 }) });
+        return route.fulfill({ status: 200, headers: corsHeaders, contentType: 'application/json', body: JSON.stringify({ items, total: items.length, page: 1, pageSize: 50 }) });
       }
       if (url.includes('/inventory') || url.includes('records/inventory')) {
         if (url.includes('records/inventory')) {
@@ -532,12 +545,20 @@ test.describe('7. Modales de Soporte, Legal, Auditoría y Seguridad', () => {
     await page.getByRole('button', { name: 'Manual', exact: true }).click();
     await expect(page.getByPlaceholder('Escribe o pega el código...')).toBeVisible();
 
-    // Enter a code and submit
-    await page.getByPlaceholder('Escribe o pega el código...').fill('SKU-TEST-999');
+    // Enter a SKU code manually and submit
+    await page.getByPlaceholder('Escribe o pega el código...').fill('ARR-DIA-001');
     await page.getByRole('button', { name: 'Confirmar código' }).click();
 
-    // Scanner closes and routes appropriately
+    // Scanner closes and routes to products tab with specific product filtered
     await expect(page.getByText('Escáner de Código')).not.toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Catálogo de Productos' })).toBeVisible();
+    await expect(page.getByText('Filtro por escáner activo:')).toBeVisible();
+    await expect(page.getByRole('strong')).toContainText('ARR-DIA-001');
+    await expect(page.getByText('Arroz Diana Especial 1kg')).toBeVisible();
+
+    // Clear filter to show all products
+    await page.getByRole('button', { name: /Mostrar todos los productos/i }).click();
+    await expect(page.getByText('Aceite Premier 1000ml')).toBeVisible();
   });
 
   test('UI/UX Avanzado: Paleta de Comandos Ctrl+K, Modo Oscuro/Industrial, Heatmap 2D y Stepper', async ({ page }) => {
