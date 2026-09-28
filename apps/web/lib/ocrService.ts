@@ -25,13 +25,36 @@ export interface SkuCandidate {
   originalOcrText?: string;
 }
 
+export interface OcrWordDetail {
+  text: string;
+  confidence: number;
+  bbox?: {
+    x0: number;
+    y0: number;
+    x1: number;
+    y1: number;
+  };
+}
+
+export interface OcrResult {
+  text: string;
+  confidence: number;
+  rawText?: string;
+  words?: OcrWordDetail[];
+  highConfidenceText?: string;
+}
+
 export interface PreprocessOptions {
   invert?: boolean;
   contrast?: number; // 1.0 = normal, 1.5 - 2.0 = boosted
-  binarize?: boolean; // Otsu binarization
+  binarize?: boolean;
+  binarizationMethod?: 'otsu' | 'adaptive' | 'auto';
   scaleFactor?: number;
   sharpen?: boolean; // Laplacian unsharp mask
   adaptiveThreshold?: boolean;
+  deskew?: boolean; // Automatic orientation alignment
+  denoise?: boolean; // Noise reduction filter
+  morphClose?: boolean; // Morphological closing to seal dot-matrix gaps
 }
 
 export interface KnownProductLookup {
@@ -67,6 +90,42 @@ export function normalizeOcrConfusion(str: string): string {
     .replace(/[S]/g, '5')
     .replace(/[B]/g, '8')
     .replace(/[Z]/g, '2');
+}
+
+/**
+ * Standard post-processing for OCR output based on the image-ocr skill specifications:
+ * 1. Strips non-printable / control characters (retains ASCII text and line breaks).
+ * 2. Merges hyphenated words split across multiple lines.
+ * 3. Normalizes whitespace and redundant carriage returns.
+ * 4. Applies context-sensitive character corrections:
+ *    - 0 misread as O before/after letters.
+ *    - Standalone l or 1 misread as uppercase I.
+ *    - rn misread as m in serif fonts.
+ */
+export function cleanOcrText(text: string): string {
+  if (!text) return '';
+
+  // 1. Remove non-printable / control characters (preserve ASCII printable, newlines, tabs)
+  let result = text.replace(/[^\x20-\x7E\n\t]/g, '');
+
+  // 2. Fix hyphenated words split across lines (common in narrow label wrappers)
+  result = result.replace(/(\w)-\n(\w)/g, '$1$2');
+
+  // 3. Normalize multiple whitespace and extra linebreaks
+  result = result.replace(/[ \t]+/g, ' ');
+  result = result.replace(/\n{3,}/g, '\n\n');
+
+  // 4. Contextual OCR corrections from skill specifications
+  // 0 misread as O before letter
+  result = result.replace(/\b0(?=[a-zA-Z])/g, 'O');
+  // O misread as 0 after letter
+  result = result.replace(/(?<=[a-zA-Z])0\b/g, 'O');
+  // Standalone 'l' misread as 'I'
+  result = result.replace(/\bl\b/g, 'I');
+  // 'rn' misread as 'm' in low-resolution serif fonts
+  result = result.replace(/\brn\b/g, 'm').replace(/(?<=[a-z])rn(?=[a-z])/g, 'm');
+
+  return result.trim();
 }
 
 /**
@@ -178,14 +237,218 @@ export function calculateOtsuThreshold(grayPixels: Uint8ClampedArray): number {
 }
 
 /**
+ * Integral image (Summed-Area Table) based adaptive thresholding.
+ * Extremely fast O(1) per-pixel computation that dynamically overcomes uneven warehouse lighting,
+ * glare from shrink-wrap packaging, and dark rack shadows.
+ */
+export function applyAdaptiveThreshold(
+  grayBuffer: Uint8ClampedArray,
+  width: number,
+  height: number,
+  radius = 11,
+  cConstant = 6
+): Uint8ClampedArray {
+  const numPixels = width * height;
+  const binary = new Uint8ClampedArray(numPixels);
+
+  // Compute 2D Integral Image (Summed Area Table)
+  const intW = width + 1;
+  const intH = height + 1;
+  const integral = new Float64Array(intW * intH);
+
+  for (let y = 0; y < height; y++) {
+    const rowOffset = y * width;
+    const intRow = (y + 1) * intW;
+    const prevIntRow = y * intW;
+    let rowSum = 0;
+    for (let x = 0; x < width; x++) {
+      rowSum += grayBuffer[rowOffset + x];
+      integral[intRow + (x + 1)] = integral[prevIntRow + (x + 1)] + rowSum;
+    }
+  }
+
+  // Evaluate each pixel against its local window mean minus C
+  for (let y = 0; y < height; y++) {
+    const y1 = Math.max(0, y - radius);
+    const y2 = Math.min(height - 1, y + radius);
+    const rowOffset = y * width;
+
+    for (let x = 0; x < width; x++) {
+      const x1 = Math.max(0, x - radius);
+      const x2 = Math.min(width - 1, x + radius);
+      const count = (x2 - x1 + 1) * (y2 - y1 + 1);
+
+      const sum =
+        integral[(y2 + 1) * intW + (x2 + 1)] -
+        integral[(y2 + 1) * intW + x1] -
+        integral[y1 * intW + (x2 + 1)] +
+        integral[y1 * intW + x1];
+
+      const localMean = sum / count;
+      const pixelVal = grayBuffer[rowOffset + x];
+
+      // Black text (0) if pixel < threshold, White background (255) otherwise
+      binary[rowOffset + x] = pixelVal < localMean - cConstant ? 0 : 255;
+    }
+  }
+
+  return binary;
+}
+
+/**
+ * Morphological closing operation (Dilation followed by Erosion).
+ * Closes micro-gaps in dot-matrix / inkjet printed text, connects fragmented character strokes,
+ * and eliminates high-frequency salt-and-pepper noise.
+ */
+export function applyMorphologicalClose(
+  binaryBuffer: Uint8ClampedArray,
+  width: number,
+  height: number,
+  radius = 1
+): Uint8ClampedArray {
+  const numPixels = width * height;
+  const dilated = new Uint8ClampedArray(numPixels);
+  const closed = new Uint8ClampedArray(numPixels);
+
+  // 1. Dilation: for text, if any neighbor is dark (0), output is dark (0)
+  for (let y = 0; y < height; y++) {
+    const yStart = Math.max(0, y - radius);
+    const yEnd = Math.min(height - 1, y + radius);
+    const rowOffset = y * width;
+
+    for (let x = 0; x < width; x++) {
+      const xStart = Math.max(0, x - radius);
+      const xEnd = Math.min(width - 1, x + radius);
+      let minVal = 255;
+
+      for (let ny = yStart; ny <= yEnd; ny++) {
+        const nRow = ny * width;
+        for (let nx = xStart; nx <= xEnd; nx++) {
+          const val = binaryBuffer[nRow + nx];
+          if (val < minVal) {
+            minVal = val;
+            if (minVal === 0) break;
+          }
+        }
+        if (minVal === 0) break;
+      }
+      dilated[rowOffset + x] = minVal;
+    }
+  }
+
+  // 2. Erosion: if all neighbors are dark (0), output is dark (0), else white (255)
+  for (let y = 0; y < height; y++) {
+    const yStart = Math.max(0, y - radius);
+    const yEnd = Math.min(height - 1, y + radius);
+    const rowOffset = y * width;
+
+    for (let x = 0; x < width; x++) {
+      const xStart = Math.max(0, x - radius);
+      const xEnd = Math.min(width - 1, x + radius);
+      let maxVal = 0;
+
+      for (let ny = yStart; ny <= yEnd; ny++) {
+        const nRow = ny * width;
+        for (let nx = xStart; nx <= xEnd; nx++) {
+          const val = dilated[nRow + nx];
+          if (val > maxVal) {
+            maxVal = val;
+            if (maxVal === 255) break;
+          }
+        }
+        if (maxVal === 255) break;
+      }
+      closed[rowOffset + x] = maxVal;
+    }
+  }
+
+  return closed;
+}
+
+/**
+ * Estimates text skew angle (-15° to +15°) using horizontal projection profile variance.
+ * Text lines aligned horizontally produce high variance in line-sum luminance profiles.
+ */
+export function estimateDeskewAngle(
+  grayBuffer: Uint8ClampedArray,
+  width: number,
+  height: number
+): number {
+  if (width < 60 || height < 40) return 0;
+
+  // Sample downscaled grid for quick calculation
+  const stepX = Math.max(1, Math.floor(width / 160));
+  const stepY = Math.max(1, Math.floor(height / 100));
+  const sW = Math.floor(width / stepX);
+  const sH = Math.floor(height / stepY);
+
+  const sample = new Uint8Array(sW * sH);
+  for (let sy = 0; sy < sH; sy++) {
+    const origY = sy * stepY;
+    for (let sx = 0; sx < sW; sx++) {
+      sample[sy * sW + sx] = grayBuffer[origY * width + sx * stepX];
+    }
+  }
+
+  let bestAngle = 0;
+  let maxVariance = 0;
+
+  // Test angles from -12 to +12 degrees in 2 degree steps
+  for (let angle = -12; angle <= 12; angle += 2) {
+    const rad = (angle * Math.PI) / 180;
+    const tan = Math.tan(rad);
+    const profile = new Float64Array(sH);
+    const counts = new Uint16Array(sH);
+
+    for (let sy = 0; sy < sH; sy++) {
+      for (let sx = 0; sx < sW; sx++) {
+        const shiftedY = Math.round(sy + (sx - sW / 2) * tan);
+        if (shiftedY >= 0 && shiftedY < sH) {
+          profile[shiftedY] += 255 - sample[sy * sW + sx]; // Dark text pixels contribute
+          counts[shiftedY]++;
+        }
+      }
+    }
+
+    let sum = 0;
+    let validLines = 0;
+    for (let i = 0; i < sH; i++) {
+      if (counts[i] > 5) {
+        sum += profile[i] / counts[i];
+        validLines++;
+      }
+    }
+    if (validLines === 0) continue;
+
+    const mean = sum / validLines;
+    let variance = 0;
+    for (let i = 0; i < sH; i++) {
+      if (counts[i] > 5) {
+        const diff = profile[i] / counts[i] - mean;
+        variance += diff * diff;
+      }
+    }
+
+    if (variance > maxVariance) {
+      maxVariance = variance;
+      bestAngle = angle;
+    }
+  }
+
+  return bestAngle;
+}
+
+/**
  * Preprocesses an image or video frame with Computer Vision algorithms:
  * 1. Cropping to the aiming reticle area.
- * 2. High-quality scaling for optimal OCR font height (30-60px).
- * 3. Grayscale conversion.
- * 4. Contrast stretching & enhancement.
- * 5. Optional Laplacian edge sharpening.
- * 6. Otsu's adaptive binarization (sharp black/white text edges).
- * 7. Polarity inversion (for white text on dark packaging).
+ * 2. High-quality scaling (upscale to 300+ DPI equivalent, font height 30-60px).
+ * 3. Automatic deskewing / rotation correction.
+ * 4. Grayscale luminance conversion (Rec. 601 luma).
+ * 5. Contrast stretching & enhancement (1.8x - 2.0x boost for faded labels).
+ * 6. Optional Laplacian edge sharpening.
+ * 7. Dual Binarization: Adaptive Gaussian thresholding (shadows/glare) or Otsu (uniform).
+ * 8. Morphological closing (seals broken strokes in thermal & dot-matrix labels).
+ * 9. Polarity inversion (for white text on dark packaging).
  */
 export function preprocessCanvasForOCR(
   source: CanvasImageSource,
@@ -194,15 +457,22 @@ export function preprocessCanvasForOCR(
 ): HTMLCanvasElement {
   const {
     invert = false,
-    contrast = 1.6,
+    contrast = 1.8,
     binarize = true,
-    scaleFactor = 2.2,
+    binarizationMethod = 'auto',
+    scaleFactor,
     sharpen = true,
+    adaptiveThreshold,
+    deskew = true,
+    morphClose = true,
   } = options;
 
+  // Auto-compute scaling factor: ensure image width >= 1000px (300+ DPI equivalent)
+  const computedScale = scaleFactor ?? Math.max(2.0, Math.min(3.5, 1200 / Math.max(cropRect.width, 200)));
+
   const canvas = document.createElement('canvas');
-  const targetWidth = Math.max(200, Math.round(cropRect.width * scaleFactor));
-  const targetHeight = Math.max(100, Math.round(cropRect.height * scaleFactor));
+  const targetWidth = Math.max(200, Math.round(cropRect.width * computedScale));
+  const targetHeight = Math.max(100, Math.round(cropRect.height * computedScale));
 
   canvas.width = targetWidth;
   canvas.height = targetHeight;
@@ -239,7 +509,32 @@ export function preprocessCanvasForOCR(
     grayBuffer[j] = Math.round(0.299 * r + 0.587 * g + 0.114 * b);
   }
 
-  // 2. Optional Laplacian edge sharpening to crisp faint/dot-matrix printed digits
+  // 2. Optional Deskew: if rotation angle > 1.5°, rotate the canvas to align text horizontally
+  if (deskew && targetWidth > 150 && targetHeight > 80) {
+    const angle = estimateDeskewAngle(grayBuffer, targetWidth, targetHeight);
+    if (Math.abs(angle) >= 1.5) {
+      const rad = (-angle * Math.PI) / 180;
+      ctx.save();
+      ctx.translate(targetWidth / 2, targetHeight / 2);
+      ctx.rotate(rad);
+      ctx.drawImage(canvas, -targetWidth / 2, -targetHeight / 2);
+      ctx.restore();
+
+      // Refresh image data after rotation
+      const rotatedData = ctx.getImageData(0, 0, targetWidth, targetHeight);
+      for (let i = 0, j = 0; i < rotatedData.data.length; i += 4, j++) {
+        const r = rotatedData.data[i];
+        const g = rotatedData.data[i + 1];
+        const b = rotatedData.data[i + 2];
+        grayBuffer[j] = Math.round(0.299 * r + 0.587 * g + 0.114 * b);
+        data[i] = r;
+        data[i + 1] = g;
+        data[i + 2] = b;
+      }
+    }
+  }
+
+  // 3. Optional Laplacian edge sharpening to crisp faint/dot-matrix printed digits
   if (sharpen && targetWidth > 2 && targetHeight > 2) {
     const sharpened = new Uint8ClampedArray(numPixels);
     for (let y = 1; y < targetHeight - 1; y++) {
@@ -266,31 +561,69 @@ export function preprocessCanvasForOCR(
     }
   }
 
-  // 3. Compute Otsu threshold if binarization is enabled
-  const otsuThreshold = binarize ? calculateOtsuThreshold(grayBuffer) : 128;
-
-  // 4. Contrast adjustment factor
+  // 4. Contrast stretching factor
   const contrastFactor = (259 * ((contrast - 1) * 128 + 255)) / (255 * (259 - (contrast - 1) * 128));
-
-  // 5. Pixel transformation (Contrast, Binarization, Inversion)
-  for (let i = 0, j = 0; i < data.length; i += 4, j++) {
+  for (let j = 0; j < numPixels; j++) {
     let gray = grayBuffer[j];
-
-    // Contrast stretching
     gray = contrastFactor * (gray - 128) + 128;
-    gray = Math.max(0, Math.min(255, gray));
+    grayBuffer[j] = Math.max(0, Math.min(255, gray));
+  }
 
-    let finalVal: number;
-    if (binarize) {
-      finalVal = gray < otsuThreshold ? 0 : 255;
-    } else {
-      finalVal = gray;
+  // 5. Binarization selection (Adaptive for uneven shadows vs Otsu for uniform background)
+  let binaryPixels: Uint8ClampedArray;
+  if (binarize) {
+    let useAdaptive = adaptiveThreshold || binarizationMethod === 'adaptive';
+
+    if (binarizationMethod === 'auto' && !adaptiveThreshold) {
+      // Analyze 4 quadrant lighting variance to detect shadows or uneven spotlight
+      const halfW = Math.floor(targetWidth / 2);
+      const halfH = Math.floor(targetHeight / 2);
+      let q1 = 0, q2 = 0, q3 = 0, q4 = 0;
+      let count = 0;
+      for (let y = 0; y < halfH; y += 4) {
+        for (let x = 0; x < halfW; x += 4) {
+          q1 += grayBuffer[y * targetWidth + x];
+          q2 += grayBuffer[y * targetWidth + (x + halfW)];
+          q3 += grayBuffer[(y + halfH) * targetWidth + x];
+          q4 += grayBuffer[(y + halfH) * targetWidth + (x + halfW)];
+          count++;
+        }
+      }
+      if (count > 0) {
+        const m1 = q1 / count, m2 = q2 / count, m3 = q3 / count, m4 = q4 / count;
+        const maxM = Math.max(m1, m2, m3, m4);
+        const minM = Math.min(m1, m2, m3, m4);
+        // If lighting difference across quadrants exceeds 28, use adaptive thresholding!
+        if (maxM - minM > 28) {
+          useAdaptive = true;
+        }
+      }
     }
 
+    if (useAdaptive) {
+      binaryPixels = applyAdaptiveThreshold(grayBuffer, targetWidth, targetHeight, 11, 7);
+    } else {
+      const otsu = calculateOtsuThreshold(grayBuffer);
+      binaryPixels = new Uint8ClampedArray(numPixels);
+      for (let i = 0; i < numPixels; i++) {
+        binaryPixels[i] = grayBuffer[i] < otsu ? 0 : 255;
+      }
+    }
+
+    // 6. Morphological Closing (Dilation + Erosion) to seal broken strokes in dot-matrix text
+    if (morphClose) {
+      binaryPixels = applyMorphologicalClose(binaryPixels, targetWidth, targetHeight, 1);
+    }
+  } else {
+    binaryPixels = grayBuffer;
+  }
+
+  // 7. Write back to RGBA data
+  for (let i = 0, j = 0; i < data.length; i += 4, j++) {
+    let finalVal = binaryPixels[j];
     if (invert) {
       finalVal = 255 - finalVal;
     }
-
     data[i] = finalVal;     // R
     data[i + 1] = finalVal; // G
     data[i + 2] = finalVal; // B
@@ -467,33 +800,52 @@ export function extractSkuCandidates(
   // 1. Keyword-prefixed patterns (e.g. SKU: 12345, COD: ABC-01, ART: 99482)
   const keywordRegex = /(?:SKU|COD|CODIGO|ART|ARTICULO|REF|REFERENCIA|PART|P\/N|ITEM|NO|MODELO|MOD)\s*[:#.-]?\s*([A-Za-z0-9\-_./]{3,24})/gi;
   let match: RegExpExecArray | null;
-  while ((match = keywordRegex.exec(rawText)) !== null) {
-    if (match[1]) {
-      processToken(match[1], 'keyword', 92);
+
+  const textsToScan = [rawText];
+  const cleaned = cleanOcrText(rawText);
+  if (cleaned && cleaned !== rawText) {
+    textsToScan.push(cleaned);
+  }
+
+  for (const text of textsToScan) {
+    keywordRegex.lastIndex = 0;
+    while ((match = keywordRegex.exec(text)) !== null) {
+      if (match[1]) {
+        processToken(match[1], 'keyword', 92);
+      }
     }
   }
 
   // 2. Pure numeric sequences of 4 to 18 digits (standard numeric SKUs, EAN, UPC)
   const numericRegex = /\b\d{4,18}\b/g;
-  while ((match = numericRegex.exec(rawText)) !== null) {
-    if (match[0]) {
-      processToken(match[0], 'numeric', 85);
+  for (const text of textsToScan) {
+    numericRegex.lastIndex = 0;
+    while ((match = numericRegex.exec(text)) !== null) {
+      if (match[0]) {
+        processToken(match[0], 'numeric', 85);
+      }
     }
   }
 
   // 3. Delimited alphanumeric patterns (e.g. ELEC-001, PRD-1029-A, RACK-01, A-C-01-01)
   const alphanumericRegex = /\b[A-Za-z0-9]{1,8}(?:[-_/.][A-Za-z0-9]{1,8}){1,4}\b/gi;
-  while ((match = alphanumericRegex.exec(rawText)) !== null) {
-    if (match[0]) {
-      processToken(match[0], 'alphanumeric', 90);
+  for (const text of textsToScan) {
+    alphanumericRegex.lastIndex = 0;
+    while ((match = alphanumericRegex.exec(text)) !== null) {
+      if (match[0]) {
+        processToken(match[0], 'alphanumeric', 90);
+      }
     }
   }
 
   // 4. Standalone alphanumeric tokens containing at least one digit (e.g. 1024B, X9001)
   const tokenRegex = /\b(?=[A-Za-z0-9\-_]{4,16}\b)(?=.*\d)[A-Za-z0-9\-_]+\b/g;
-  while ((match = tokenRegex.exec(rawText)) !== null) {
-    if (match[0]) {
-      processToken(match[0], 'raw', 72);
+  for (const text of textsToScan) {
+    tokenRegex.lastIndex = 0;
+    while ((match = tokenRegex.exec(text)) !== null) {
+      if (match[0]) {
+        processToken(match[0], 'raw', 72);
+      }
     }
   }
 
@@ -697,7 +1049,7 @@ export function getAutoDeliverInventoryWinner(
 export async function recognizeTextFromCanvas(
   canvas: HTMLCanvasElement,
   onProgress?: (progress: number, status: string) => void
-): Promise<{ text: string; confidence: number }> {
+): Promise<OcrResult> {
   try {
     const { createWorker } = await import('tesseract.js');
 
@@ -726,15 +1078,34 @@ export async function recognizeTextFromCanvas(
 
     const ret = await worker.recognize(canvas);
 
-    onProgress?.(95, 'Finalizando reconocimiento...');
+    onProgress?.(95, 'Finalizando reconocimiento y filtrado de confianza...');
 
     await worker.terminate();
 
     onProgress?.(100, 'Completado');
 
+    const rawText = ret.data.text || '';
+    const cleanedText = cleanOcrText(rawText);
+
+    // Extract word-level details with confidence filtering > 70 as instructed by fearovex-labs/image-ocr skill
+    const pageData = ret.data as any;
+    const rawWords = pageData.words || (pageData.lines?.flatMap((l: any) => l.words || []) || []);
+    const words: OcrWordDetail[] = rawWords
+      .filter((w: any) => typeof w.confidence === 'number' && w.confidence > 70 && w.text && w.text.trim().length > 0)
+      .map((w: any) => ({
+        text: cleanOcrText(w.text),
+        confidence: Math.round(w.confidence),
+        bbox: w.bbox,
+      }));
+
+    const highConfidenceText = words.map((w) => w.text).join(' ');
+
     return {
-      text: ret.data.text || '',
+      text: cleanedText || rawText,
       confidence: ret.data.confidence || 0,
+      rawText,
+      words,
+      highConfidenceText,
     };
   } catch (err: unknown) {
     console.warn('[OCR Service] Error running Tesseract worker:', err);

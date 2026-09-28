@@ -11,6 +11,8 @@ import {
   getAutoDeliverWinner,
   filterInventoryByScan,
   getAutoDeliverInventoryWinner,
+  cleanOcrText,
+  OcrWordDetail,
   SkuCandidate,
   KnownProductLookup,
   ScannedInventoryProduct,
@@ -122,6 +124,8 @@ export default function BarcodeScanner({
   const [ocrCandidates, setOcrCandidates] = useState<SkuCandidate[]>([]);
   const [invertContrast, setInvertContrast] = useState(false);
   const [continuousOcr, setContinuousOcr] = useState(false);
+  const [binarizationMethod, setBinarizationMethod] = useState<"auto" | "adaptive" | "otsu">("auto");
+  const [ocrWords, setOcrWords] = useState<OcrWordDetail[]>([]);
   const [ocrRawText, setOcrRawText] = useState("");
   const [autoDeliveredWinner, setAutoDeliveredWinner] = useState<{
     code: string;
@@ -537,19 +541,29 @@ export default function BarcodeScanner({
       const cropX = Math.round((vWidth - cropWidth) / 2);
       const cropY = Math.round((vHeight - cropHeight) / 2);
 
-      setOcrStatusText("Aplicando filtros de nitidez y contraste (Otsu & Laplacian)...");
+      setOcrStatusText(
+        `Aplicando filtros industriales (DPI 300+, Deskew, ${
+          binarizationMethod === "adaptive"
+            ? "Adaptativo Anti-sombras"
+            : binarizationMethod === "otsu"
+            ? "Otsu Uniforme"
+            : "Auto-Filtro"
+        })...`
+      );
       setOcrProgress(30);
 
-      // Preprocess frame via Computer Vision Canvas algorithms
+      // Preprocess frame via Computer Vision Canvas algorithms with image-ocr skill pipeline
       const processedCanvas = preprocessCanvasForOCR(
         video,
         { x: cropX, y: cropY, width: cropWidth, height: cropHeight },
         {
           invert: invertContrast,
-          contrast: 1.6,
+          contrast: 1.8,
           binarize: true,
-          scaleFactor: 2.2,
+          binarizationMethod,
           sharpen: true,
+          deskew: true,
+          morphClose: true,
         }
       );
 
@@ -557,7 +571,7 @@ export default function BarcodeScanner({
       setOcrProgress(50);
 
       // Convert canvas to image base64 for API transmission
-      const dataUrl = processedCanvas.toDataURL("image/jpeg", 0.85);
+      const dataUrl = processedCanvas.toDataURL("image/jpeg", 0.88);
 
       let apiWinner: any = null;
       let apiCandidates: SkuCandidate[] = [];
@@ -602,15 +616,20 @@ export default function BarcodeScanner({
           setOcrStatusText(msg);
         });
 
-        setOcrRawText(ocrResult.text);
-        setLiveScannedQuery(ocrResult.text);
+        if (ocrResult.words && ocrResult.words.length > 0) {
+          setOcrWords(ocrResult.words);
+        }
+
+        const recognizedText = ocrResult.text;
+        setOcrRawText(recognizedText);
+        setLiveScannedQuery(recognizedText);
 
         // Extract SKU Candidates using regex, location validation, confusion correction & catalog
-        const localCandidates = extractSkuCandidates(ocrResult.text, activeCatalog);
+        const localCandidates = extractSkuCandidates(recognizedText, activeCatalog);
         const localWinner = getAutoDeliverWinner(localCandidates);
 
         // Filter inventory against extracted text
-        const localFilteredInv = filterInventoryByScan(inventoryList, ocrResult.text, localCandidates);
+        const localFilteredInv = filterInventoryByScan(inventoryList, recognizedText, localCandidates);
         const localInvWinner = getAutoDeliverInventoryWinner(localFilteredInv);
 
         if (localInvWinner) {
@@ -708,7 +727,16 @@ export default function BarcodeScanner({
       const processedCanvas = preprocessCanvasForOCR(
         img,
         { x: 0, y: 0, width: img.naturalWidth, height: img.naturalHeight },
-        { invert: invertContrast, contrast: 1.5, binarize: true, scaleFactor: 1, sharpen: true }
+        {
+          invert: invertContrast,
+          contrast: 1.8,
+          binarize: true,
+          binarizationMethod,
+          scaleFactor: 1,
+          sharpen: true,
+          deskew: true,
+          morphClose: true,
+        }
       );
 
       // Check API route first
@@ -745,14 +773,19 @@ export default function BarcodeScanner({
           setOcrStatusText(msg);
         });
 
-        setOcrRawText(ocrResult.text);
-        setLiveScannedQuery(ocrResult.text);
+        if (ocrResult.words && ocrResult.words.length > 0) {
+          setOcrWords(ocrResult.words);
+        }
 
-        const localCandidates = extractSkuCandidates(ocrResult.text, activeCatalog);
+        const recognizedText = ocrResult.text;
+        setOcrRawText(recognizedText);
+        setLiveScannedQuery(recognizedText);
+
+        const localCandidates = extractSkuCandidates(recognizedText, activeCatalog);
         candidates = localCandidates;
         winner = getAutoDeliverWinner(localCandidates);
 
-        const localFilteredInv = filterInventoryByScan(inventoryList, ocrResult.text, localCandidates);
+        const localFilteredInv = filterInventoryByScan(inventoryList, recognizedText, localCandidates);
         const invWinner = getAutoDeliverInventoryWinner(localFilteredInv);
         if (invWinner) {
           winner = {
@@ -1097,19 +1130,41 @@ export default function BarcodeScanner({
               <div className="p-3 bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-800 space-y-2.5">
                 {/* Secondary Options Bar */}
                 <div className="flex items-center justify-between gap-2 text-xs">
-                  <button
-                    type="button"
-                    onClick={() => setInvertContrast((prev) => !prev)}
-                    className={`px-2 py-1 rounded-lg border transition-colors flex items-center gap-1.5 cursor-pointer text-xs ${
-                      invertContrast
-                        ? "bg-slate-900 text-white border-slate-900 dark:bg-white dark:text-slate-900"
-                        : "bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700"
-                    }`}
-                    title="Activa si el texto es blanco sobre fondo oscuro"
-                  >
-                    <Icon name="sliders" size={12} />
-                    <span>{invertContrast ? "Fondo Oscuro" : "Invertir"}</span>
-                  </button>
+                  <div className="flex items-center gap-1.5">
+                    <button
+                      type="button"
+                      onClick={() => setInvertContrast((prev) => !prev)}
+                      className={`px-2 py-1 rounded-lg border transition-colors flex items-center gap-1.5 cursor-pointer text-xs ${
+                        invertContrast
+                          ? "bg-slate-900 text-white border-slate-900 dark:bg-white dark:text-slate-900"
+                          : "bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700"
+                      }`}
+                      title="Activa si el texto es blanco sobre fondo oscuro"
+                    >
+                      <Icon name="sliders" size={12} />
+                      <span>{invertContrast ? "Fondo Oscuro" : "Invertir"}</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setBinarizationMethod((prev) =>
+                          prev === "auto" ? "adaptive" : prev === "adaptive" ? "otsu" : "auto"
+                        )
+                      }
+                      className="px-2 py-1 rounded-lg border transition-colors flex items-center gap-1 cursor-pointer text-xs bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700"
+                      title="Método de umbralización: Auto, Adaptativo (Anti-sombras) u Otsu (Uniforme)"
+                    >
+                      <Icon name="sliders" size={12} />
+                      <span>
+                        {binarizationMethod === "auto"
+                          ? "Auto-Filtro"
+                          : binarizationMethod === "adaptive"
+                          ? "Adaptativo"
+                          : "Otsu"}
+                      </span>
+                    </button>
+                  </div>
 
                   <div className="flex items-center gap-2">
                     <button
@@ -1177,6 +1232,69 @@ export default function BarcodeScanner({
                       className="bg-orange-600 h-full transition-all duration-300"
                       style={{ width: `${ocrProgress}%` }}
                     />
+                  </div>
+                )}
+
+                {/* Detected High-Confidence Words (>70%) from Skill */}
+                {ocrWords.length > 0 && (
+                  <div className="p-2 bg-amber-50/80 dark:bg-amber-950/40 rounded-lg border border-amber-200 dark:border-amber-900/60 space-y-1.5 animate-fadeIn">
+                    <div className="flex items-center justify-between text-[11px] font-semibold text-amber-900 dark:text-amber-200">
+                      <span className="flex items-center gap-1">
+                        <Icon name="sparkles" size={12} className="text-amber-600 dark:text-amber-400" />
+                        Tokens Extraídos (&gt;70% Precisión):
+                      </span>
+                      <span className="text-[10px] bg-amber-200/80 dark:bg-amber-900/80 px-1.5 py-0.5 rounded font-mono font-bold">
+                        {ocrWords.length} tokens
+                      </span>
+                    </div>
+                    <div className="flex flex-wrap gap-1 max-h-20 overflow-y-auto">
+                      {ocrWords.slice(0, 10).map((word, wIdx) => (
+                        <button
+                          key={`${word.text}-${wIdx}`}
+                          type="button"
+                          onClick={() => handleDetectedCode(word.text, true)}
+                          className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-white dark:bg-slate-800 hover:bg-amber-100 dark:hover:bg-amber-900/70 border border-amber-300 dark:border-amber-700 text-xs font-mono font-medium text-slate-800 dark:text-slate-200 transition-colors cursor-pointer"
+                          title={`Confianza: ${word.confidence}% - Toca para entregar`}
+                        >
+                          <span>{word.text}</span>
+                          <span className="text-[10px] text-amber-600 dark:text-amber-400 font-sans font-bold">
+                            {word.confidence}%
+                          </span>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Candidate list if detected without >= 90% single winner */}
+                {ocrCandidates.length > 0 && !autoDeliveredWinner && (
+                  <div className="p-2 bg-slate-50 dark:bg-slate-800/60 rounded-lg border border-slate-200 dark:border-slate-700 space-y-1 animate-fadeIn">
+                    <div className="flex items-center justify-between text-[11px] font-semibold text-slate-700 dark:text-slate-300">
+                      <span>Candidatos SKU evaluados:</span>
+                      <span className="text-[10px] font-mono text-orange-600 dark:text-orange-400 font-bold">
+                        {ocrCandidates.length} sugerencias
+                      </span>
+                    </div>
+                    <div className="flex flex-wrap gap-1 max-h-20 overflow-y-auto">
+                      {ocrCandidates.slice(0, 8).map((cand) => (
+                        <button
+                          key={cand.code}
+                          type="button"
+                          onClick={() =>
+                            handleDetectedCode(cand.code, true, {
+                              productName: cand.productName,
+                              score: cand.confidence,
+                            })
+                          }
+                          className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-xs font-mono border bg-white dark:bg-slate-800 border-slate-300 dark:border-slate-600 hover:border-blue-500 text-slate-800 dark:text-slate-200 transition-colors cursor-pointer"
+                        >
+                          <span>{cand.code}</span>
+                          <span className="text-[10px] text-slate-400 font-sans font-bold">
+                            {cand.confidence}%
+                          </span>
+                        </button>
+                      ))}
+                    </div>
                   </div>
                 )}
               </div>

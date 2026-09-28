@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import {
+  cleanOcrText,
   extractSkuCandidates,
   getAutoDeliverWinner,
   filterInventoryByScan,
@@ -20,56 +21,108 @@ export async function POST(req: NextRequest) {
     const body = (await req.json()) as OcrApiPayload;
     const { image, rawText, catalog = [], inventory = [] } = body;
 
-    let recognizedText = rawText || "";
+    let recognizedText = rawText ? cleanOcrText(rawText) : "";
 
     // 1. If image is provided and an external vision model / gateway is configured, attempt vision extraction
+    const anthropicKey = process.env.ANTHROPIC_API_KEY;
     const openRouterKey = process.env.OPENROUTER_API_KEY;
     const openAiKey = process.env.OPENAI_API_KEY;
+    const insforgeKey = process.env.INSFORGE_AI_KEY;
 
-    if (image && !recognizedText && (openRouterKey || openAiKey)) {
+    if (image && !recognizedText && (anthropicKey || openRouterKey || openAiKey || insforgeKey)) {
       try {
-        const apiKey = openRouterKey || openAiKey;
-        const endpoint = openRouterKey
-          ? "https://openrouter.ai/api/v1/chat/completions"
-          : "https://api.openai.com/v1/chat/completions";
-        const model = openRouterKey ? "google/gemini-2.0-flash-001" : "gpt-4o-mini";
-
-        // Extract base64 part if it has data URL prefix
         const imageUrl = image.startsWith("data:") ? image : `data:image/jpeg;base64,${image}`;
 
-        const aiResponse = await fetch(endpoint, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${apiKey}`,
-          },
-          body: JSON.stringify({
-            model,
-            messages: [
-              {
-                role: "user",
-                content: [
-                  {
-                    type: "text",
-                    text: "You are an industrial warehouse barcode and SKU optical character recognition scanner. Read all text, product codes, SKU codes, numbers, and warehouse labels visible in this image. Return ONLY the identified alphanumeric codes separated by spaces or newlines. Do not include markdown or explanations.",
-                  },
-                  {
-                    type: "image_url",
-                    image_url: { url: imageUrl },
-                  },
-                ],
-              },
-            ],
-            max_tokens: 150,
-            temperature: 0.1,
-          }),
-        });
+        if (anthropicKey) {
+          // Claude Vision inference as specified in image-ocr skill
+          const base64Data = imageUrl.replace(/^data:image\/[a-zA-Z]+;base64,/, "");
+          const mediaType = imageUrl.startsWith("data:image/png") ? "image/png" : "image/jpeg";
 
-        if (aiResponse.ok) {
-          const aiJson = await aiResponse.json();
-          const content = aiJson.choices?.[0]?.message?.content;
-          if (content && typeof content === "string") {
-            recognizedText = content.trim();
+          const claudeRes = await fetch("https://api.anthropic.com/v1/messages", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "x-api-key": anthropicKey,
+              "anthropic-version": "2023-06-01",
+            },
+            body: JSON.stringify({
+              model: "claude-3-5-sonnet-20241022",
+              max_tokens: 300,
+              messages: [
+                {
+                  role: "user",
+                  content: [
+                    {
+                      type: "image",
+                      source: {
+                        type: "base64",
+                        media_type: mediaType,
+                        data: base64Data,
+                      },
+                    },
+                    {
+                      type: "text",
+                      text: "Extract ALL text, product codes, SKU codes, numbers, and warehouse location labels from this image exactly as they appear. Return only the extracted codes separated by spaces or newlines.",
+                    },
+                  ],
+                },
+              ],
+            }),
+          });
+
+          if (claudeRes.ok) {
+            const claudeJson = await claudeRes.json();
+            const textContent = claudeJson.content?.[0]?.text;
+            if (textContent) {
+              recognizedText = cleanOcrText(textContent);
+            }
+          }
+        } else {
+          // OpenRouter / OpenAI / InsForge AI Gateway
+          const apiKey = openRouterKey || openAiKey || insforgeKey;
+          const endpoint = openRouterKey
+            ? "https://openrouter.ai/api/v1/chat/completions"
+            : insforgeKey
+            ? "https://api.insforge.app/v1/ai/chat/completions"
+            : "https://api.openai.com/v1/chat/completions";
+          const model = openRouterKey
+            ? "google/gemini-2.0-flash-001"
+            : "gpt-4o-mini";
+
+          const aiResponse = await fetch(endpoint, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${apiKey}`,
+            },
+            body: JSON.stringify({
+              model,
+              messages: [
+                {
+                  role: "user",
+                  content: [
+                    {
+                      type: "text",
+                      text: "You are an industrial warehouse barcode and SKU optical character recognition scanner. Read all text, product codes, SKU codes, numbers, and warehouse labels visible in this image. Return ONLY the identified alphanumeric codes separated by spaces or newlines. Do not include markdown or explanations.",
+                    },
+                    {
+                      type: "image_url",
+                      image_url: { url: imageUrl },
+                    },
+                  ],
+                },
+              ],
+              max_tokens: 150,
+              temperature: 0.1,
+            }),
+          });
+
+          if (aiResponse.ok) {
+            const aiJson = await aiResponse.json();
+            const content = aiJson.choices?.[0]?.message?.content;
+            if (content && typeof content === "string") {
+              recognizedText = cleanOcrText(content.trim());
+            }
           }
         }
       } catch (aiErr) {
