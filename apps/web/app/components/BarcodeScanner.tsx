@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState, useEffect, useCallback } from "react";
+import { useRef, useState, useEffect, useCallback, useMemo } from "react";
 import { BrowserMultiFormatReader, BarcodeFormat } from "@zxing/browser";
 import { DecodeHintType } from "@zxing/library";
 import Icon from "./Icon";
@@ -9,8 +9,11 @@ import {
   extractSkuCandidates,
   recognizeTextFromCanvas,
   getAutoDeliverWinner,
+  filterInventoryByScan,
+  getAutoDeliverInventoryWinner,
   SkuCandidate,
   KnownProductLookup,
+  ScannedInventoryProduct,
 } from "../../lib/ocrService";
 
 interface Props {
@@ -18,6 +21,7 @@ interface Props {
   onClose: () => void;
   label?: string;
   catalogProducts?: Array<{ sku: string; name: string; barcode?: string }>;
+  inventoryProducts?: Array<ScannedInventoryProduct>;
 }
 
 declare global {
@@ -28,11 +32,55 @@ declare global {
   }
 }
 
+const DEFAULT_INVENTORY_SEED: ScannedInventoryProduct[] = [
+  {
+    id: "inv-seed-1",
+    sku: "ARR-DIA-001",
+    name: "Arroz Diana Especial 1kg",
+    barcode: "7702010010015",
+    quantity: 85,
+    locationCode: "A-C-01-01",
+    category: "Granos y Abarrotes",
+    unit: "kg",
+  },
+  {
+    id: "inv-seed-2",
+    sku: "ACE-PRE-002",
+    name: "Aceite Premier 1000ml",
+    barcode: "7702010010022",
+    quantity: 42,
+    locationCode: "A-C-01-02",
+    category: "Aceites y Grasas",
+    unit: "litro",
+  },
+  {
+    id: "inv-seed-3",
+    sku: "BEV-001",
+    name: "Cerveza Artesanal IPA 330ml",
+    barcode: "7702010010039",
+    quantity: 120,
+    locationCode: "A-P-02-04",
+    category: "Bebidas",
+    unit: "botella",
+  },
+  {
+    id: "inv-seed-4",
+    sku: "HAR-PAN-002",
+    name: "Harina PAN 1kg",
+    barcode: "7702010010046",
+    quantity: 64,
+    locationCode: "A-C-01-05",
+    category: "Harinas",
+    unit: "paquete",
+  },
+];
+
 export default function BarcodeScanner({
   onScan,
   onClose,
   label = "SKU / Código de barras",
   catalogProducts = [],
+  inventoryProducts = [],
 }: Props) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
@@ -59,6 +107,14 @@ export default function BarcodeScanner({
   // Active product catalog (auto-hydrated from API if caller provided none)
   const [activeCatalog, setActiveCatalog] = useState<KnownProductLookup[]>(catalogProducts);
 
+  // Active inventory products loaded in warehouse
+  const [inventoryList, setInventoryList] = useState<ScannedInventoryProduct[]>(
+    inventoryProducts && inventoryProducts.length > 0 ? inventoryProducts : DEFAULT_INVENTORY_SEED
+  );
+  const [inventorySearchQuery, setInventorySearchQuery] = useState("");
+  const [liveScannedQuery, setLiveScannedQuery] = useState("");
+  const [showInventoryTray, setShowInventoryTray] = useState(true);
+
   // Computer Vision & OCR state
   const [ocrLoading, setOcrLoading] = useState(false);
   const [ocrProgress, setOcrProgress] = useState(0);
@@ -67,7 +123,13 @@ export default function BarcodeScanner({
   const [invertContrast, setInvertContrast] = useState(false);
   const [continuousOcr, setContinuousOcr] = useState(false);
   const [ocrRawText, setOcrRawText] = useState("");
-  const [autoDeliveredWinner, setAutoDeliveredWinner] = useState<SkuCandidate | null>(null);
+  const [autoDeliveredWinner, setAutoDeliveredWinner] = useState<{
+    code: string;
+    confidence: number;
+    productName?: string;
+    locationCode?: string;
+    quantity?: number;
+  } | null>(null);
 
   // Auto-hydrate product catalog from backend if not provided
   useEffect(() => {
@@ -102,6 +164,60 @@ export default function BarcodeScanner({
       isMounted = false;
     };
   }, [catalogProducts]);
+
+  // Auto-hydrate warehouse inventory items if not provided
+  useEffect(() => {
+    if (inventoryProducts && inventoryProducts.length > 0) {
+      setInventoryList(inventoryProducts);
+      return;
+    }
+
+    let isMounted = true;
+    const fetchInventory = async () => {
+      try {
+        const res = await fetch("/api/inventory");
+        if (res.ok) {
+          const json = await res.json();
+          if (isMounted && json && Array.isArray(json.items) && json.items.length > 0) {
+            const normalized = json.items.map((it: any) => ({
+              id: it.id || `inv-${it.sku || it.product?.sku}`,
+              sku: it.sku || it.product?.sku || "",
+              name: it.name || it.product?.name || "Producto",
+              barcode: it.barcode || it.product?.barcode,
+              quantity: it.quantity ?? it.product?.quantity ?? 0,
+              locationCode: it.locationCode || it.location?.code || "",
+              category: it.category || it.product?.category,
+              unit: it.unit || it.product?.unit || "uds",
+            }));
+            setInventoryList(normalized);
+          }
+        }
+      } catch {
+        // Non-blocking fallback
+      }
+    };
+
+    void fetchInventory();
+    return () => {
+      isMounted = false;
+    };
+  }, [inventoryProducts]);
+
+  // Combined live filter query: manual query > input query > scanner live query
+  const effectiveFilterQuery = useMemo(() => {
+    if (mode === "manual" && manualValue.trim()) {
+      return manualValue.trim();
+    }
+    if (inventorySearchQuery.trim()) {
+      return inventorySearchQuery.trim();
+    }
+    return liveScannedQuery.trim();
+  }, [inventorySearchQuery, liveScannedQuery, manualValue, mode]);
+
+  // Reactive filtered inventory list recalculated on every keystroke, frame, or OCR candidate
+  const filteredInventory = useMemo(() => {
+    return filterInventoryByScan(inventoryList, effectiveFilterQuery, ocrCandidates);
+  }, [effectiveFilterQuery, inventoryList, ocrCandidates]);
 
   // Haptic feedback
   const triggerHaptic = useCallback(() => {
@@ -141,9 +257,9 @@ export default function BarcodeScanner({
     }
   }, []);
 
-  // Handle scanned code with debouncing
+  // Handle scanned code with debouncing and instant delivery
   const handleDetectedCode = useCallback(
-    (code: string, force = false) => {
+    (code: string, force = false, extra?: { productName?: string; locationCode?: string; quantity?: number; score?: number }) => {
       const clean = code.trim();
       if (!clean) return;
 
@@ -157,6 +273,16 @@ export default function BarcodeScanner({
       setStatus("detected");
       triggerHaptic();
       triggerAudioBeep();
+
+      if (extra) {
+        setAutoDeliveredWinner({
+          code: clean,
+          confidence: extra.score || 95,
+          productName: extra.productName,
+          locationCode: extra.locationCode,
+          quantity: extra.quantity,
+        });
+      }
 
       // Return to scanning state after short visual indicator
       setTimeout(() => {
@@ -318,7 +444,9 @@ export default function BarcodeScanner({
                 if (results && results.length > 0) {
                   const first = results[0];
                   if (first?.rawValue) {
-                    handleDetectedCode(first.rawValue);
+                    const code = first.rawValue.trim();
+                    setLiveScannedQuery(code);
+                    handleDetectedCode(code);
                   }
                 }
               } catch {
@@ -355,6 +483,7 @@ export default function BarcodeScanner({
             if (result) {
               const text = result.getText();
               if (text) {
+                setLiveScannedQuery(text.trim());
                 handleDetectedCode(text);
               }
             }
@@ -430,10 +559,10 @@ export default function BarcodeScanner({
       // Convert canvas to image base64 for API transmission
       const dataUrl = processedCanvas.toDataURL("image/jpeg", 0.85);
 
-      let apiWinner: SkuCandidate | null = null;
+      let apiWinner: any = null;
       let apiCandidates: SkuCandidate[] = [];
 
-      // 1. Check with backend OCR API Route
+      // 1. Check with backend OCR API Route (sending catalog + inventory)
       try {
         const apiResponse = await fetch("/api/ocr", {
           method: "POST",
@@ -441,6 +570,7 @@ export default function BarcodeScanner({
           body: JSON.stringify({
             image: dataUrl,
             catalog: activeCatalog,
+            inventory: inventoryList,
           }),
         });
 
@@ -451,6 +581,7 @@ export default function BarcodeScanner({
             apiWinner = apiData.winner || null;
             if (apiData.rawText) {
               setOcrRawText(apiData.rawText);
+              setLiveScannedQuery(apiData.rawText);
             }
           }
         }
@@ -472,13 +603,25 @@ export default function BarcodeScanner({
         });
 
         setOcrRawText(ocrResult.text);
+        setLiveScannedQuery(ocrResult.text);
 
         // Extract SKU Candidates using regex, location validation, confusion correction & catalog
         const localCandidates = extractSkuCandidates(ocrResult.text, activeCatalog);
         const localWinner = getAutoDeliverWinner(localCandidates);
 
-        // Choose best between API and local
-        if (localWinner && (!winner || localWinner.confidence > winner.confidence)) {
+        // Filter inventory against extracted text
+        const localFilteredInv = filterInventoryByScan(inventoryList, ocrResult.text, localCandidates);
+        const localInvWinner = getAutoDeliverInventoryWinner(localFilteredInv);
+
+        if (localInvWinner) {
+          winner = {
+            code: localInvWinner.sku,
+            confidence: localInvWinner.matchScore || 92,
+            productName: localInvWinner.name,
+            locationCode: localInvWinner.locationCode,
+            quantity: localInvWinner.quantity,
+          };
+        } else if (localWinner && (!winner || localWinner.confidence > winner.confidence)) {
           winner = localWinner;
         }
 
@@ -497,13 +640,18 @@ export default function BarcodeScanner({
       setOcrLoading(false);
       setOcrProgress(100);
 
-      // 3. AUTO-ENTREGA AL SUPERAR EL 90% DE ACIERTO
+      // 3. AUTO-ENTREGA AL SUPERAR EL 90% DE ACIERTO EN INVENTARIO O CATÁLOGO
       if (winner && winner.confidence >= 90) {
         setAutoDeliveredWinner(winner);
         setOcrStatusText(
           `✓ ${winner.confidence}% Precisión · Auto-entregado: ${winner.code}${winner.productName ? ` (${winner.productName})` : ""}`
         );
-        handleDetectedCode(winner.code, true);
+        handleDetectedCode(winner.code, true, {
+          productName: winner.productName,
+          locationCode: winner.locationCode,
+          quantity: winner.quantity,
+          score: winner.confidence,
+        });
       } else if (finalCandidates.length > 0) {
         const topAcc = finalCandidates[0].confidence;
         setOcrStatusText(
@@ -517,7 +665,7 @@ export default function BarcodeScanner({
       setOcrLoading(false);
       setOcrStatusText("Error al procesar OCR. Toca para enfocar o usa ingreso manual.");
     }
-  }, [activeCatalog, handleDetectedCode, invertContrast, ocrLoading, triggerAutofocus]);
+  }, [activeCatalog, handleDetectedCode, inventoryList, invertContrast, ocrLoading, triggerAutofocus]);
 
   // Continuous OCR interval listener
   useEffect(() => {
@@ -566,7 +714,7 @@ export default function BarcodeScanner({
       // Check API route first
       const dataUrl = processedCanvas.toDataURL("image/jpeg", 0.9);
       let candidates: SkuCandidate[] = [];
-      let winner: SkuCandidate | null = null;
+      let winner: any = null;
 
       try {
         const apiResponse = await fetch("/api/ocr", {
@@ -575,6 +723,7 @@ export default function BarcodeScanner({
           body: JSON.stringify({
             image: dataUrl,
             catalog: activeCatalog,
+            inventory: inventoryList,
           }),
         });
 
@@ -583,6 +732,9 @@ export default function BarcodeScanner({
           if (apiData.candidates && Array.isArray(apiData.candidates) && apiData.candidates.length > 0) {
             candidates = apiData.candidates;
             winner = apiData.winner;
+            if (apiData.rawText) {
+              setLiveScannedQuery(apiData.rawText);
+            }
           }
         }
       } catch {}
@@ -594,9 +746,23 @@ export default function BarcodeScanner({
         });
 
         setOcrRawText(ocrResult.text);
+        setLiveScannedQuery(ocrResult.text);
+
         const localCandidates = extractSkuCandidates(ocrResult.text, activeCatalog);
         candidates = localCandidates;
         winner = getAutoDeliverWinner(localCandidates);
+
+        const localFilteredInv = filterInventoryByScan(inventoryList, ocrResult.text, localCandidates);
+        const invWinner = getAutoDeliverInventoryWinner(localFilteredInv);
+        if (invWinner) {
+          winner = {
+            code: invWinner.sku,
+            confidence: invWinner.matchScore || 92,
+            productName: invWinner.name,
+            locationCode: invWinner.locationCode,
+            quantity: invWinner.quantity,
+          };
+        }
       }
 
       setOcrCandidates(candidates);
@@ -607,7 +773,12 @@ export default function BarcodeScanner({
       if (winner && winner.confidence >= 90) {
         setAutoDeliveredWinner(winner);
         setOcrStatusText(`✓ ${winner.confidence}% Precisión · Auto-entregado: ${winner.code}`);
-        handleDetectedCode(winner.code, true);
+        handleDetectedCode(winner.code, true, {
+          productName: winner.productName,
+          locationCode: winner.locationCode,
+          quantity: winner.quantity,
+          score: winner.confidence,
+        });
       }
     } catch {
       setOcrLoading(false);
@@ -651,7 +822,7 @@ export default function BarcodeScanner({
 
   return (
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/75 p-0 sm:p-4 backdrop-blur-xs">
-      <div className="bg-white dark:bg-slate-900 rounded-t-2xl sm:rounded-xl w-full max-w-md shadow-2xl overflow-hidden animate-fadeIn border border-slate-200 dark:border-slate-800">
+      <div className="bg-white dark:bg-slate-900 rounded-t-2xl sm:rounded-xl w-full max-w-lg shadow-2xl overflow-hidden animate-fadeIn border border-slate-200 dark:border-slate-800 flex flex-col max-h-[92vh]">
         {/* Mobile handle indicator */}
         <div className="pt-2 pb-1 flex justify-center sm:hidden bg-slate-900">
           <div className="w-10 h-1 rounded-full bg-slate-600" />
@@ -659,16 +830,21 @@ export default function BarcodeScanner({
 
         {/* Auto-delivery banner when >= 90% match detected */}
         {autoDeliveredWinner && (
-          <div className="bg-emerald-600 text-white px-4 py-2.5 flex items-center justify-between text-xs animate-fadeIn border-b border-emerald-500 shadow-md">
+          <div className="bg-emerald-600 text-white px-4 py-2.5 flex items-center justify-between text-xs animate-fadeIn border-b border-emerald-500 shadow-md shrink-0">
             <div className="flex items-center gap-2">
               <Icon name="check-circle" size={16} className="text-emerald-100" />
               <div>
-                <span className="font-bold">{autoDeliveredWinner.confidence}% Precisión</span>
+                <span className="font-bold">{autoDeliveredWinner.confidence}% Coincidencia</span>
                 <span className="mx-1.5 opacity-75">·</span>
                 <span className="font-mono font-semibold">{autoDeliveredWinner.code}</span>
                 {autoDeliveredWinner.productName && (
-                  <span className="ml-1 opacity-90 truncate max-w-[140px] inline-block align-bottom">
+                  <span className="ml-1 opacity-90 truncate max-w-[160px] inline-block align-bottom font-sans">
                     ({autoDeliveredWinner.productName})
+                  </span>
+                )}
+                {autoDeliveredWinner.locationCode && (
+                  <span className="ml-1.5 bg-emerald-700 px-1.5 py-0.5 rounded text-[10px] font-mono">
+                    📍 {autoDeliveredWinner.locationCode}
                   </span>
                 )}
               </div>
@@ -680,11 +856,11 @@ export default function BarcodeScanner({
         )}
 
         {/* Header */}
-        <div className="flex items-center justify-between px-4 py-3 bg-slate-900 text-white">
+        <div className="flex items-center justify-between px-4 py-3 bg-slate-900 text-white shrink-0">
           <div className="flex items-center gap-2.5">
             <Icon name="scan-barcode" size={20} className="text-orange-500" />
             <div>
-              <p className="font-semibold text-sm leading-tight">Escáner de Código</p>
+              <p className="font-semibold text-sm leading-tight">Escáner de Código & Inventario</p>
               <p className="text-xs text-slate-400">{label}</p>
             </div>
           </div>
@@ -735,7 +911,7 @@ export default function BarcodeScanner({
         </div>
 
         {/* Mode Toggle (Tabs Swiss Enterprise) */}
-        <div className="flex bg-slate-100 dark:bg-slate-800/80 p-1 border-b border-slate-200 dark:border-slate-800">
+        <div className="flex bg-slate-100 dark:bg-slate-800/80 p-1 border-b border-slate-200 dark:border-slate-800 shrink-0">
           <button
             type="button"
             onClick={() => setMode("camera")}
@@ -779,313 +955,394 @@ export default function BarcodeScanner({
           </button>
         </div>
 
-        {/* 1. Barcode 2D Imager Camera Mode */}
-        {mode === "camera" && (
-          <div className="relative bg-black" onClick={handleViewfinderClick}>
-            {status === "error" ? (
-              <div className="p-6 text-center space-y-4 bg-slate-900 text-white min-h-[240px] flex flex-col items-center justify-center">
-                <div className="w-10 h-10 rounded-full bg-red-500/20 text-red-400 flex items-center justify-center">
-                  <Icon name="warning" size={22} />
+        {/* Scrollable Scanner Body */}
+        <div className="overflow-y-auto flex-1">
+          {/* 1. Barcode 2D Imager Camera Mode */}
+          {mode === "camera" && (
+            <div className="relative bg-black" onClick={handleViewfinderClick}>
+              {status === "error" ? (
+                <div className="p-6 text-center space-y-4 bg-slate-900 text-white min-h-[220px] flex flex-col items-center justify-center">
+                  <div className="w-10 h-10 rounded-full bg-red-500/20 text-red-400 flex items-center justify-center">
+                    <Icon name="warning" size={22} />
+                  </div>
+                  <div className="space-y-1">
+                    <p className="font-semibold text-sm text-red-300">Cámara no disponible</p>
+                    <p className="text-xs text-slate-400 max-w-xs leading-relaxed">{errorMsg}</p>
+                  </div>
+                  <div className="flex gap-2 w-full pt-2">
+                    <button
+                      type="button"
+                      onClick={() => void startCamera()}
+                      className="flex-1 py-2 px-3 bg-slate-700 hover:bg-slate-600 rounded-lg text-xs font-medium text-white transition-colors min-h-[40px] flex items-center justify-center gap-1.5 cursor-pointer"
+                    >
+                      <Icon name="refresh" size={14} /> Reintentar
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        stopCamera();
+                        setMode("manual");
+                      }}
+                      className="flex-1 py-2 px-3 bg-blue-600 hover:bg-blue-700 rounded-lg text-xs font-medium text-white transition-colors min-h-[40px] flex items-center justify-center gap-1.5 cursor-pointer"
+                    >
+                      <Icon name="keyboard" size={14} /> Digitar código
+                    </button>
+                  </div>
                 </div>
-                <div className="space-y-1">
-                  <p className="font-semibold text-sm text-red-300">Cámara no disponible</p>
-                  <p className="text-xs text-slate-400 max-w-xs leading-relaxed">{errorMsg}</p>
-                </div>
-                <div className="flex gap-2 w-full pt-2">
-                  <button
-                    type="button"
-                    onClick={() => void startCamera()}
-                    className="flex-1 py-2 px-3 bg-slate-700 hover:bg-slate-600 rounded-lg text-xs font-medium text-white transition-colors min-h-[40px] flex items-center justify-center gap-1.5 cursor-pointer"
-                  >
-                    <Icon name="refresh" size={14} /> Reintentar
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      stopCamera();
-                      setMode("manual");
-                    }}
-                    className="flex-1 py-2 px-3 bg-blue-600 hover:bg-blue-700 rounded-lg text-xs font-medium text-white transition-colors min-h-[40px] flex items-center justify-center gap-1.5 cursor-pointer"
-                  >
-                    <Icon name="keyboard" size={14} /> Digitar código
-                  </button>
-                </div>
-              </div>
-            ) : (
-              <>
-                <video ref={videoRef} className="w-full h-64 sm:h-56 object-cover cursor-crosshair" playsInline muted />
+              ) : (
+                <>
+                  <video ref={videoRef} className="w-full h-48 sm:h-52 object-cover cursor-crosshair" playsInline muted />
+
+                  {/* Tap-to-Focus Indicator Ring */}
+                  {focusIndicator && focusIndicator.active && (
+                    <div
+                      className="absolute pointer-events-none -translate-x-1/2 -translate-y-1/2 border-2 border-emerald-400 rounded-lg w-14 h-14 flex items-center justify-center animate-ping"
+                      style={{ left: focusIndicator.x, top: focusIndicator.y }}
+                    >
+                      <span className="text-[10px] text-emerald-300 font-mono font-bold bg-black/60 px-1 rounded">
+                        AF
+                      </span>
+                    </div>
+                  )}
+
+                  {/* Aiming Reticle for Barcode / QR */}
+                  <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                    <div
+                      className={`w-56 h-32 border-2 rounded-xl relative shadow-2xl transition-colors duration-200 ${
+                        status === "detected" ? "border-emerald-400 bg-emerald-500/10" : "border-white/80"
+                      }`}
+                    >
+                      <div className="absolute top-0 left-0 w-5 h-5 border-t-4 border-l-4 rounded-tl-lg border-blue-500" />
+                      <div className="absolute top-0 right-0 w-5 h-5 border-t-4 border-r-4 rounded-tr-lg border-blue-500" />
+                      <div className="absolute bottom-0 left-0 w-5 h-5 border-b-4 border-l-4 rounded-bl-lg border-blue-500" />
+                      <div className="absolute bottom-0 right-0 w-5 h-5 border-b-4 border-r-4 rounded-br-lg border-blue-500" />
+
+                      {status === "scanning" && (
+                        <div className="absolute inset-x-0 top-0 h-0.5 bg-blue-400 shadow-[0_0_8px_#60a5fa] animate-[scan-line_2s_linear_infinite]" />
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="absolute bottom-2 inset-x-0 text-center px-4 pointer-events-none">
+                    {status === "starting" && (
+                      <span className="text-white text-xs bg-black/75 px-3 py-1 rounded-full font-medium inline-block">
+                        Iniciando 2D Imager & Autofoco...
+                      </span>
+                    )}
+                    {status === "scanning" && (
+                      <span className="text-white text-xs bg-black/75 px-3 py-1 rounded-full font-medium inline-block">
+                        Apunta al código · Filtra inventario en tiempo real
+                      </span>
+                    )}
+                    {status === "detected" && (
+                      <span className="text-emerald-300 text-xs bg-emerald-950/90 border border-emerald-500/50 px-3 py-1 rounded-full font-semibold inline-block">
+                        ¡Código detectado!
+                      </span>
+                    )}
+                  </div>
+                </>
+              )}
+            </div>
+          )}
+
+          {/* 2. Computer Vision & OCR Mode (Printed Numbers / Non-barcoded SKUs) */}
+          {mode === "ocr" && (
+            <div className="relative bg-black flex flex-col">
+              <div className="relative overflow-hidden cursor-crosshair" onClick={handleViewfinderClick}>
+                <video ref={videoRef} className="w-full h-44 sm:h-48 object-cover" playsInline muted />
 
                 {/* Tap-to-Focus Indicator Ring */}
                 {focusIndicator && focusIndicator.active && (
                   <div
-                    className="absolute pointer-events-none -translate-x-1/2 -translate-y-1/2 border-2 border-emerald-400 rounded-lg w-14 h-14 flex items-center justify-center animate-ping"
+                    className="absolute pointer-events-none -translate-x-1/2 -translate-y-1/2 border-2 border-amber-400 rounded-lg w-14 h-14 flex items-center justify-center animate-ping"
                     style={{ left: focusIndicator.x, top: focusIndicator.y }}
                   >
-                    <span className="text-[10px] text-emerald-300 font-mono font-bold bg-black/60 px-1 rounded">
+                    <span className="text-[10px] text-amber-300 font-mono font-bold bg-black/60 px-1 rounded">
                       AF
                     </span>
                   </div>
                 )}
 
-                {/* Aiming Reticle for Barcode / QR */}
+                {/* OCR Targeted Text Reticle */}
                 <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
                   <div
-                    className={`w-60 h-40 border-2 rounded-xl relative shadow-2xl transition-colors duration-200 ${
-                      status === "detected" ? "border-emerald-400 bg-emerald-500/10" : "border-white/80"
+                    className={`w-64 h-20 border-2 rounded-lg relative shadow-2xl transition-colors duration-200 ${
+                      ocrLoading ? "border-orange-400 bg-orange-500/10" : "border-amber-400/90"
                     }`}
                   >
-                    <div className="absolute top-0 left-0 w-6 h-6 border-t-4 border-l-4 rounded-tl-lg border-blue-500" />
-                    <div className="absolute top-0 right-0 w-6 h-6 border-t-4 border-r-4 rounded-tr-lg border-blue-500" />
-                    <div className="absolute bottom-0 left-0 w-6 h-6 border-b-4 border-l-4 rounded-bl-lg border-blue-500" />
-                    <div className="absolute bottom-0 right-0 w-6 h-6 border-b-4 border-r-4 rounded-br-lg border-blue-500" />
+                    {/* Precise Crosshair Corners */}
+                    <div className="absolute top-0 left-0 w-3.5 h-3.5 border-t-2 border-l-2 border-orange-500" />
+                    <div className="absolute top-0 right-0 w-3.5 h-3.5 border-t-2 border-r-2 border-orange-500" />
+                    <div className="absolute bottom-0 left-0 w-3.5 h-3.5 border-b-2 border-l-2 border-orange-500" />
+                    <div className="absolute bottom-0 right-0 w-3.5 h-3.5 border-b-2 border-r-2 border-orange-500" />
 
-                    {status === "scanning" && (
-                      <div className="absolute inset-x-0 top-0 h-0.5 bg-blue-400 shadow-[0_0_8px_#60a5fa] animate-[scan-line_2s_linear_infinite]" />
+                    {/* Horizontal Alignment Laser Line */}
+                    <div className="absolute inset-x-2 top-1/2 -translate-y-1/2 border-t border-dashed border-orange-400/60" />
+
+                    {ocrLoading && (
+                      <div className="absolute inset-x-0 top-0 h-0.5 bg-orange-500 shadow-[0_0_8px_#ea580c] animate-[scan-line-ocr_1.5s_linear_infinite]" />
                     )}
                   </div>
                 </div>
 
-                <div className="absolute bottom-3 inset-x-0 text-center px-4 pointer-events-none">
-                  {status === "starting" && (
-                    <span className="text-white text-xs bg-black/75 px-3 py-1 rounded-full font-medium inline-block">
-                      Iniciando 2D Imager & Autofoco...
-                    </span>
-                  )}
-                  {status === "scanning" && (
-                    <span className="text-white text-xs bg-black/75 px-3 py-1 rounded-full font-medium inline-block">
-                      Apunta al código o toca para enfocar
-                    </span>
-                  )}
-                  {status === "detected" && (
-                    <span className="text-emerald-300 text-xs bg-emerald-950/90 border border-emerald-500/50 px-3 py-1 rounded-full font-semibold inline-block">
-                      ¡Código detectado!
-                    </span>
-                  )}
-                </div>
-              </>
-            )}
-          </div>
-        )}
-
-        {/* 2. Computer Vision & OCR Mode (Printed Numbers / Non-barcoded SKUs) */}
-        {mode === "ocr" && (
-          <div className="relative bg-black flex flex-col">
-            <div className="relative overflow-hidden cursor-crosshair" onClick={handleViewfinderClick}>
-              <video ref={videoRef} className="w-full h-56 sm:h-52 object-cover" playsInline muted />
-
-              {/* Tap-to-Focus Indicator Ring */}
-              {focusIndicator && focusIndicator.active && (
-                <div
-                  className="absolute pointer-events-none -translate-x-1/2 -translate-y-1/2 border-2 border-amber-400 rounded-lg w-14 h-14 flex items-center justify-center animate-ping"
-                  style={{ left: focusIndicator.x, top: focusIndicator.y }}
-                >
-                  <span className="text-[10px] text-amber-300 font-mono font-bold bg-black/60 px-1 rounded">
-                    AF
+                {/* Overlay Guidance */}
+                <div className="absolute top-2 inset-x-0 text-center px-4 pointer-events-none">
+                  <span className="text-white text-[11px] bg-slate-900/85 px-2.5 py-1 rounded-md font-medium inline-block border border-slate-700">
+                    Enfoque continuo activo · Toca para re-enfocar
                   </span>
                 </div>
-              )}
+              </div>
 
-              {/* OCR Targeted Text Reticle */}
-              <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                <div
-                  className={`w-72 h-24 border-2 rounded-lg relative shadow-2xl transition-colors duration-200 ${
-                    ocrLoading ? "border-orange-400 bg-orange-500/10" : "border-amber-400/90"
-                  }`}
-                >
-                  {/* Precise Crosshair Corners */}
-                  <div className="absolute top-0 left-0 w-4 h-4 border-t-2 border-l-2 border-orange-500" />
-                  <div className="absolute top-0 right-0 w-4 h-4 border-t-2 border-r-2 border-orange-500" />
-                  <div className="absolute bottom-0 left-0 w-4 h-4 border-b-2 border-l-2 border-orange-500" />
-                  <div className="absolute bottom-0 right-0 w-4 h-4 border-b-2 border-r-2 border-orange-500" />
+              {/* OCR Controls & Action Panel */}
+              <div className="p-3 bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-800 space-y-2.5">
+                {/* Secondary Options Bar */}
+                <div className="flex items-center justify-between gap-2 text-xs">
+                  <button
+                    type="button"
+                    onClick={() => setInvertContrast((prev) => !prev)}
+                    className={`px-2 py-1 rounded-lg border transition-colors flex items-center gap-1.5 cursor-pointer text-xs ${
+                      invertContrast
+                        ? "bg-slate-900 text-white border-slate-900 dark:bg-white dark:text-slate-900"
+                        : "bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700"
+                    }`}
+                    title="Activa si el texto es blanco sobre fondo oscuro"
+                  >
+                    <Icon name="sliders" size={12} />
+                    <span>{invertContrast ? "Fondo Oscuro" : "Invertir"}</span>
+                  </button>
 
-                  {/* Horizontal Alignment Laser Line */}
-                  <div className="absolute inset-x-2 top-1/2 -translate-y-1/2 border-t border-dashed border-orange-400/60" />
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => void triggerAutofocus()}
+                      className="px-2 py-1 bg-amber-500/10 hover:bg-amber-500/20 text-amber-700 dark:text-amber-400 border border-amber-300 dark:border-amber-700/50 rounded-lg flex items-center gap-1.5 cursor-pointer transition-colors text-xs"
+                      title="Forzar re-enfoque de cámara"
+                    >
+                      <Icon name="focus" size={12} />
+                      <span>Autofoco</span>
+                    </button>
 
-                  {ocrLoading && (
-                    <div className="absolute inset-x-0 top-0 h-0.5 bg-orange-500 shadow-[0_0_8px_#ea580c] animate-[scan-line-ocr_1.5s_linear_infinite]" />
-                  )}
+                    <label className="flex items-center gap-1.5 text-slate-600 dark:text-slate-400 cursor-pointer text-xs">
+                      <input
+                        type="checkbox"
+                        checked={continuousOcr}
+                        onChange={(e) => setContinuousOcr(e.target.checked)}
+                        className="rounded text-orange-600 focus:ring-orange-500"
+                      />
+                      <span>Continuo</span>
+                    </label>
+
+                    <button
+                      type="button"
+                      onClick={() => fileInputRef.current?.click()}
+                      className="p-1 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 text-slate-700 dark:text-slate-300 rounded-lg border border-slate-200 dark:border-slate-700 cursor-pointer"
+                      title="Cargar foto desde galería o cámara nativa"
+                    >
+                      <Icon name="upload" size={13} />
+                    </button>
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      accept="image/*"
+                      className="hidden"
+                      onChange={handleFileUpload}
+                    />
+                  </div>
                 </div>
-              </div>
 
-              {/* Overlay Guidance */}
-              <div className="absolute top-2 inset-x-0 text-center px-4 pointer-events-none">
-                <span className="text-white text-[11px] bg-slate-900/85 px-2.5 py-1 rounded-md font-medium inline-block border border-slate-700">
-                  Enfoque continuo activo · Toca para re-enfocar
-                </span>
-              </div>
-            </div>
-
-            {/* OCR Controls & Action Panel */}
-            <div className="p-3.5 bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-800 space-y-3">
-              {/* Secondary Options Bar */}
-              <div className="flex items-center justify-between gap-2 text-xs">
+                {/* Primary OCR Capture Trigger Button (Industrial CTA Orange) */}
                 <button
                   type="button"
-                  onClick={() => setInvertContrast((prev) => !prev)}
-                  className={`px-2.5 py-1.5 rounded-lg border transition-colors flex items-center gap-1.5 cursor-pointer ${
-                    invertContrast
-                      ? "bg-slate-900 text-white border-slate-900 dark:bg-white dark:text-slate-900"
-                      : "bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700"
-                  }`}
-                  title="Activa si el texto es blanco sobre fondo oscuro"
+                  onClick={() => void captureAndRecognizeOcr()}
+                  disabled={ocrLoading}
+                  className="w-full bg-orange-600 hover:bg-orange-700 active:bg-orange-800 text-white font-semibold py-2 px-3 rounded-lg shadow-sm flex items-center justify-center gap-2 transition-all cursor-pointer min-h-[40px] disabled:opacity-50 text-xs"
                 >
-                  <Icon name="sliders" size={13} />
-                  <span>{invertContrast ? "Fondo Oscuro" : "Invertir"}</span>
+                  {ocrLoading ? (
+                    <>
+                      <Icon name="refresh" size={15} className="animate-spin" />
+                      <span>{ocrStatusText || "Procesando con Visión Artificial..."}</span>
+                    </>
+                  ) : (
+                    <>
+                      <Icon name="camera" size={15} />
+                      <span>Capturar y Auto-Entregar (&ge; 90%)</span>
+                    </>
+                  )}
                 </button>
 
-                <div className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={() => void triggerAutofocus()}
-                    className="px-2.5 py-1.5 bg-amber-500/10 hover:bg-amber-500/20 text-amber-700 dark:text-amber-400 border border-amber-300 dark:border-amber-700/50 rounded-lg flex items-center gap-1.5 cursor-pointer transition-colors"
-                    title="Forzar re-enfoque de cámara"
-                  >
-                    <Icon name="focus" size={13} />
-                    <span>Autofoco</span>
-                  </button>
-
-                  <label className="flex items-center gap-1.5 text-slate-600 dark:text-slate-400 cursor-pointer text-xs">
-                    <input
-                      type="checkbox"
-                      checked={continuousOcr}
-                      onChange={(e) => setContinuousOcr(e.target.checked)}
-                      className="rounded text-orange-600 focus:ring-orange-500"
+                {/* Progress Bar during OCR calculation */}
+                {ocrLoading && (
+                  <div className="w-full bg-slate-100 dark:bg-slate-800 rounded-full h-1.5 overflow-hidden">
+                    <div
+                      className="bg-orange-600 h-full transition-all duration-300"
+                      style={{ width: `${ocrProgress}%` }}
                     />
-                    <span>Continuo</span>
-                  </label>
-
-                  <button
-                    type="button"
-                    onClick={() => fileInputRef.current?.click()}
-                    className="p-1.5 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 text-slate-700 dark:text-slate-300 rounded-lg border border-slate-200 dark:border-slate-700 cursor-pointer"
-                    title="Cargar foto desde galería o cámara nativa"
-                  >
-                    <Icon name="upload" size={14} />
-                  </button>
-                  <input
-                    ref={fileInputRef}
-                    type="file"
-                    accept="image/*"
-                    className="hidden"
-                    onChange={handleFileUpload}
-                  />
-                </div>
-              </div>
-
-              {/* Primary OCR Capture Trigger Button (Industrial CTA Orange) */}
-              <button
-                type="button"
-                onClick={() => void captureAndRecognizeOcr()}
-                disabled={ocrLoading}
-                className="w-full bg-orange-600 hover:bg-orange-700 active:bg-orange-800 text-white font-semibold py-2.5 px-4 rounded-lg shadow-sm flex items-center justify-center gap-2 transition-all cursor-pointer min-h-[44px] disabled:opacity-50"
-              >
-                {ocrLoading ? (
-                  <>
-                    <Icon name="refresh" size={16} className="animate-spin" />
-                    <span>{ocrStatusText || "Procesando con Visión Artificial..."}</span>
-                  </>
-                ) : (
-                  <>
-                    <Icon name="camera" size={16} />
-                    <span>Capturar y Auto-Entregar (&ge; 90%)</span>
-                  </>
+                  </div>
                 )}
+              </div>
+            </div>
+          )}
+
+          {/* 3. Manual Input */}
+          {mode === "manual" && (
+            <form onSubmit={handleManualSubmit} className="p-3.5 space-y-3">
+              <div>
+                <label className="block text-xs font-semibold uppercase tracking-wider text-slate-700 dark:text-slate-300 mb-1">
+                  {label}
+                </label>
+                <input
+                  autoFocus
+                  value={manualValue}
+                  onChange={(e) => setManualValue(e.target.value)}
+                  placeholder="Escribe o pega el código..."
+                  className="w-full border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 rounded-lg px-3 py-2 min-h-[40px] text-xs focus:outline-none focus:ring-2 focus:ring-blue-600 font-mono"
+                />
+              </div>
+              <button
+                type="submit"
+                className="w-full bg-blue-600 hover:bg-blue-700 text-white min-h-[38px] py-2 rounded-lg text-xs font-semibold shadow-sm transition-all cursor-pointer"
+              >
+                Confirmar código
               </button>
+            </form>
+          )}
 
-              {/* Progress Bar during OCR calculation */}
-              {ocrLoading && (
-                <div className="w-full bg-slate-100 dark:bg-slate-800 rounded-full h-1.5 overflow-hidden">
-                  <div
-                    className="bg-orange-600 h-full transition-all duration-300"
-                    style={{ width: `${ocrProgress}%` }}
-                  />
-                </div>
-              )}
-
-              {/* Detected Candidate Badges */}
-              {ocrCandidates.length > 0 && (
-                <div className="space-y-1.5 pt-1">
-                  <div className="flex items-center justify-between">
-                    <p className="text-[11px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
-                      Códigos reconocidos ({ocrCandidates[0].confidence}% máx):
-                    </p>
-                    <span className="text-[10px] text-slate-400">
-                      {ocrCandidates[0].confidence >= 90 ? "Auto-entregando..." : "Toca para elegir"}
-                    </span>
-                  </div>
-                  <div className="flex flex-wrap gap-1.5 max-h-32 overflow-y-auto">
-                    {ocrCandidates.map((candidate) => (
-                      <button
-                        key={candidate.code}
-                        type="button"
-                        onClick={() => handleDetectedCode(candidate.code, true)}
-                        className={`text-left px-2.5 py-1.5 rounded-lg border text-xs font-mono transition-all flex items-center gap-2 cursor-pointer ${
-                          candidate.confidence >= 90
-                            ? "bg-emerald-50 dark:bg-emerald-950/40 border-emerald-400 text-emerald-800 dark:text-emerald-300 font-bold shadow-xs"
-                            : candidate.isKnownProduct
-                            ? "bg-blue-50 dark:bg-blue-950/40 border-blue-400 text-blue-800 dark:text-blue-300"
-                            : "bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300"
-                        }`}
-                      >
-                        <span className="font-bold">{candidate.code}</span>
-                        {candidate.productName && (
-                          <span className="text-[10px] text-slate-600 dark:text-slate-400 truncate max-w-[120px]">
-                            ({candidate.productName})
-                          </span>
-                        )}
-                        <span
-                          className={`text-[10px] font-sans px-1 rounded ${
-                            candidate.confidence >= 90
-                              ? "bg-emerald-200 dark:bg-emerald-900/60 text-emerald-900 dark:text-emerald-200 font-bold"
-                              : "opacity-75"
-                          }`}
-                        >
-                          {candidate.confidence}%
-                        </span>
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* Status Message */}
-              {ocrStatusText && !ocrLoading && ocrCandidates.length === 0 && (
-                <p className="text-xs text-slate-500 dark:text-slate-400 text-center leading-tight">
-                  {ocrStatusText}
-                </p>
-              )}
+          {/* 4. REAL-TIME INVENTORY FILTERING TRAY */}
+          <div className="p-3.5 bg-slate-50 dark:bg-slate-800/80 border-t border-slate-200 dark:border-slate-800 space-y-2.5">
+            {/* Tray Header */}
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-1.5">
+                <Icon name="boxes" size={15} className="text-blue-600 dark:text-blue-400" />
+                <span className="text-xs font-bold text-slate-800 dark:text-slate-200">
+                  Inventario Filtrado en Tiempo Real ({filteredInventory.length})
+                </span>
+              </div>
+              <div className="flex items-center gap-2">
+                {effectiveFilterQuery && (
+                  <span className="flex items-center gap-1 text-[10px] text-emerald-600 dark:text-emerald-400 font-semibold bg-emerald-50 dark:bg-emerald-950/60 px-1.5 py-0.5 rounded border border-emerald-300 dark:border-emerald-800 animate-pulse">
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+                    Filtrando por: &quot;{effectiveFilterQuery}&quot;
+                  </span>
+                )}
+                <button
+                  type="button"
+                  onClick={() => setShowInventoryTray((prev) => !prev)}
+                  className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 p-0.5 cursor-pointer"
+                  title="Expandir / Contraer lista de inventario"
+                >
+                  <Icon name={showInventoryTray ? "chevron-down" : "chevron-right"} size={14} />
+                </button>
+              </div>
             </div>
-          </div>
-        )}
 
-        {/* 3. Manual Input */}
-        {mode === "manual" && (
-          <form onSubmit={handleManualSubmit} className="p-4 sm:p-5 space-y-4">
-            <div>
-              <label className="block text-xs font-semibold uppercase tracking-wider text-slate-700 dark:text-slate-300 mb-1.5">
-                {label}
-              </label>
+            {/* Quick Interactive Search / Filter Bar */}
+            <div className="relative">
               <input
-                autoFocus
-                value={manualValue}
-                onChange={(e) => setManualValue(e.target.value)}
-                placeholder="Escribe o pega el código..."
-                className="w-full border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 rounded-lg px-3.5 py-2.5 min-h-[44px] text-sm focus:outline-none focus:ring-2 focus:ring-blue-600 font-mono"
+                type="text"
+                value={inventorySearchQuery}
+                onChange={(e) => setInventorySearchQuery(e.target.value)}
+                placeholder="Filtro rápido en inventario (ej. arroz, BEV-001, A-C-01)..."
+                className="w-full bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg pl-8 pr-7 py-1.5 text-xs text-slate-900 dark:text-slate-100 placeholder-slate-400 focus:outline-none focus:ring-1 focus:ring-blue-500"
               />
+              <div className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none">
+                <Icon name="search" size={13} />
+              </div>
+              {inventorySearchQuery && (
+                <button
+                  type="button"
+                  onClick={() => setInventorySearchQuery("")}
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 cursor-pointer"
+                  title="Limpiar búsqueda"
+                >
+                  <Icon name="close" size={12} />
+                </button>
+              )}
             </div>
-            <button
-              type="submit"
-              className="w-full bg-blue-600 hover:bg-blue-700 text-white min-h-[44px] py-2.5 rounded-lg text-sm font-semibold shadow-sm transition-all cursor-pointer"
-            >
-              Confirmar código
-            </button>
-          </form>
-        )}
+
+            {/* Live Filtered Inventory Product Cards */}
+            {showInventoryTray && (
+              <div className="max-h-44 overflow-y-auto space-y-1.5 pr-0.5">
+                {filteredInventory.length === 0 ? (
+                  <div className="text-center py-4 bg-white dark:bg-slate-900 rounded-lg border border-dashed border-slate-300 dark:border-slate-700">
+                    <p className="text-xs text-slate-500 dark:text-slate-400">
+                      No se encontraron productos en inventario con &quot;{effectiveFilterQuery}&quot;.
+                    </p>
+                    <p className="text-[10px] text-slate-400 mt-0.5">
+                      Prueba con otro SKU, nombre de artículo o código de casillero.
+                    </p>
+                  </div>
+                ) : (
+                  filteredInventory.map((item) => (
+                    <button
+                      key={`${item.sku}-${item.locationCode || ""}`}
+                      type="button"
+                      onClick={() =>
+                        handleDetectedCode(item.sku, true, {
+                          productName: item.name,
+                          locationCode: item.locationCode,
+                          quantity: item.quantity,
+                          score: item.matchScore || 100,
+                        })
+                      }
+                      className={`w-full text-left p-2 rounded-lg border transition-all flex items-center justify-between gap-2 cursor-pointer shadow-2xs ${
+                        (item.matchScore || 0) >= 90
+                          ? "bg-emerald-50/70 dark:bg-emerald-950/40 border-emerald-400 hover:bg-emerald-100/70"
+                          : (item.matchScore || 0) > 0
+                          ? "bg-blue-50/50 dark:bg-blue-950/30 border-blue-300 dark:border-blue-800 hover:bg-blue-100/50"
+                          : "bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700/80 hover:border-slate-400"
+                      }`}
+                    >
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <span className="font-mono font-bold text-xs text-blue-700 dark:text-blue-400">
+                            {item.sku}
+                          </span>
+                          {item.locationCode && (
+                            <span className="text-[10px] bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 px-1.5 py-0.2 rounded font-mono border border-slate-200 dark:border-slate-700">
+                              📍 {item.locationCode}
+                            </span>
+                          )}
+                          {(item.matchScore || 0) > 0 && (
+                            <span
+                              className={`text-[9px] px-1.5 py-0.2 rounded font-semibold ${
+                                (item.matchScore || 0) >= 90
+                                  ? "bg-emerald-200 dark:bg-emerald-900/60 text-emerald-900 dark:text-emerald-200 font-bold"
+                                  : "bg-blue-100 dark:bg-blue-900/40 text-blue-800 dark:text-blue-300"
+                              }`}
+                            >
+                              {item.matchScore}%
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-xs font-medium text-slate-800 dark:text-slate-200 truncate mt-0.5">
+                          {item.name}
+                        </p>
+                        {item.matchedReason && (
+                          <p className="text-[9px] text-slate-500 dark:text-slate-400 truncate">
+                            {item.matchedReason}
+                          </p>
+                        )}
+                      </div>
+                      <div className="text-right shrink-0">
+                        <span className="text-xs font-bold text-emerald-600 dark:text-emerald-400 block">
+                          {item.quantity ?? 0} {item.unit || "uds"}
+                        </span>
+                        <span className="text-[9px] text-slate-400 uppercase tracking-wider">
+                          Disponible
+                        </span>
+                      </div>
+                    </button>
+                  ))
+                )}
+              </div>
+            )}
+          </div>
+        </div>
 
         {/* Last scanned feedback bar */}
         {lastScanned && (
-          <div className="px-4 py-2.5 bg-blue-50 dark:bg-slate-800/80 border-t border-blue-100 dark:border-slate-800 flex items-center justify-between text-xs">
-            <span className="text-slate-500 dark:text-slate-400 font-medium">Último código:</span>
+          <div className="px-4 py-2 bg-blue-50 dark:bg-slate-800/80 border-t border-blue-100 dark:border-slate-800 flex items-center justify-between text-xs shrink-0">
+            <span className="text-slate-500 dark:text-slate-400 font-medium">Último código escaneado:</span>
             <span className="font-mono font-bold text-blue-700 dark:text-blue-400">{lastScanned}</span>
           </div>
         )}
@@ -1094,11 +1351,11 @@ export default function BarcodeScanner({
       <style>{`
         @keyframes scan-line {
           0% { transform: translateY(0); }
-          100% { transform: translateY(calc(10rem - 2px)); }
+          100% { transform: translateY(calc(8rem - 2px)); }
         }
         @keyframes scan-line-ocr {
           0% { transform: translateY(0); }
-          100% { transform: translateY(calc(6rem - 2px)); }
+          100% { transform: translateY(calc(5rem - 2px)); }
         }
       `}</style>
     </div>

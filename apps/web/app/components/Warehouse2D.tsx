@@ -1582,6 +1582,16 @@ export function Warehouse2D({ token, onError, onNavigate, onDataChanged, refresh
               : 'Escanear etiqueta de ubicación (ej. A-C-1-05) o código de producto'
           }
           catalogProducts={catalogProducts}
+          inventoryProducts={Array.from(inventoryMap.values()).map((inv) => ({
+            id: inv.id,
+            sku: inv.product?.sku || '',
+            name: inv.product?.name || '',
+            barcode: inv.product?.barcode,
+            quantity: inv.quantity,
+            locationCode: inv.location?.code,
+            category: inv.product?.category,
+            unit: inv.product?.unit,
+          }))}
         />
       )}
     </section>

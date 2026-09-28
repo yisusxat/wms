@@ -40,6 +40,20 @@ export interface KnownProductLookup {
   barcode?: string;
 }
 
+export interface ScannedInventoryProduct {
+  id?: string;
+  sku: string;
+  name: string;
+  barcode?: string;
+  quantity?: number;
+  reservedQuantity?: number;
+  locationCode?: string;
+  category?: string;
+  unit?: string;
+  matchScore?: number; // 0 to 100
+  matchedReason?: string;
+}
+
 /**
  * Normalizes common OCR mischaracterizations:
  * 'O' <-> '0', 'I'/'l'/'|' <-> '1', 'S' <-> '5', 'B' <-> '8', 'Z' <-> '2'
@@ -498,6 +512,179 @@ export function getAutoDeliverWinner(candidates: SkuCandidate[]): SkuCandidate |
   if (!candidates || candidates.length === 0) return null;
   const top = candidates[0];
   if (top && top.confidence >= 90) {
+    return top;
+  }
+  return null;
+}
+
+/**
+ * Progressively filters inventory products in real time as scanning progresses.
+ * Calculates matchScore (0 - 100) based on:
+ * - Direct query match (exact, prefix, contains, fuzzy Levenshtein, confusion correction)
+ * - Candidates match from OCR or BarcodeDetector
+ * - Location code matches (if user scans a location like A-C-01-02, shows products at that location)
+ * Returns items sorted by matchScore descending, then by quantity descending.
+ */
+export function filterInventoryByScan(
+  inventory: ScannedInventoryProduct[],
+  query: string,
+  candidates: SkuCandidate[] = []
+): ScannedInventoryProduct[] {
+  if (!inventory || inventory.length === 0) return [];
+
+  const cleanQuery = query.trim().toUpperCase();
+
+  // If no query and no candidates, return all inventory items with 0 matchScore
+  if (!cleanQuery && candidates.length === 0) {
+    return inventory.map((item) => ({ ...item, matchScore: 0 }));
+  }
+
+  const queryConfusion = normalizeOcrConfusion(cleanQuery);
+
+  const scoredList = inventory.map((item) => {
+    let bestScore = 0;
+    let bestReason = '';
+
+    const sku = item.sku || (item as any).product?.sku || '';
+    const name = item.name || (item as any).product?.name || '';
+    const barcode = item.barcode || (item as any).product?.barcode || '';
+    const locationCode = item.locationCode || (item as any).location?.code || '';
+
+    const skuUpper = sku.toUpperCase();
+    const nameUpper = name.toUpperCase();
+    const barUpper = barcode.toUpperCase();
+    const locUpper = locationCode.toUpperCase();
+    const skuConfusion = normalizeOcrConfusion(skuUpper);
+
+    // 1. Direct query evaluation
+    if (cleanQuery) {
+      // 1.1 Exact match on SKU or Barcode
+      if (skuUpper === cleanQuery || barUpper === cleanQuery) {
+        bestScore = 100;
+        bestReason = 'Coincidencia exacta SKU';
+      }
+      // 1.2 Exact match on warehouse location
+      else if (locUpper === cleanQuery) {
+        bestScore = 98;
+        bestReason = `Ubicación ${locUpper}`;
+      }
+      // 1.3 Confusion-corrected SKU match (e.g. O <-> 0, I <-> 1)
+      else if (skuConfusion === queryConfusion) {
+        bestScore = 96;
+        bestReason = 'Coincidencia SKU (OCR corregido)';
+      }
+      // 1.4 Prefix match on SKU (e.g. "PRD" -> "PRD-001")
+      else if (cleanQuery.length >= 2 && skuUpper.startsWith(cleanQuery)) {
+        bestScore = Math.min(95, 80 + cleanQuery.length * 3);
+        bestReason = 'Prefijo de SKU';
+      }
+      // 1.5 Contains match in Product Name
+      else if (cleanQuery.length >= 3 && nameUpper.includes(cleanQuery)) {
+        bestScore = 92;
+        bestReason = 'Nombre de producto';
+      }
+      // 1.6 Substring match in SKU
+      else if (cleanQuery.length >= 3 && skuUpper.includes(cleanQuery)) {
+        bestScore = 90;
+        bestReason = 'Subcadena de SKU';
+      }
+      // 1.7 Location prefix match (e.g. "A-C-01" matches "A-C-01-05")
+      else if (cleanQuery.length >= 4 && locUpper.startsWith(cleanQuery)) {
+        bestScore = 94;
+        bestReason = `Pasillo/Rack ${locUpper}`;
+      }
+      // 1.8 Fuzzy Levenshtein match on SKU
+      else if (cleanQuery.length >= 3) {
+        const sim = calculateSimilarity(cleanQuery, skuUpper);
+        if (sim >= 0.85) {
+          const fuzzyScore = Math.round(85 + (sim - 0.85) * 80);
+          if (fuzzyScore > bestScore) {
+            bestScore = fuzzyScore;
+            bestReason = `Similitud SKU (${Math.round(sim * 100)}%)`;
+          }
+        }
+      }
+    }
+
+    // 2. Evaluate against OCR / Barcode candidates
+    for (const cand of candidates) {
+      const candCode = cand.code.toUpperCase();
+      const candConfusion = normalizeOcrConfusion(candCode);
+
+      if (skuUpper === candCode || barUpper === candCode) {
+        const score = Math.max(cand.confidence, 98);
+        if (score > bestScore) {
+          bestScore = score;
+          bestReason = 'Detectado por cámara/OCR';
+        }
+      } else if (locUpper === candCode) {
+        const score = Math.max(cand.confidence, 96);
+        if (score > bestScore) {
+          bestScore = score;
+          bestReason = `Ubicación detectada (${locUpper})`;
+        }
+      } else if (skuConfusion === candConfusion) {
+        const score = Math.max(Math.round(cand.confidence * 0.95), 94);
+        if (score > bestScore) {
+          bestScore = score;
+          bestReason = 'SKU detectado (OCR corregido)';
+        }
+      } else if (candCode.length >= 3) {
+        const sim = calculateSimilarity(candCode, skuUpper);
+        if (sim >= 0.88) {
+          const score = Math.round(cand.confidence * sim);
+          if (score > bestScore) {
+            bestScore = score;
+            bestReason = `Afinidad OCR (${Math.round(sim * 100)}%)`;
+          }
+        }
+      }
+    }
+
+    return {
+      ...item,
+      sku: item.sku || sku,
+      name: item.name || name,
+      barcode: item.barcode || barcode || undefined,
+      locationCode: item.locationCode || locationCode || undefined,
+      matchScore: bestScore,
+      matchedReason: bestReason || undefined,
+    };
+  });
+
+  // If there's an active query or candidates, only return items with matchScore > 0
+  let filtered = scoredList;
+  if (cleanQuery || candidates.length > 0) {
+    const matching = scoredList.filter((i) => (i.matchScore || 0) > 0);
+    if (matching.length > 0) {
+      filtered = matching;
+    } else {
+      // Fallback to case-insensitive partial match on name or category
+      filtered = scoredList.filter(
+        (i) =>
+          (i.name && i.name.toUpperCase().includes(cleanQuery)) ||
+          (i.category && i.category.toUpperCase().includes(cleanQuery))
+      );
+    }
+  }
+
+  // Sort descending by matchScore, then by quantity
+  return filtered.sort((a, b) => {
+    const scoreDiff = (b.matchScore || 0) - (a.matchScore || 0);
+    if (scoreDiff !== 0) return scoreDiff;
+    return (b.quantity || 0) - (a.quantity || 0);
+  });
+}
+
+/**
+ * Returns the winning inventory product if matchScore is >= 90%, enabling automatic delivery
+ */
+export function getAutoDeliverInventoryWinner(
+  filteredInventory: ScannedInventoryProduct[]
+): ScannedInventoryProduct | null {
+  if (!filteredInventory || filteredInventory.length === 0) return null;
+  const top = filteredInventory[0];
+  if (top && (top.matchScore || 0) >= 90) {
     return top;
   }
   return null;

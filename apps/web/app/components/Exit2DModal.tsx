@@ -922,6 +922,16 @@ export function Exit2DModal({ isOpen, onClose, token, onSuccess }: Props) {
           onClose={() => setScannerOpen(false)}
           label="Escanear etiqueta de posición o SKU de producto para salida"
           catalogProducts={catalogProducts}
+          inventoryProducts={items.map((i) => ({
+            id: i.id,
+            sku: i.product.sku,
+            name: i.product.name,
+            barcode: i.product.barcode,
+            quantity: i.quantity,
+            locationCode: i.location.code,
+            category: i.product.category,
+            unit: i.product.unit,
+          }))}
         />
       )}
     </>

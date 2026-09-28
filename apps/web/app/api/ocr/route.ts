@@ -2,19 +2,23 @@ import { NextRequest, NextResponse } from "next/server";
 import {
   extractSkuCandidates,
   getAutoDeliverWinner,
+  filterInventoryByScan,
+  getAutoDeliverInventoryWinner,
   KnownProductLookup,
+  ScannedInventoryProduct,
 } from "../../../lib/ocrService";
 
 interface OcrApiPayload {
   image?: string;
   rawText?: string;
   catalog?: KnownProductLookup[];
+  inventory?: ScannedInventoryProduct[];
 }
 
 export async function POST(req: NextRequest) {
   try {
     const body = (await req.json()) as OcrApiPayload;
-    const { image, rawText, catalog = [] } = body;
+    const { image, rawText, catalog = [], inventory = [] } = body;
 
     let recognizedText = rawText || "";
 
@@ -75,12 +79,33 @@ export async function POST(req: NextRequest) {
 
     // 2. Extract and score candidates using the high-precision fuzzy matcher and catalog lookups
     const candidates = extractSkuCandidates(recognizedText, catalog);
-    const winner = getAutoDeliverWinner(candidates);
+    const candidateWinner = getAutoDeliverWinner(candidates);
+
+    // 3. Progressively filter inventory products if provided
+    const filteredInventory =
+      inventory && inventory.length > 0
+        ? filterInventoryByScan(inventory, recognizedText, candidates)
+        : [];
+    const inventoryWinner = getAutoDeliverInventoryWinner(filteredInventory);
+
+    // Choose overall winner (inventory winner prioritized with location & stock details)
+    const winner = inventoryWinner
+      ? {
+          code: inventoryWinner.sku,
+          confidence: inventoryWinner.matchScore || 90,
+          source: "catalog_match" as const,
+          isKnownProduct: true,
+          productName: inventoryWinner.name,
+          locationCode: inventoryWinner.locationCode,
+          quantity: inventoryWinner.quantity,
+        }
+      : candidateWinner;
 
     return NextResponse.json({
       success: true,
       rawText: recognizedText,
       candidates,
+      matchingInventory: filteredInventory,
       winner,
       autoDeliver: Boolean(winner && winner.confidence >= 90),
       accuracy: winner ? winner.confidence : (candidates[0]?.confidence ?? 0),
@@ -92,6 +117,7 @@ export async function POST(req: NextRequest) {
         success: false,
         error: message,
         candidates: [],
+        matchingInventory: [],
         winner: null,
         autoDeliver: false,
       },

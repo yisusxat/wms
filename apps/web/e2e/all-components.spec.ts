@@ -595,10 +595,24 @@ test.describe('7. Modales de Soporte, Legal, Auditoría y Seguridad', () => {
     expect(locData.winner.code).toBe('A-C-01-05');
     expect(locData.winner.confidence).toBeGreaterThanOrEqual(95);
 
-    // 3. Test scanner UI autofocus controls and OCR mode
+    // 3. Test /api/inventory endpoint
+    const invRes = await page.request.get('/api/inventory');
+    expect(invRes.ok()).toBeTruthy();
+    const invData = await invRes.json();
+    expect(invData.success).toBe(true);
+    expect(invData.items.length).toBeGreaterThan(0);
+
+    // 4. Test scanner UI autofocus controls, OCR mode and live inventory filtering
     await loginAndNavigate(page);
     await page.getByRole('button', { name: /Escanear/i }).first().click();
     await expect(page.getByText('Escáner de Código')).toBeVisible();
+
+    // Verify live inventory filtering tray is visible
+    await expect(page.getByText(/Inventario Filtrado en Tiempo Real/i)).toBeVisible();
+
+    // Type in live filter input to test progressive filtering by inventory
+    await page.getByPlaceholder(/Filtro rápido en inventario/i).fill('arroz');
+    await expect(page.getByText('Arroz Diana Especial 1kg')).toBeVisible();
 
     // Switch to OCR Vision tab
     await page.getByRole('button', { name: /Visión OCR/i }).click();
