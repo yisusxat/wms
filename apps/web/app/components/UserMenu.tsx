@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import {
   ChevronDown,
+  Clock,
   FileText,
   LifeBuoy,
   LogOut,
@@ -126,6 +127,12 @@ export function UserMenu({
             {soundOn ? 'Silenciar sonidos' : 'Activar sonidos'}
           </button>
           <div className="my-1 border-t border-slate-100 dark:border-slate-800" />
+          <div className="flex items-center justify-between px-3 py-1.5 text-[11px] text-slate-500 dark:text-slate-400">
+            <span className="flex items-center gap-1.5">
+              <Clock className="h-3 w-3 text-slate-400" /> Inactividad
+            </span>
+            <span className="font-semibold text-slate-700 dark:text-slate-300">15 min</span>
+          </div>
           <button type="button" className={itemClass} onClick={() => { onRevokeAll(); setOpen(false); }}>
             <FileText className="h-4 w-4" /> Cerrar en todos
           </button>

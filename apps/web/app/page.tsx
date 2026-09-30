@@ -128,6 +128,11 @@ const BarcodeScanner = dynamic(
   { ssr: false }
 );
 
+const InactivityTimerModal = dynamic(
+  () => import('./components/InactivityTimerModal').then((m) => m.InactivityTimerModal),
+  { ssr: false }
+);
+
 import { ToastProvider, useToast } from './components/Toast';
 import { ThemeProvider, useTheme, ThemeToggle } from './components/ThemeContext';
 import CommandPalette from './components/CommandPalette';
@@ -523,7 +528,7 @@ function HomePageContent() {
     } catch {}
   }
 
-  async function signOut() {
+  async function signOut(reason?: string) {
     try {
       await insforge.auth.signOut().catch(() => {});
     } catch {}
@@ -532,6 +537,9 @@ function HomePageContent() {
     setUser(null);
     setProfile(null);
     setSummary(null);
+    if (reason) {
+      setError(reason);
+    }
     try {
       localStorage.removeItem('wms_auth_session');
       localStorage.removeItem('wms_active_tab');
@@ -1075,6 +1083,14 @@ function HomePageContent() {
         }}
         isDark={isDark}
         isSoundOn={soundOn}
+      />
+
+      {/* Auto Logout Inactivity Protection (15 min timeout, 60s countdown warning) */}
+      <InactivityTimerModal
+        isLoggedIn={Boolean(user && token)}
+        onSignOut={signOut}
+        timeoutMinutes={15}
+        warningSeconds={60}
       />
     </div>
   );

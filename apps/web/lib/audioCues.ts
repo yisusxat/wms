@@ -126,3 +126,37 @@ export function playClickSound(): void {
     }, 150);
   } catch {}
 }
+
+/**
+ * Pulsing attention chime for session timeout / inactivity warnings
+ */
+export function playWarningSound(): void {
+  if (!isSoundEnabled()) return;
+  try {
+    const ctx = getAudioContext();
+    if (!ctx) return;
+
+    const now = ctx.currentTime;
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+
+    gain.gain.setValueAtTime(0.08, now);
+    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.35);
+
+    osc.type = "sine";
+    osc.frequency.setValueAtTime(523.25, now); // C5
+    osc.frequency.setValueAtTime(659.25, now + 0.12); // E5
+
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+
+    osc.start(now);
+    osc.stop(now + 0.38);
+
+    setTimeout(() => {
+      try {
+        ctx.close();
+      } catch {}
+    }, 450);
+  } catch {}
+}
