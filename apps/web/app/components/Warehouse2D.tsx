@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, useCallback } from 'react';
 import dynamic from 'next/dynamic';
 import {
   apiFetch,
@@ -8,10 +8,12 @@ import {
   Location,
   Page,
   resolveLocationUuid,
+  resolveLocationCode,
   InventoryItem,
   normalizeLocationCode,
   isWarehouseLocationCode,
 } from '../../lib/api';
+import { useWmsRealtimeSync, notifyWmsDataChanged } from '../../lib/syncEvents';
 import { Entry2DModal } from './Entry2DModal';
 import { Exit2DModal } from './Exit2DModal';
 import { MappingModal } from './MappingModal';
@@ -103,7 +105,7 @@ export function Warehouse2D({ token, onError, onNavigate, onDataChanged, refresh
   const [heatmapMode, setHeatmapMode] = useState(false);
   const [scannerOpen, setScannerOpen] = useState(false);
 
-  const refreshLocations = () => {
+  const refreshLocations = useCallback(() => {
     Promise.all([
       apiFetch<Page<Location>>('/locations?pageSize=500', token).catch(() => ({ items: [] as Location[] })),
       apiFetch<Page<InventoryItem>>('/inventory?pageSize=500', token).catch(() => ({ items: [] as InventoryItem[] })),
@@ -113,47 +115,57 @@ export function Warehouse2D({ token, onError, onNavigate, onDataChanged, refresh
         const invM = new Map<string, InventoryItem>();
         for (const item of invItems) {
           if (!item || (item.quantity || 0) <= 0) continue;
-          if (item.location && typeof item.location === 'object') {
-            if (item.location.code) {
-              invM.set(item.location.code, item);
-              invM.set(normalizeLocationCode(item.location.code), item);
-            }
-            if (item.location.id) {
-              invM.set(item.location.id, item);
-              const resId = resolveLocationUuid(item.location.id);
-              if (resId) invM.set(resId, item);
+          const locCode = item.location?.code || (item as any).locationCode;
+          const locId = item.location?.id || (item as any).locationId || (typeof item.location === 'string' ? item.location : undefined);
+
+          if (locCode) {
+            invM.set(locCode, item);
+            invM.set(normalizeLocationCode(locCode), item);
+          }
+          if (locId) {
+            invM.set(locId, item);
+            const resId = resolveLocationUuid(locId);
+            if (resId) invM.set(resId, item);
+            const resCode = resolveLocationCode(locId);
+            if (resCode) {
+              invM.set(resCode, item);
+              invM.set(normalizeLocationCode(resCode), item);
             }
           }
         }
         setInventoryMap(invM);
 
-        if (locPage.items && locPage.items.length > 0) {
-          // Merge live statuses and update with inventory occupancy
-          setLocations((current) => {
-            const liveMap = new Map(locPage.items.map((l) => [l.code, l]));
-            return current.map((loc) => {
-              const live = liveMap.get(loc.code) ?? loc;
-              const hasStock = invM.has(loc.code) || invM.has(normalizeLocationCode(loc.code)) || invM.has(loc.id);
-              let computedStatus = live.status;
-              if (hasStock && live.status === 'AVAILABLE') {
-                computedStatus = 'OCCUPIED';
-              } else if (!hasStock && live.status === 'OCCUPIED') {
-                computedStatus = 'AVAILABLE';
-              }
-              return { ...live, status: computedStatus };
-            });
+        const liveMap = new Map((locPage?.items || []).map((l) => [l.code, l]));
+        setLocations((current) => {
+          const baseList = current.length >= 148 ? current : getWarehouseSeedLocations();
+          return baseList.map((loc) => {
+            const live = liveMap.get(loc.code) ?? loc;
+            const hasStock = (invM.get(loc.code)?.quantity || 0) > 0 ||
+                             (invM.get(normalizeLocationCode(loc.code))?.quantity || 0) > 0 ||
+                             (invM.get(loc.id)?.quantity || 0) > 0 ||
+                             (resolveLocationUuid(loc.id) ? (invM.get(resolveLocationUuid(loc.id)!)?.quantity || 0) > 0 : false);
+            let computedStatus = live.status;
+            if (hasStock && computedStatus === 'AVAILABLE') {
+              computedStatus = 'OCCUPIED';
+            } else if (!hasStock && computedStatus === 'OCCUPIED') {
+              computedStatus = 'AVAILABLE';
+            }
+            return { ...live, status: computedStatus };
           });
-        }
+        });
       })
       .catch((err: Error) => {
         console.warn('Live location fetch notice:', err.message);
       });
-  };
+  }, [token]);
 
-  // Fetch live updates from API / InsForge
+  // Fetch live updates on mount, token change, or explicit refreshKey
   useEffect(() => {
     refreshLocations();
-  }, [token, onError, refreshKey]);
+  }, [refreshLocations, refreshKey]);
+
+  // Real-time synchronization across all tabs and components
+  useWmsRealtimeSync(refreshLocations, [refreshLocations]);
 
   // Index locations by "Aisle-RackCode-Level-Position"
   const locationMap = useMemo(() => {
@@ -167,16 +179,24 @@ export function Warehouse2D({ token, onError, onNavigate, onDataChanged, refresh
     return map;
   }, [locations]);
 
-  // Dynamic KPI Stats
+  // Dynamic KPI Stats accurately computing live stock occupancy
   const stats = useMemo(() => {
-    return locations.reduce(
-      (acc, loc) => {
-        acc[loc.status] = (acc[loc.status] ?? 0) + 1;
-        return acc;
-      },
-      { AVAILABLE: 0, OCCUPIED: 0, BLOCKED: 0, MAINTENANCE: 0, TRANSIT: 0 } as Record<string, number>
-    );
-  }, [locations]);
+    const counts: Record<string, number> = { AVAILABLE: 0, OCCUPIED: 0, BLOCKED: 0, MAINTENANCE: 0, TRANSIT: 0 };
+    for (const loc of locations) {
+      const inv = inventoryMap.get(loc.code) ||
+                  inventoryMap.get(normalizeLocationCode(loc.code)) ||
+                  inventoryMap.get(loc.id);
+      const hasStock = (inv?.quantity || 0) > 0;
+      let status = loc.status;
+      if (hasStock && status === 'AVAILABLE') {
+        status = 'OCCUPIED';
+      } else if (!hasStock && status === 'OCCUPIED') {
+        status = 'AVAILABLE';
+      }
+      counts[status] = (counts[status] ?? 0) + 1;
+    }
+    return counts;
+  }, [locations, inventoryMap]);
 
   // Array of Location objects corresponding to entrySelectedCodes
   const entrySelectedLocations = useMemo(() => {
@@ -195,7 +215,7 @@ export function Warehouse2D({ token, onError, onNavigate, onDataChanged, refresh
     return list;
   }, [locations, entrySelectedCodes]);
 
-  const availableCount = stats.AVAILABLE;
+  const availableCount = stats.AVAILABLE ?? 0;
 
   // Auto-select nearest available positions to the entrance
   const handleAutoSelectNearest = () => {
@@ -327,6 +347,7 @@ export function Warehouse2D({ token, onError, onNavigate, onDataChanged, refresh
       .then(() => {
         refreshLocations();
         onDataChanged?.();
+        notifyWmsDataChanged({ type: 'location', action: 'update', locationCode: loc.code });
       })
       .catch((err: any) => {
         console.warn('Error al persistir estado de ubicación en BD:', err?.message);
@@ -365,9 +386,6 @@ export function Warehouse2D({ token, onError, onNavigate, onDataChanged, refresh
     const matched = isMatch(loc);
     const highlighted = isHighlighted(loc);
     const isSelected = selected?.code === loc.code;
-    const cfg = STATUS_CONFIG[loc.status] ?? STATUS_CONFIG.AVAILABLE;
-
-    // Entry selection mode state
     const isSelectedForEntry = entrySelectedCodes.has(loc.code);
     const selectedEntryIndex = isSelectedForEntry
       ? Array.from(entrySelectedCodes).indexOf(loc.code) + 1
@@ -377,10 +395,20 @@ export function Warehouse2D({ token, onError, onNavigate, onDataChanged, refresh
       inventoryMap.get(loc.code) ||
       inventoryMap.get(normalizeLocationCode(loc.code)) ||
       inventoryMap.get(loc.id) ||
+      (resolveLocationUuid(loc.id) ? inventoryMap.get(resolveLocationUuid(loc.id)!) : null) ||
       null;
     const invQty = invItem?.quantity ?? 0;
     const maxCapacity = 100;
     const occupancyPct = Math.min(100, Math.round((invQty / maxCapacity) * 100));
+
+    const hasStock = invQty > 0;
+    let effectiveStatus = loc.status;
+    if (hasStock && (loc.status === 'AVAILABLE' || !loc.status)) {
+      effectiveStatus = 'OCCUPIED';
+    } else if (!hasStock && loc.status === 'OCCUPIED') {
+      effectiveStatus = 'AVAILABLE';
+    }
+    const cfg = STATUS_CONFIG[effectiveStatus] ?? STATUS_CONFIG.AVAILABLE;
 
     let buttonBg = cfg.bg;
     let buttonBorder = cfg.border;
@@ -1554,6 +1582,7 @@ export function Warehouse2D({ token, onError, onNavigate, onDataChanged, refresh
           } else {
             refreshLocations();
             onDataChanged?.();
+            notifyWmsDataChanged({ type: 'movement', action: 'entry' });
             setSuccessBanner(`Entrada confirmada exitosamente en ${assigned.length} ubicaciones del almacén.`);
           }
           setTimeout(() => setSuccessBanner(null), 6000);
@@ -1568,6 +1597,7 @@ export function Warehouse2D({ token, onError, onNavigate, onDataChanged, refresh
         onSuccess={() => {
           refreshLocations();
           onDataChanged?.();
+          notifyWmsDataChanged({ type: 'movement', action: 'exit' });
         }}
       />
 

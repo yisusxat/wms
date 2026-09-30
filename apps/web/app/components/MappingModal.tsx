@@ -8,9 +8,11 @@ import {
   InventoryItem,
   getWarehouseSeedLocations,
   resolveLocationUuid,
+  resolveLocationCode,
   normalizeLocationCode,
   isWarehouseLocationCode,
 } from "../../lib/api";
+import { useWmsRealtimeSync, notifyWmsDataChanged } from "../../lib/syncEvents";
 import { Icon } from "./Icon";
 
 const BarcodeScanner = dynamic(
@@ -256,21 +258,22 @@ function MappingModalInner({
         const invMap = new Map<string, InventoryItem>();
         for (const item of invList) {
           if (!item) continue;
-          if (typeof item.location === "object" && item.location) {
-            if (item.location.code) {
-              invMap.set(item.location.code, item);
-              invMap.set(normalizeLocationCode(item.location.code), item);
+          const locCode = (typeof item.location === "object" && item.location ? item.location.code : typeof item.location === "string" ? item.location : (item as any).location_code) || "";
+          const locId = (typeof item.location === "object" && item.location ? item.location.id : typeof item.location === "string" ? item.location : (item as any).location_id) || "";
+
+          if (locCode) {
+            invMap.set(locCode, item);
+            invMap.set(normalizeLocationCode(locCode), item);
+          }
+          if (locId) {
+            invMap.set(locId, item);
+            const resId = resolveLocationUuid(locId);
+            if (resId) invMap.set(resId, item);
+            const resCode = resolveLocationCode(locId);
+            if (resCode) {
+              invMap.set(resCode, item);
+              invMap.set(normalizeLocationCode(resCode), item);
             }
-            if (item.location.id) {
-              invMap.set(item.location.id, item);
-              const res = resolveLocationUuid(item.location.id);
-              if (res) invMap.set(res, item);
-            }
-          } else if (typeof item.location === "string") {
-            invMap.set(item.location, item);
-            invMap.set(normalizeLocationCode(item.location), item);
-            const res = resolveLocationUuid(item.location);
-            if (res) invMap.set(res, item);
           }
         }
 
@@ -291,7 +294,8 @@ function MappingModalInner({
               invMap.get(loc.code) ||
               invMap.get(normalizeLocationCode(loc.code)) ||
               invMap.get(loc.id) ||
-              (resolveLocationUuid(loc.id) ? invMap.get(resolveLocationUuid(loc.id)!) : undefined);
+              (resolveLocationUuid(loc.id) ? invMap.get(resolveLocationUuid(loc.id)!) : undefined) ||
+              (resolveLocationCode(loc.id) ? invMap.get(resolveLocationCode(loc.id)!) : undefined);
             const hasInv = Boolean(inv && (inv.quantity || 0) > 0);
             const prod = inv && typeof inv.product === "object" ? inv.product : undefined;
 
@@ -329,6 +333,13 @@ function MappingModalInner({
       .catch((err) => console.warn("Error cargando inventario de mapeo:", err))
       .finally(() => setLoading(false));
   }, [locations, token]);
+
+  // Hook up real-time sync across tabs and warehouse actions
+  useWmsRealtimeSync(() => {
+    if (isOpen) {
+      loadData();
+    }
+  }, [isOpen, loadData]);
 
   // Initialize data on open
   useEffect(() => {
@@ -788,6 +799,7 @@ function MappingModalInner({
         message: `¡Posición ${locationCode} modificada y sincronizada en tiempo real con la base de datos! (${targetQty} ${targetProdUnit} de ${targetProdName})`
       });
 
+      notifyWmsDataChanged({ type: "audit", action: "update", locationCode });
       onSuccess();
     } catch (err: any) {
       console.error("Direct modification err:", err);
@@ -930,6 +942,7 @@ function MappingModalInner({
         message: `¡Modificación de ${disc.locationCode} aplicada y sincronizada en tiempo real con la base de datos! (${disc.physicalQuantity} ${disc.physicalProductUnit})`
       });
 
+      notifyWmsDataChanged({ type: "audit", action: "update", locationCode: disc.locationCode });
       onSuccess();
     } catch (err: any) {
       console.error("Apply single discrepancy err:", err);
@@ -1224,6 +1237,7 @@ function MappingModalInner({
       });
 
       setStep("REPORT");
+      notifyWmsDataChanged({ type: "audit", action: "sync" });
       onSuccess();
       loadData();
     } catch (err) {

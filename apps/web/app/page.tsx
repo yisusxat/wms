@@ -34,6 +34,7 @@ import {
 import { insforge } from '../lib/insforge';
 import dynamic from 'next/dynamic';
 import { apiFetch, CurrentUser, InventoryItem, Location, Page, Product, Summary, isWarehouseLocationCode } from '../lib/api';
+import { useWmsRealtimeSync, notifyWmsDataChanged } from '../lib/syncEvents';
 import { locationStatusClass, locationStatusLabel } from '../lib/locationStatus';
 import { MovementsPanel } from './components/MovementsPanel';
 import { ProductsPanel } from './components/ProductsPanel';
@@ -400,12 +401,19 @@ function HomePageContent() {
   const refreshSummary = useCallback(() => {
     if (!token) return;
     setDataVersion((v) => v + 1);
-    if (typeof window !== 'undefined') {
-      window.dispatchEvent(new CustomEvent('wms-data-changed'));
-    }
+    notifyWmsDataChanged({ type: 'all' });
     apiFetch<Summary>('/dashboard/summary', token)
       .then(setSummary)
       .catch(() => {/* silent — do not replace visible error for a background refresh */});
+  }, [token]);
+
+  // Global real-time synchronization across all tabs and components
+  useWmsRealtimeSync(() => {
+    if (!token) return;
+    setDataVersion((v) => v + 1);
+    apiFetch<Summary>('/dashboard/summary', token)
+      .then(setSummary)
+      .catch(() => {});
   }, [token]);
 
   // Synchronize dashboard summary whenever user views the dashboard or data updates

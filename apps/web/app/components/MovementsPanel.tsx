@@ -2,6 +2,7 @@
 
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { apiFetch, CurrentUser, Location, Movement, Page, Product, getWarehouseSeedLocations } from "../../lib/api";
+import { useWmsRealtimeSync, notifyWmsDataChanged } from "../../lib/syncEvents";
 import BarcodeScanner from "./BarcodeScanner";
 import { LabelModal, LabelModalData } from "./LabelModal";
 import { PickingModal } from "./PickingModal";
@@ -103,6 +104,18 @@ export function MovementsPanel({
       .catch((e: Error) => onError(e.message));
   }, [token, refreshKey]);
 
+  // Sincronización en tiempo real con 2D, 3D y Mapeo
+  useWmsRealtimeSync(() => {
+    void Promise.all([
+      apiFetch<Page<Product>>("/products?pageSize=500", token).catch(() => null),
+      apiFetch<Page<Location>>("/locations?pageSize=500", token).catch(() => null),
+      loadMovements(),
+    ]).then(([productPage, locationPage]) => {
+      if (productPage?.items) setProducts(productPage.items);
+      if (locationPage?.items) setLocations(locationPage.items);
+    });
+  }, [token]);
+
   // Lista unificada de ubicaciones: combina las 148 de bodega, las traídas por API y las sugerencias
   const allLocations = useMemo(() => {
     const map = new Map<string, Location>();
@@ -194,6 +207,7 @@ export function MovementsPanel({
       const result = await syncOfflineMovements(token, apiBase);
       if (result.synced > 0) {
         await loadMovements();
+        notifyWmsDataChanged({ type: "movement", action: "sync" });
         onDataChanged?.();
         alert(`✅ Sincronizados ${result.synced} movimientos pendientes de la cola offline.`);
       }
@@ -300,6 +314,8 @@ export function MovementsPanel({
       const locObj = allLocations.find((l) => l.id === form.locationId);
       const prodName = prodObj ? `${prodObj.sku} — ${prodObj.name}` : "Producto";
       const locCode = locObj ? locObj.code : form.locationId;
+
+      notifyWmsDataChanged({ type: "movement", action: mode, locationCode: locCode, sku: prodObj?.sku });
 
       const actionText =
         mode === "entry"

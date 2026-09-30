@@ -171,6 +171,21 @@ export function isUuid(str?: string | null): boolean {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(str.trim());
 }
 
+export const UUID_TO_LOCATION_CODE: Record<string, string> = Object.entries(LOCATION_CODE_TO_UUID).reduce(
+  (acc, [code, uuid]) => {
+    acc[uuid.toLowerCase()] = code;
+    return acc;
+  },
+  {} as Record<string, string>
+);
+
+export function resolveLocationCode(uuidOrCode?: string | null): string {
+  if (!uuidOrCode) return '';
+  const trimmed = uuidOrCode.trim();
+  if (!isUuid(trimmed)) return normalizeLocationCode(trimmed);
+  return UUID_TO_LOCATION_CODE[trimmed.toLowerCase()] || trimmed;
+}
+
 export function resolveLocationUuid(idOrCode?: string | null): string {
   if (!idOrCode) return '';
   const trimmed = idOrCode.trim();

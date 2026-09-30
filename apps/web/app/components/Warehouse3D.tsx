@@ -3,7 +3,18 @@
 import { useEffect, useMemo, useState, useCallback } from 'react';
 import { Canvas } from '@react-three/fiber';
 import { OrbitControls, Text } from '@react-three/drei';
-import { apiFetch, Location, LocationRack, Page, InventoryItem, normalizeLocationCode } from '../../lib/api';
+import {
+  apiFetch,
+  Location,
+  LocationRack,
+  Page,
+  InventoryItem,
+  normalizeLocationCode,
+  getWarehouseSeedLocations,
+  resolveLocationUuid,
+  resolveLocationCode,
+} from '../../lib/api';
+import { useWmsRealtimeSync } from '../../lib/syncEvents';
 
 const STATUS_LABELS: Record<string, string> = {
   AVAILABLE: 'Disponible',
@@ -119,14 +130,14 @@ export function Warehouse3D({
   onError: (value: string) => void;
   refreshKey?: number;
 }) {
-  const [locations, setLocations] = useState<Location[]>([]);
+  const [locations, setLocations] = useState<Location[]>(() => getWarehouseSeedLocations());
   const [inventoryMap, setInventoryMap] = useState<Map<string, InventoryItem>>(new Map());
   const [totalUnits, setTotalUnits] = useState<number>(0);
   const [selected, setSelected] = useState<Location | null>(null);
 
   const refresh3D = useCallback(() => {
     Promise.all([
-      apiFetch<Page<Location>>('/locations?pageSize=500', token),
+      apiFetch<Page<Location>>('/locations?pageSize=500', token).catch(() => ({ items: [] as Location[], total: 0, page: 1, pageSize: 500 })),
       apiFetch<Page<InventoryItem>>('/inventory?pageSize=500', token).catch(() => ({ items: [], total: 0, page: 1, pageSize: 500 })),
     ])
       .then(([locPage, invPage]) => {
@@ -135,32 +146,45 @@ export function Warehouse3D({
         for (const item of (invPage?.items ?? [])) {
           if (!item || (item.quantity || 0) <= 0) continue;
           sumUnits += item.quantity || 0;
-          if (item.location && typeof item.location === 'object') {
-            if (item.location.code) {
-              invM.set(item.location.code, item);
-              invM.set(normalizeLocationCode(item.location.code), item);
-            }
-            if (item.location.id) {
-              invM.set(item.location.id, item);
+          const locCode = item.location?.code || (item as any).locationCode;
+          const locId = item.location?.id || (item as any).locationId || (typeof item.location === 'string' ? item.location : undefined);
+
+          if (locCode) {
+            invM.set(locCode, item);
+            invM.set(normalizeLocationCode(locCode), item);
+          }
+          if (locId) {
+            invM.set(locId, item);
+            const resId = resolveLocationUuid(locId);
+            if (resId) invM.set(resId, item);
+            const resCode = resolveLocationCode(locId);
+            if (resCode) {
+              invM.set(resCode, item);
+              invM.set(normalizeLocationCode(resCode), item);
             }
           }
         }
         setInventoryMap(invM);
         setTotalUnits(sumUnits);
 
-        if (locPage?.items && locPage.items.length > 0) {
-          const liveLocs = locPage.items.map((loc) => {
-            const hasStock = invM.has(loc.code) || invM.has(normalizeLocationCode(loc.code)) || invM.has(loc.id);
-            let computedStatus = loc.status;
-            if (hasStock && loc.status === 'AVAILABLE') {
+        const liveMap = new Map((locPage?.items || []).map((l) => [l.code, l]));
+        setLocations((current) => {
+          const baseList = current.length >= 148 ? current : getWarehouseSeedLocations();
+          return baseList.map((loc) => {
+            const live = liveMap.get(loc.code) ?? loc;
+            const hasStock = (invM.get(loc.code)?.quantity || 0) > 0 ||
+                             (invM.get(normalizeLocationCode(loc.code))?.quantity || 0) > 0 ||
+                             (invM.get(loc.id)?.quantity || 0) > 0 ||
+                             (resolveLocationUuid(loc.id) ? (invM.get(resolveLocationUuid(loc.id)!)?.quantity || 0) > 0 : false);
+            let computedStatus = live.status;
+            if (hasStock && computedStatus === 'AVAILABLE') {
               computedStatus = 'OCCUPIED';
-            } else if (!hasStock && loc.status === 'OCCUPIED') {
+            } else if (!hasStock && computedStatus === 'OCCUPIED') {
               computedStatus = 'AVAILABLE';
             }
-            return { ...loc, status: computedStatus };
+            return { ...live, status: computedStatus };
           });
-          setLocations(liveLocs);
-        }
+        });
       })
       .catch((error: Error) => onError(error.message));
   }, [token, onError]);
@@ -168,6 +192,9 @@ export function Warehouse3D({
   useEffect(() => {
     refresh3D();
   }, [refresh3D, refreshKey]);
+
+  // Realtime cross-tab and cross-component sync
+  useWmsRealtimeSync(refresh3D, [refresh3D]);
 
   const groups = useMemo(() => buildRackGroups(locations), [locations]);
   const aisleCodes = useMemo(() => [...new Set(groups.map((group) => group.aisleCode))], [groups]);

@@ -2,18 +2,24 @@ import {
   getWarehouseSeedLocations,
   isUuid,
   resolveLocationUuid,
+  resolveLocationCode,
+  UUID_TO_LOCATION_CODE,
   normalizeLocationCode,
   LOCATION_CODE_TO_UUID,
   isWarehouseLocationCode,
 } from './locations-data';
+import { notifyWmsDataChanged } from './syncEvents';
 
 export {
   getWarehouseSeedLocations,
   isUuid,
   resolveLocationUuid,
+  resolveLocationCode,
+  UUID_TO_LOCATION_CODE,
   normalizeLocationCode,
   LOCATION_CODE_TO_UUID,
   isWarehouseLocationCode,
+  notifyWmsDataChanged,
 };
 
 const configuredApiUrl = process.env.NEXT_PUBLIC_API_URL;
@@ -120,7 +126,7 @@ export async function apiFetch<T>(path: string, token: string, init?: RequestIni
           isClient &&
           ['POST', 'PUT', 'PATCH', 'DELETE'].includes((requestInit?.method || '').toUpperCase())
         ) {
-          window.dispatchEvent(new CustomEvent('wms-data-changed'));
+          notifyWmsDataChanged({ type: 'all' });
         }
         const json = await response.json();
         // If the caller requested full inventory or locations and the response has more pages, auto-fetch page 2
@@ -586,20 +592,27 @@ async function fallbackInsforge<T>(path: string, token: string, init?: RequestIn
 
   if (cleanPath === '/inventory') {
     const res = await fetch(
-      `${insforgeUrl}/api/database/records/inventory?select=id,quantity,reserved_quantity,product:products(*),location:locations(*)`,
+      `${insforgeUrl}/api/database/records/inventory?select=id,quantity,reserved_quantity,location_id,product:products(*),location:locations(*)`,
       { headers }
     );
     const data = res.ok ? await res.json().catch(() => []) : [];
     const items = Array.isArray(data)
-      ? data.map((item: any) => ({
-          id: item.id,
-          quantity: item.quantity,
-          reservedQuantity: item.reserved_quantity ?? 0,
-          product: item.product,
-          location: item.location,
-        }))
+      ? data.map((item: any) => {
+          let loc = item.location;
+          if (!loc && item.location_id) {
+            const code = resolveLocationCode(item.location_id);
+            loc = { id: item.location_id, code };
+          }
+          return {
+            id: item.id,
+            quantity: Number(item.quantity) || 0,
+            reservedQuantity: Number(item.reserved_quantity) || 0,
+            product: item.product,
+            location: loc,
+          };
+        })
       : [];
-    return { items, total: items.length, page: 1, pageSize: 100 } as T;
+    return { items, total: items.length, page: 1, pageSize: Math.max(100, items.length) } as T;
   }
 
   if (cleanPath === '/movements') {
