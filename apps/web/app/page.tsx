@@ -39,6 +39,7 @@ import { locationStatusClass, locationStatusLabel } from '../lib/locationStatus'
 import { MovementsPanel } from './components/MovementsPanel';
 import { ProductsPanel } from './components/ProductsPanel';
 import { RoleBadge, UserMenu } from './components/UserMenu';
+import { EmptyState } from './components/ui/EmptyState';
 
 const Dashboard = dynamic(
   () => import('./components/Dashboard').then((m) => m.Dashboard),
@@ -613,7 +614,6 @@ function HomePageContent() {
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
                   className="absolute right-3 top-3 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
-                  tabIndex={-1}
                   title={showPassword ? "Ocultar contraseña" : "Ver contraseña"}
                 >
                   {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
@@ -666,6 +666,12 @@ function HomePageContent() {
 
   return (
     <div className="min-h-screen bg-surface lg:flex dark:bg-slate-950">
+      <a
+        href="#main-content"
+        className="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-[60] focus:rounded-lg focus:bg-blue-600 focus:px-4 focus:py-2 focus:text-sm focus:font-semibold focus:text-white focus:shadow-lg"
+      >
+        Ir al contenido principal
+      </a>
       <div className="sticky top-0 z-40 flex items-center justify-between bg-[var(--color-sidebar)] px-3.5 py-2.5 text-white shadow-md lg:hidden">
         <div className="flex min-w-0 items-center gap-2">
           <Warehouse className="h-4 w-4 shrink-0" />
@@ -814,7 +820,7 @@ function HomePageContent() {
         </div>
       )}
 
-      <section className="min-w-0 flex-1 p-3 pb-28 sm:p-6 lg:p-8 lg:pb-8">
+      <section id="main-content" className="min-w-0 flex-1 p-3 pb-28 sm:p-6 lg:p-8 lg:pb-8">
         <header className="flex flex-col justify-between gap-3 border-b border-slate-200 pb-4 sm:flex-row sm:items-center dark:border-slate-800">
           <div>
             <div className="flex items-center gap-2">
@@ -872,6 +878,24 @@ function HomePageContent() {
           </div>
         </header>
 
+        <nav aria-label="Ruta de navegación" className="mt-2 flex items-center gap-1.5 text-xs text-slate-500 dark:text-slate-400">
+          <button
+            type="button"
+            onClick={() => changeTab('dashboard')}
+            className="hover:text-blue-600 dark:hover:text-blue-400 transition"
+          >
+            Inicio
+          </button>
+          {tab !== 'dashboard' && (
+            <>
+              <span className="text-slate-300 dark:text-slate-600">/</span>
+              <span className="font-medium text-slate-700 dark:text-slate-200">
+                {visibleTabs.find(item => item.id === tab)?.label ?? tab}
+              </span>
+            </>
+          )}
+        </nav>
+
         {error && <p className="mt-6 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-danger dark:border-red-900 dark:bg-red-950/40">{error}</p>}
 
         {FLOOR_TABS.includes(tab) ? (
@@ -899,7 +923,7 @@ function HomePageContent() {
           </div>
         ) : null}
 
-        <div className="mt-6">
+        <div className="mt-6 animate-fadeIn" key={tab}>
           {tab === 'dashboard' ? (
             <Dashboard
               summary={summary}
@@ -1187,7 +1211,7 @@ function Table({ headers, rows, statusColumn }: { headers: (string | number)[]; 
     <div className="overflow-x-auto">
       <table className="w-full min-w-[500px] text-left text-xs sm:text-sm">
         <thead>
-          <tr className="border-b border-slate-200 text-[10px] uppercase text-slate-500 sm:text-xs dark:border-slate-700">
+          <tr className="border-b border-slate-200 text-[10px] uppercase text-slate-500 sm:text-xs dark:border-slate-700 dark:text-slate-400">
             {headers.map(header => (
               <th key={header} className="whitespace-nowrap px-3 py-2.5 font-semibold sm:py-3">{header}</th>
             ))}
@@ -1196,16 +1220,18 @@ function Table({ headers, rows, statusColumn }: { headers: (string | number)[]; 
         <tbody>
           {rows.length === 0 ? (
             <tr>
-              <td colSpan={headers.length} className="px-3 py-10 text-center text-slate-500">
-                <p className="font-medium text-slate-700 dark:text-slate-200">Sin registros</p>
-                <p className="mt-1 text-xs">Cuando existan datos, aparecerán en esta tabla.</p>
+              <td colSpan={headers.length} className="px-3 py-6">
+                <EmptyState
+                  title="Sin registros"
+                  description="Cuando existan datos, aparecerán listados en esta tabla."
+                />
               </td>
             </tr>
           ) : (
             rows.map((row, index) => (
               <tr key={index} className="border-b border-slate-100 last:border-0 hover:bg-slate-50/80 dark:border-slate-800 dark:hover:bg-slate-800/50">
                 {row.map((cell, cellIndex) => (
-                  <td key={cellIndex} className="whitespace-nowrap px-3 py-2.5 sm:py-3">
+                  <td key={cellIndex} className="whitespace-nowrap px-3 py-2.5 sm:py-3 text-slate-800 dark:text-slate-200">
                     {statusColumn === cellIndex ? (
                       <span className={`inline-flex rounded-full border px-2 py-0.5 text-[10px] font-semibold ${locationStatusClass(String(cell))}`}>
                         {locationStatusLabel(String(cell))}
@@ -1229,11 +1255,11 @@ function Table({ headers, rows, statusColumn }: { headers: (string | number)[]; 
 function Pager({ page, pageSize, total, onChange }: { page: number; pageSize: number; total: number; onChange: (page: number) => void }) {
   const pages = Math.max(1, Math.ceil(total / pageSize));
   return (
-    <div className="mt-4 flex items-center justify-between text-sm text-gray-500">
+    <div className="mt-4 flex items-center justify-between text-sm text-slate-500 dark:text-slate-400">
       <span>Página {page} de {pages} · {total} registros</span>
       <div className="flex gap-2">
-        <button disabled={page <= 1} onClick={() => onChange(page - 1)} className="rounded border px-3 py-1 font-medium disabled:opacity-40">Anterior</button>
-        <button disabled={page >= pages} onClick={() => onChange(page + 1)} className="rounded border px-3 py-1 font-medium disabled:opacity-40">Siguiente</button>
+        <button disabled={page <= 1} onClick={() => onChange(page - 1)} className="rounded border px-3 py-1 font-medium disabled:opacity-40 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800">Anterior</button>
+        <button disabled={page >= pages} onClick={() => onChange(page + 1)} className="rounded border px-3 py-1 font-medium disabled:opacity-40 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800">Siguiente</button>
       </div>
     </div>
   );

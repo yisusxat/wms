@@ -47,15 +47,15 @@ export function AuditLogsModal({ isOpen, onClose, token }: Props) {
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 p-3 sm:p-4 backdrop-blur-xs">
-      <div className="w-full max-w-4xl max-h-[90vh] sm:max-h-[85vh] flex flex-col rounded-2xl bg-white p-4 sm:p-6 shadow-2xl border border-slate-100">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 p-3 sm:p-4 backdrop-blur-xs" role="dialog" aria-modal="true" aria-labelledby="audit-modal-title">
+      <div className="w-full max-w-4xl max-h-[90vh] sm:max-h-[85vh] flex flex-col rounded-xl bg-white dark:bg-slate-900 p-4 sm:p-6 shadow-2xl border border-slate-200 dark:border-slate-800">
         <div className="flex items-start justify-between border-b border-slate-100 pb-3">
           <div>
             <div className="flex items-center gap-2">
               <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-indigo-100 text-indigo-700 text-sm font-bold">
                 📜
               </span>
-              <h3 className="text-base sm:text-lg font-bold text-slate-900">Bitácora de Auditoría (Audit Log)</h3>
+              <h3 id="audit-modal-title" className="text-base sm:text-lg font-bold text-slate-900 dark:text-white">Bitácora de Auditoría (Audit Log)</h3>
             </div>
             <p className="text-[11px] sm:text-xs text-slate-500 mt-1">Registro inmutable de acciones críticas, mutaciones y eventos de seguridad</p>
           </div>

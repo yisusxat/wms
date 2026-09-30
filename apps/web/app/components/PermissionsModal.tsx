@@ -317,40 +317,45 @@ export function PermissionsModal({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-slate-900/60 p-0 sm:p-5 backdrop-blur-sm animate-fadeIn">
-      <div className="w-full max-w-4xl max-h-[96vh] sm:max-h-[94vh] flex flex-col rounded-t-3xl sm:rounded-3xl bg-white shadow-2xl border border-slate-200 overflow-hidden">
-        <div className="mx-auto w-12 h-1.5 rounded-full bg-slate-300 mt-2.5 mb-1 sm:hidden" />
+    <div
+      className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-slate-900/60 p-0 sm:p-5 backdrop-blur-sm animate-fadeIn"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="permissions-modal-title"
+    >
+      <div className="w-full max-w-4xl max-h-[96vh] sm:max-h-[94vh] flex flex-col rounded-t-xl sm:rounded-xl bg-white dark:bg-slate-900 shadow-2xl border border-slate-200 dark:border-slate-800 overflow-hidden text-slate-900 dark:text-white">
+        <div className="mx-auto w-12 h-1.5 rounded-full bg-slate-300 dark:bg-slate-700 mt-2.5 mb-1 sm:hidden" />
         {/* Header */}
-        <div className="flex items-center justify-between border-b px-3.5 sm:px-6 py-3 sm:py-4 bg-gradient-to-r from-slate-50 via-white to-slate-50">
+        <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 px-3.5 sm:px-6 py-3 sm:py-4 bg-gradient-to-r from-slate-50 via-white to-slate-50 dark:from-slate-900 dark:via-slate-800/50 dark:to-slate-900">
           <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
-            <div className="flex h-9 w-9 sm:h-11 sm:w-11 shrink-0 items-center justify-center rounded-xl sm:rounded-2xl bg-blue-600 font-bold text-white text-sm sm:text-base shadow-sm">
+            <div className="flex h-9 w-9 sm:h-11 sm:w-11 shrink-0 items-center justify-center rounded-lg sm:rounded-xl bg-blue-600 font-bold text-white text-sm sm:text-base shadow-sm">
               {member.name ? member.name.slice(0, 2).toUpperCase() : "US"}
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <h3 className="text-base font-black text-slate-900">
+                <h3 id="permissions-modal-title" className="text-base font-black text-slate-900 dark:text-white">
                   Gestionar Permisos y Acceso
                 </h3>
                 <span
                   className={`inline-flex items-center gap-1 text-[11px] px-2.5 py-0.5 rounded-full font-bold shadow-2xs ${
                     active
-                      ? "bg-emerald-100 text-emerald-800 border border-emerald-200"
-                      : "bg-rose-100 text-rose-800 border border-rose-200"
+                      ? "bg-emerald-100 dark:bg-emerald-900/50 text-emerald-800 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800/50"
+                      : "bg-rose-100 dark:bg-rose-900/50 text-rose-800 dark:text-rose-300 border border-rose-200 dark:border-rose-800/50"
                   }`}
                 >
-                  <span className={`h-1.5 w-1.5 rounded-full ${active ? "bg-emerald-600" : "bg-rose-600"}`} />
+                  <span className={`h-1.5 w-1.5 rounded-full ${active ? "bg-emerald-600 dark:bg-emerald-400" : "bg-rose-600 dark:bg-rose-400"}`} />
                   {active ? "Activo" : "Acceso Suspendido"}
                 </span>
               </div>
-              <p className="text-xs text-slate-500">
-                <strong className="text-slate-700">{member.name}</strong> · {member.email || "Sin correo"} · ID:{" "}
-                <span className="font-mono text-slate-400">{member.id.slice(0, 8)}...</span>
+              <p className="text-xs text-slate-500 dark:text-slate-400">
+                <strong className="text-slate-700 dark:text-slate-300">{member.name}</strong> · {member.email || "Sin correo"} · ID:{" "}
+                <span className="font-mono text-slate-400 dark:text-slate-500">{member.id.slice(0, 8)}...</span>
               </p>
             </div>
           </div>
           <button
             onClick={onClose}
-            className="p-2 rounded-xl text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition"
+            className="p-2 rounded-lg text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition"
             title="Cerrar ventana"
           >
             ✕
@@ -359,15 +364,15 @@ export function PermissionsModal({
 
         {/* Error Alert if any */}
         {errorMsg && (
-          <div className="mx-6 mt-4 p-3.5 rounded-2xl bg-rose-50 border border-rose-200 text-rose-800 text-xs flex items-start gap-2 animate-fadeIn">
+          <div className="mx-6 mt-4 p-3.5 rounded-xl bg-rose-50 dark:bg-rose-900/20 border border-rose-200 dark:border-rose-800/50 text-rose-800 dark:text-rose-400 text-xs flex items-start gap-2 animate-fadeIn">
             <span className="text-base leading-none">⚠️</span>
             <div className="flex-1">
               <p className="font-bold">Error al guardar los cambios</p>
-              <p className="text-[11px] text-rose-600 mt-0.5">{errorMsg}</p>
+              <p className="text-[11px] text-rose-600 dark:text-rose-500 mt-0.5">{errorMsg}</p>
             </div>
             <button
               onClick={() => setErrorMsg(null)}
-              className="text-rose-500 hover:text-rose-800 text-xs font-bold"
+              className="text-rose-500 hover:text-rose-800 dark:hover:text-rose-300 text-xs font-bold"
             >
               ✕
             </button>
@@ -375,47 +380,47 @@ export function PermissionsModal({
         )}
 
         {/* Content Body */}
-        <div className="p-3 sm:p-6 overflow-y-auto space-y-4 sm:space-y-6 flex-1 text-sm bg-slate-50/40">
+        <div className="p-3 sm:p-6 overflow-y-auto space-y-4 sm:space-y-6 flex-1 text-sm bg-slate-50/40 dark:bg-slate-900/40">
           {/* Quick Account Controls: Role Preset & Status */}
-          <div className="grid gap-3 sm:gap-4 sm:grid-cols-2 bg-white p-3.5 sm:p-4 rounded-2xl border border-slate-200 shadow-2xs">
+          <div className="grid gap-3 sm:gap-4 sm:grid-cols-2 bg-white dark:bg-slate-800 p-3.5 sm:p-4 rounded-xl border border-slate-200 dark:border-slate-700 shadow-2xs">
             <div>
-              <label className="block text-xs font-bold text-slate-700 mb-1.5 flex items-center justify-between">
+              <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5 flex items-center justify-between">
                 <span>Rol Asignado & Plantilla Base</span>
-                <span className="text-[10px] text-blue-600 font-semibold bg-blue-50 px-2 py-0.5 rounded-md">
+                <span className="text-[10px] text-blue-600 dark:text-blue-400 font-semibold bg-blue-50 dark:bg-blue-900/30 px-2 py-0.5 rounded-md">
                   Carga sugerida
                 </span>
               </label>
               <select
                 value={role}
                 onChange={(e) => handleRoleSelect(e.target.value as any)}
-                className="w-full rounded-xl border border-slate-300 bg-slate-50 p-2.5 text-xs font-bold text-slate-800 focus:bg-white focus:ring-2 focus:ring-blue-600 focus:outline-none transition cursor-pointer"
+                className="w-full rounded-lg border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-900 p-2.5 text-xs font-bold text-slate-800 dark:text-slate-200 focus:bg-white dark:focus:bg-slate-800 focus:ring-2 focus:ring-blue-600 focus:outline-none transition cursor-pointer"
               >
                 <option value="ADMIN">👑 Administrador (Acceso Total a la Plataforma)</option>
                 <option value="SUPERVISOR">🔍 Supervisor (Operación, Ajustes y Reportes)</option>
                 <option value="OPERATOR">📦 Operador (Entradas, Salidas, Traslados y Mapeo)</option>
                 <option value="VIEWER">👁️ Visualizador (Solo Consulta / Auditoría)</option>
               </select>
-              <p className="text-[11px] text-slate-500 mt-1">
+              <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-1">
                 Al seleccionar un rol, se aplicará automáticamente la configuración recomendada.
               </p>
             </div>
 
             <div>
-              <label className="block text-xs font-bold text-slate-700 mb-1.5">
+              <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5">
                 Estado de la Cuenta
               </label>
               <button
                 type="button"
                 onClick={() => setActive(!active)}
-                className={`w-full flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl text-xs font-bold transition border shadow-2xs ${
+                className={`w-full flex items-center justify-center gap-2 py-2.5 px-4 rounded-lg text-xs font-bold transition border shadow-2xs ${
                   active
-                    ? "bg-rose-50 text-rose-700 border-rose-200 hover:bg-rose-100"
-                    : "bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100"
+                    ? "bg-rose-50 dark:bg-rose-900/20 text-rose-700 dark:text-rose-400 border-rose-200 dark:border-rose-800/50 hover:bg-rose-100 dark:hover:bg-rose-900/40"
+                    : "bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-400 border-emerald-200 dark:border-emerald-800/50 hover:bg-emerald-100 dark:hover:bg-emerald-900/40"
                 }`}
               >
                 {active ? "🚫 Suspender Acceso del Usuario" : "✅ Reactivar Cuenta del Usuario"}
               </button>
-              <p className="text-[11px] text-slate-500 mt-1">
+              <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-1">
                 {active
                   ? "El usuario puede iniciar sesión y operar con sus permisos asignados."
                   : "Acceso denegado: el usuario no podrá iniciar sesión en el sistema."}
@@ -424,18 +429,18 @@ export function PermissionsModal({
           </div>
 
           {/* Quick Toolbar: Counters, Global Toggles & Search */}
-          <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 bg-white p-3.5 rounded-2xl border border-slate-200 shadow-2xs">
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 bg-white dark:bg-slate-800 p-3.5 rounded-xl border border-slate-200 dark:border-slate-700 shadow-2xs">
             <div className="flex items-center gap-2.5">
-              <span className="flex h-7 w-7 items-center justify-center rounded-xl bg-blue-100 text-blue-800 text-xs font-black">
+              <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-400 text-xs font-black">
                 {totalActive}
               </span>
               <div>
-                <p className="text-xs font-bold text-slate-800">
+                <p className="text-xs font-bold text-slate-800 dark:text-slate-200">
                   {totalActive} de {ALL_PERMISSION_KEYS.length} permisos habilitados
                 </p>
-                <div className="w-36 h-1.5 bg-slate-100 rounded-full overflow-hidden mt-1">
+                <div className="w-36 h-1.5 bg-slate-100 dark:bg-slate-700 rounded-full overflow-hidden mt-1">
                   <div
-                    className="h-full bg-blue-600 rounded-full transition-all duration-300"
+                    className="h-full bg-blue-600 dark:bg-blue-500 rounded-full transition-all duration-300"
                     style={{
                       width: `${Math.round((totalActive / ALL_PERMISSION_KEYS.length) * 100)}%`,
                     }}
@@ -450,12 +455,12 @@ export function PermissionsModal({
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 placeholder="Filtrar permiso..."
-                className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs text-slate-800 font-medium focus:bg-white focus:border-blue-600 focus:outline-none w-36 sm:w-44"
+                className="rounded-lg border border-slate-200 dark:border-slate-600 bg-slate-50 dark:bg-slate-900 px-3 py-1.5 text-xs text-slate-800 dark:text-slate-200 font-medium focus:bg-white dark:focus:bg-slate-800 focus:border-blue-600 focus:outline-none w-36 sm:w-44"
               />
               <button
                 type="button"
                 onClick={handleSelectAllGlobal}
-                className="px-2.5 py-1.5 rounded-xl bg-slate-100 hover:bg-blue-50 hover:text-blue-700 text-[11px] font-bold text-slate-700 transition cursor-pointer"
+                className="px-2.5 py-1.5 rounded-lg bg-slate-100 dark:bg-slate-700/50 hover:bg-blue-50 dark:hover:bg-blue-900/30 hover:text-blue-700 dark:hover:text-blue-400 text-[11px] font-bold text-slate-700 dark:text-slate-300 transition cursor-pointer"
                 title="Habilitar todos los permisos"
               >
                 ✓ Marcar Todos
@@ -463,7 +468,7 @@ export function PermissionsModal({
               <button
                 type="button"
                 onClick={handleDeselectAllGlobal}
-                className="px-2.5 py-1.5 rounded-xl bg-slate-100 hover:bg-rose-50 hover:text-rose-700 text-[11px] font-bold text-slate-700 transition cursor-pointer"
+                className="px-2.5 py-1.5 rounded-lg bg-slate-100 dark:bg-slate-700/50 hover:bg-rose-50 dark:hover:bg-rose-900/30 hover:text-rose-700 dark:hover:text-rose-400 text-[11px] font-bold text-slate-700 dark:text-slate-300 transition cursor-pointer"
                 title="Desmarcar todos los permisos"
               >
                 ✕ Desmarcar Todos
@@ -474,21 +479,21 @@ export function PermissionsModal({
           {/* Granular Permissions Section */}
           <div className="space-y-5">
             {/* Group 1: Visualización y Secciones */}
-            <div className="bg-white rounded-2xl border border-slate-200 shadow-2xs overflow-hidden">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 bg-blue-50/60 border-b border-blue-100/80 px-3.5 sm:px-4 py-2.5 sm:py-3">
+            <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 shadow-2xs overflow-hidden">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 bg-blue-50/60 dark:bg-blue-900/20 border-b border-blue-100/80 dark:border-blue-900/40 px-3.5 sm:px-4 py-2.5 sm:py-3">
                 <div className="flex items-center gap-2">
                   <span className="text-base">👁️</span>
                   <div>
-                    <h4 className="text-xs font-bold text-blue-900">
+                    <h4 className="text-xs font-bold text-blue-900 dark:text-blue-300">
                       1. Permisos de Módulos y Visualización (Secciones)
                     </h4>
-                    <p className="text-[10px] text-blue-700/80">
+                    <p className="text-[10px] text-blue-700/80 dark:text-blue-400">
                       Secciones completas del menú lateral y dashboards que puede consultar en pantalla
                     </p>
                   </div>
                 </div>
                 <div className="flex items-center gap-2 self-end sm:self-auto">
-                  <span className="text-[11px] font-bold bg-blue-100/80 text-blue-800 px-2 py-0.5 rounded-md">
+                  <span className="text-[11px] font-bold bg-blue-100/80 dark:bg-blue-900/50 text-blue-800 dark:text-blue-300 px-2 py-0.5 rounded-md">
                     {viewActiveCount}/{VIEW_PERMISSIONS.length}
                   </span>
                   <button
@@ -499,7 +504,7 @@ export function PermissionsModal({
                         true
                       )
                     }
-                    className="text-[10px] font-bold text-blue-700 hover:text-blue-900 bg-white/80 hover:bg-white px-2 py-1 rounded-lg border border-blue-200 transition cursor-pointer"
+                    className="text-[10px] font-bold text-blue-700 dark:text-blue-400 hover:text-blue-900 dark:hover:text-blue-200 bg-white/80 dark:bg-slate-800 hover:bg-white dark:hover:bg-slate-700 px-2 py-1 rounded-lg border border-blue-200 dark:border-blue-800 transition cursor-pointer"
                   >
                     ✓ Todos
                   </button>
@@ -511,7 +516,7 @@ export function PermissionsModal({
                         false
                       )
                     }
-                    className="text-[10px] font-bold text-slate-500 hover:text-rose-700 bg-white/80 hover:bg-white px-2 py-1 rounded-lg border border-slate-200 transition cursor-pointer"
+                    className="text-[10px] font-bold text-slate-500 dark:text-slate-400 hover:text-rose-700 dark:hover:text-rose-400 bg-white/80 dark:bg-slate-800 hover:bg-white dark:hover:bg-slate-700 px-2 py-1 rounded-lg border border-slate-200 dark:border-slate-700 transition cursor-pointer"
                   >
                     ✕ Ninguno
                   </button>
@@ -520,7 +525,7 @@ export function PermissionsModal({
 
               <div className="p-3 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 text-xs">
                 {filteredViews.length === 0 ? (
-                  <p className="col-span-full text-center py-3 text-slate-400 text-xs">
+                  <p className="col-span-full text-center py-3 text-slate-400 dark:text-slate-500 text-xs">
                     No hay permisos que coincidan con la búsqueda
                   </p>
                 ) : (
@@ -538,21 +543,21 @@ export function PermissionsModal({
             </div>
 
             {/* Group 2: Operaciones de Bodega */}
-            <div className="bg-white rounded-2xl border border-slate-200 shadow-2xs overflow-hidden">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 bg-purple-50/60 border-b border-purple-100/80 px-3.5 sm:px-4 py-2.5 sm:py-3">
+            <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 shadow-2xs overflow-hidden">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 bg-purple-50/60 dark:bg-purple-900/20 border-b border-purple-100/80 dark:border-purple-900/40 px-3.5 sm:px-4 py-2.5 sm:py-3">
                 <div className="flex items-center gap-2">
                   <span className="text-base">✏️</span>
                   <div>
-                    <h4 className="text-xs font-bold text-purple-900">
+                    <h4 className="text-xs font-bold text-purple-900 dark:text-purple-300">
                       2. Operaciones de Bodega y Movimientos
                     </h4>
-                    <p className="text-[10px] text-purple-700/80">
+                    <p className="text-[10px] text-purple-700/80 dark:text-purple-400">
                       Registro de entradas, salidas, traslados y auditoría física de casilleros
                     </p>
                   </div>
                 </div>
                 <div className="flex items-center gap-2 self-end sm:self-auto">
-                  <span className="text-[11px] font-bold bg-purple-100/80 text-purple-800 px-2 py-0.5 rounded-md">
+                  <span className="text-[11px] font-bold bg-purple-100/80 dark:bg-purple-900/50 text-purple-800 dark:text-purple-300 px-2 py-0.5 rounded-md">
                     {opActiveCount}/{OP_PERMISSIONS.length}
                   </span>
                   <button
@@ -563,7 +568,7 @@ export function PermissionsModal({
                         true
                       )
                     }
-                    className="text-[10px] font-bold text-purple-700 hover:text-purple-900 bg-white/80 hover:bg-white px-2 py-1 rounded-lg border border-purple-200 transition cursor-pointer"
+                    className="text-[10px] font-bold text-purple-700 dark:text-purple-400 hover:text-purple-900 dark:hover:text-purple-200 bg-white/80 dark:bg-slate-800 hover:bg-white dark:hover:bg-slate-700 px-2 py-1 rounded-lg border border-purple-200 dark:border-purple-800 transition cursor-pointer"
                   >
                     ✓ Todos
                   </button>
@@ -575,7 +580,7 @@ export function PermissionsModal({
                         false
                       )
                     }
-                    className="text-[10px] font-bold text-slate-500 hover:text-rose-700 bg-white/80 hover:bg-white px-2 py-1 rounded-lg border border-slate-200 transition cursor-pointer"
+                    className="text-[10px] font-bold text-slate-500 dark:text-slate-400 hover:text-rose-700 dark:hover:text-rose-400 bg-white/80 dark:bg-slate-800 hover:bg-white dark:hover:bg-slate-700 px-2 py-1 rounded-lg border border-slate-200 dark:border-slate-700 transition cursor-pointer"
                   >
                     ✕ Ninguno
                   </button>
@@ -584,7 +589,7 @@ export function PermissionsModal({
 
               <div className="p-3 grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
                 {filteredOps.length === 0 ? (
-                  <p className="col-span-full text-center py-3 text-slate-400 text-xs">
+                  <p className="col-span-full text-center py-3 text-slate-400 dark:text-slate-500 text-xs">
                     No hay permisos que coincidan con la búsqueda
                   </p>
                 ) : (
@@ -602,21 +607,21 @@ export function PermissionsModal({
             </div>
 
             {/* Group 3: Configuración y Gestión de Maestros */}
-            <div className="bg-white rounded-2xl border border-slate-200 shadow-2xs overflow-hidden">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 bg-amber-50/60 border-b border-amber-100/80 px-3.5 sm:px-4 py-2.5 sm:py-3">
+            <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 shadow-2xs overflow-hidden">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 bg-amber-50/60 dark:bg-amber-900/20 border-b border-amber-100/80 dark:border-amber-900/40 px-3.5 sm:px-4 py-2.5 sm:py-3">
                 <div className="flex items-center gap-2">
                   <span className="text-base">🛠️</span>
                   <div>
-                    <h4 className="text-xs font-bold text-amber-900">
+                    <h4 className="text-xs font-bold text-amber-900 dark:text-amber-300">
                       3. Configuración, Catálogo y Gestión de Maestros
                     </h4>
-                    <p className="text-[10px] text-amber-700/80">
+                    <p className="text-[10px] text-amber-700/80 dark:text-amber-400">
                       Creación de fichas de SKUs, reconfiguración de racks y gestión de usuarios
                     </p>
                   </div>
                 </div>
                 <div className="flex items-center gap-2 self-end sm:self-auto">
-                  <span className="text-[11px] font-bold bg-amber-100/80 text-amber-800 px-2 py-0.5 rounded-md">
+                  <span className="text-[11px] font-bold bg-amber-100/80 dark:bg-amber-900/50 text-amber-800 dark:text-amber-300 px-2 py-0.5 rounded-md">
                     {configActiveCount}/{CONFIG_PERMISSIONS.length}
                   </span>
                   <button
@@ -627,7 +632,7 @@ export function PermissionsModal({
                         true
                       )
                     }
-                    className="text-[10px] font-bold text-amber-700 hover:text-amber-900 bg-white/80 hover:bg-white px-2 py-1 rounded-lg border border-amber-200 transition cursor-pointer"
+                    className="text-[10px] font-bold text-amber-700 dark:text-amber-400 hover:text-amber-900 dark:hover:text-amber-200 bg-white/80 dark:bg-slate-800 hover:bg-white dark:hover:bg-slate-700 px-2 py-1 rounded-lg border border-amber-200 dark:border-amber-800 transition cursor-pointer"
                   >
                     ✓ Todos
                   </button>
@@ -639,7 +644,7 @@ export function PermissionsModal({
                         false
                       )
                     }
-                    className="text-[10px] font-bold text-slate-500 hover:text-rose-700 bg-white/80 hover:bg-white px-2 py-1 rounded-lg border border-slate-200 transition cursor-pointer"
+                    className="text-[10px] font-bold text-slate-500 dark:text-slate-400 hover:text-rose-700 dark:hover:text-rose-400 bg-white/80 dark:bg-slate-800 hover:bg-white dark:hover:bg-slate-700 px-2 py-1 rounded-lg border border-slate-200 dark:border-slate-700 transition cursor-pointer"
                   >
                     ✕ Ninguno
                   </button>
@@ -648,7 +653,7 @@ export function PermissionsModal({
 
               <div className="p-3 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 text-xs">
                 {filteredConfigs.length === 0 ? (
-                  <p className="col-span-full text-center py-3 text-slate-400 text-xs">
+                  <p className="col-span-full text-center py-3 text-slate-400 dark:text-slate-500 text-xs">
                     No hay permisos que coincidan con la búsqueda
                   </p>
                 ) : (
@@ -666,21 +671,21 @@ export function PermissionsModal({
             </div>
 
             {/* Group 4: Descargas, Exportaciones y Herramientas */}
-            <div className="bg-white rounded-2xl border border-slate-200 shadow-2xs overflow-hidden">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 bg-emerald-50/60 border-b border-emerald-100/80 px-3.5 sm:px-4 py-2.5 sm:py-3">
+            <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 shadow-2xs overflow-hidden">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 bg-emerald-50/60 dark:bg-emerald-900/20 border-b border-emerald-100/80 dark:border-emerald-900/40 px-3.5 sm:px-4 py-2.5 sm:py-3">
                 <div className="flex items-center gap-2">
                   <span className="text-base">📥</span>
                   <div>
-                    <h4 className="text-xs font-bold text-emerald-900">
+                    <h4 className="text-xs font-bold text-emerald-900 dark:text-emerald-300">
                       4. Importación, Exportación y Herramientas
                     </h4>
-                    <p className="text-[10px] text-emerald-700/80">
+                    <p className="text-[10px] text-emerald-700/80 dark:text-emerald-400">
                       Cargas masivas (Excel/CSV/JSON), exportaciones, reportes y etiquetas térmicas
                     </p>
                   </div>
                 </div>
                 <div className="flex items-center gap-2 self-end sm:self-auto">
-                  <span className="text-[11px] font-bold bg-emerald-100/80 text-emerald-800 px-2 py-0.5 rounded-md">
+                  <span className="text-[11px] font-bold bg-emerald-100/80 dark:bg-emerald-900/50 text-emerald-800 dark:text-emerald-300 px-2 py-0.5 rounded-md">
                     {exportActiveCount}/{EXPORT_PERMISSIONS.length}
                   </span>
                   <button
@@ -691,7 +696,7 @@ export function PermissionsModal({
                         true
                       )
                     }
-                    className="text-[10px] font-bold text-emerald-700 hover:text-emerald-900 bg-white/80 hover:bg-white px-2 py-1 rounded-lg border border-emerald-200 transition cursor-pointer"
+                    className="text-[10px] font-bold text-emerald-700 dark:text-emerald-400 hover:text-emerald-900 dark:hover:text-emerald-200 bg-white/80 dark:bg-slate-800 hover:bg-white dark:hover:bg-slate-700 px-2 py-1 rounded-lg border border-emerald-200 dark:border-emerald-800 transition cursor-pointer"
                   >
                     ✓ Todos
                   </button>
@@ -703,7 +708,7 @@ export function PermissionsModal({
                         false
                       )
                     }
-                    className="text-[10px] font-bold text-slate-500 hover:text-rose-700 bg-white/80 hover:bg-white px-2 py-1 rounded-lg border border-slate-200 transition cursor-pointer"
+                    className="text-[10px] font-bold text-slate-500 dark:text-slate-400 hover:text-rose-700 dark:hover:text-rose-400 bg-white/80 dark:bg-slate-800 hover:bg-white dark:hover:bg-slate-700 px-2 py-1 rounded-lg border border-slate-200 dark:border-slate-700 transition cursor-pointer"
                   >
                     ✕ Ninguno
                   </button>
@@ -712,7 +717,7 @@ export function PermissionsModal({
 
               <div className="p-3 grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
                 {filteredExports.length === 0 ? (
-                  <p className="col-span-full text-center py-3 text-slate-400 text-xs">
+                  <p className="col-span-full text-center py-3 text-slate-400 dark:text-slate-500 text-xs">
                     No hay permisos que coincidan con la búsqueda
                   </p>
                 ) : (
@@ -732,24 +737,24 @@ export function PermissionsModal({
         </div>
 
         {/* Footer Actions */}
-        <div className="flex flex-col-reverse sm:flex-row items-stretch sm:items-center justify-between gap-3 border-t px-4 sm:px-6 py-3.5 sm:py-4 bg-white">
+        <div className="flex flex-col-reverse sm:flex-row items-stretch sm:items-center justify-between gap-3 border-t border-slate-200 dark:border-slate-800 px-4 sm:px-6 py-3.5 sm:py-4 bg-white dark:bg-slate-900">
           <button
             type="button"
             onClick={onClose}
             disabled={saving}
-            className="w-full sm:w-auto px-4 py-2.5 rounded-xl border border-slate-200 text-xs font-bold text-slate-600 hover:bg-slate-50 transition cursor-pointer text-center"
+            className="w-full sm:w-auto px-4 py-2.5 rounded-lg border border-slate-200 dark:border-slate-700 text-xs font-bold text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 transition cursor-pointer text-center"
           >
             Cancelar
           </button>
           <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5 sm:gap-3">
-            <span className="text-[11px] text-slate-500 text-center sm:text-left">
+            <span className="text-[11px] text-slate-500 dark:text-slate-400 text-center sm:text-left">
               <strong>{totalActive}</strong> de {ALL_PERMISSION_KEYS.length} permisos activos asignados
             </span>
             <button
               type="button"
               onClick={handleSave}
               disabled={saving}
-              className="w-full sm:w-auto flex items-center justify-center gap-2 rounded-xl bg-blue-600 px-5 py-2.5 text-xs font-bold text-white shadow-md hover:bg-blue-700 transition disabled:opacity-50 cursor-pointer active:scale-95"
+              className="w-full sm:w-auto flex items-center justify-center gap-2 rounded-lg bg-blue-600 dark:bg-blue-500 px-5 py-2.5 text-xs font-bold text-white shadow-md hover:bg-blue-700 dark:hover:bg-blue-600 transition disabled:opacity-50 cursor-pointer active:scale-95"
             >
               {saving ? (
                 <>
@@ -782,17 +787,17 @@ function PermissionCard({
 }) {
   const accentClasses = {
     blue: checked
-      ? "border-blue-300 bg-blue-50/60 text-blue-900 ring-1 ring-blue-200"
-      : "border-slate-200 bg-white text-slate-700 hover:border-slate-300",
+      ? "border-blue-300 dark:border-blue-700 bg-blue-50/60 dark:bg-blue-900/30 text-blue-900 dark:text-blue-300 ring-1 ring-blue-200 dark:ring-blue-800"
+      : "border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:border-slate-300 dark:hover:border-slate-600",
     purple: checked
-      ? "border-purple-300 bg-purple-50/60 text-purple-900 ring-1 ring-purple-200"
-      : "border-slate-200 bg-white text-slate-700 hover:border-slate-300",
+      ? "border-purple-300 dark:border-purple-700 bg-purple-50/60 dark:bg-purple-900/30 text-purple-900 dark:text-purple-300 ring-1 ring-purple-200 dark:ring-purple-800"
+      : "border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:border-slate-300 dark:hover:border-slate-600",
     amber: checked
-      ? "border-amber-300 bg-amber-50/60 text-amber-900 ring-1 ring-amber-200"
-      : "border-slate-200 bg-white text-slate-700 hover:border-slate-300",
+      ? "border-amber-300 dark:border-amber-700 bg-amber-50/60 dark:bg-amber-900/30 text-amber-900 dark:text-amber-300 ring-1 ring-amber-200 dark:ring-amber-800"
+      : "border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:border-slate-300 dark:hover:border-slate-600",
     emerald: checked
-      ? "border-emerald-300 bg-emerald-50/60 text-emerald-900 ring-1 ring-emerald-200"
-      : "border-slate-200 bg-white text-slate-700 hover:border-slate-300",
+      ? "border-emerald-300 dark:border-emerald-700 bg-emerald-50/60 dark:bg-emerald-900/30 text-emerald-900 dark:text-emerald-300 ring-1 ring-emerald-200 dark:ring-emerald-800"
+      : "border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:border-slate-300 dark:hover:border-slate-600",
   }[accent];
 
   return (
@@ -807,14 +812,14 @@ function PermissionCard({
           e.stopPropagation();
           onToggle();
         }}
-        className="mt-0.5 h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
+        className="mt-0.5 h-4 w-4 rounded border-slate-300 dark:border-slate-600 dark:bg-slate-900 text-blue-600 dark:text-blue-500 focus:ring-blue-500 cursor-pointer"
       />
       <div className="flex-1 min-w-0">
-        <p className={`font-bold text-xs flex items-center gap-1.5 ${checked ? "text-slate-900" : "text-slate-600"}`}>
+        <p className={`font-bold text-xs flex items-center gap-1.5 ${checked ? "text-slate-900 dark:text-white" : "text-slate-600 dark:text-slate-400"}`}>
           <span>{meta.icon}</span>
           <span className="truncate">{meta.label}</span>
         </p>
-        <p className="text-[10px] text-slate-500 leading-tight mt-0.5 line-clamp-2">
+        <p className="text-[10px] text-slate-500 dark:text-slate-500 leading-tight mt-0.5 line-clamp-2">
           {meta.desc}
         </p>
       </div>

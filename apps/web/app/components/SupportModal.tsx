@@ -288,7 +288,7 @@ export function SupportModal({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-slate-900/60 p-0 sm:p-4 backdrop-blur-xs animate-fadeIn">
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-slate-900/60 p-0 sm:p-4 backdrop-blur-xs animate-fadeIn" role="dialog" aria-modal="true" aria-labelledby="support-modal-title">
       <div className="w-full max-w-lg max-h-[92vh] sm:max-h-[90vh] overflow-y-auto rounded-t-xl sm:rounded-xl bg-white p-4 sm:p-6 shadow-2xl border border-slate-200 dark:border-slate-800 dark:bg-slate-900">
         <div className="mx-auto w-12 h-1 rounded-full bg-slate-200 mb-3 sm:hidden dark:bg-slate-700" />
         <div className="flex items-start justify-between border-b border-slate-100 pb-3 dark:border-slate-800">
@@ -297,7 +297,7 @@ export function SupportModal({
               <LifeBuoy className="h-5 w-5" />
             </span>
             <div>
-              <h3 className="text-base sm:text-lg font-semibold text-slate-900 dark:text-white">Mesa de Ayuda y Soporte WMS</h3>
+              <h3 id="support-modal-title" className="text-base sm:text-lg font-semibold text-slate-900 dark:text-white">Mesa de Ayuda y Soporte WMS</h3>
               <p className="text-[11px] sm:text-xs text-slate-500 dark:text-slate-400">Reportar incidencias operativas o solicitar asistencia técnica</p>
             </div>
           </div>

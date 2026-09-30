@@ -301,18 +301,23 @@ export function Entry2DModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-xs p-4 animate-fadeIn">
-      <div className="w-full max-w-2xl max-h-[94vh] flex flex-col rounded-3xl bg-white shadow-2xl border border-slate-200 overflow-hidden">
+      <div 
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="entry-2d-modal-title"
+        className="w-full max-w-2xl max-h-[94vh] flex flex-col rounded-xl bg-white dark:bg-slate-900 shadow-2xl border border-slate-200 dark:border-slate-800 dark:text-white overflow-hidden"
+      >
         {/* Modal Header */}
-        <div className="flex items-center justify-between border-b border-slate-100 bg-slate-50/80 px-4 sm:px-6 py-3.5 sm:py-4">
+        <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 bg-slate-50/80 dark:bg-slate-900 px-4 sm:px-6 py-3.5 sm:py-4">
           <div className="flex items-center gap-2.5">
-            <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-emerald-600 text-white shadow-sm font-bold text-base">
+            <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-emerald-600 text-white shadow-sm font-bold text-base">
               📥
             </span>
             <div>
-              <h3 className="text-base font-black text-slate-900">
+              <h3 id="entry-2d-modal-title" className="text-base font-black text-slate-900 dark:text-white">
                 Confirmar Entrada de Mercancía
               </h3>
-              <p className="text-xs text-slate-500">
+              <p className="text-xs text-slate-500 dark:text-slate-400">
                 Asignación de producto y cantidad a las posiciones del plano
               </p>
             </div>

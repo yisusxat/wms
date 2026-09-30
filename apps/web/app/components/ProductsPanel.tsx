@@ -299,49 +299,49 @@ export function ProductsPanel({
 
           <div className="grid gap-4 sm:grid-cols-2 md:grid-cols-4">
             <div>
-              <label className="block text-xs font-bold text-slate-700 mb-1">
+              <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
                 SKU / Código Único *
               </label>
               <input
                 required
                 placeholder="Ej: ALM-ARR-001"
-                className="w-full rounded-xl border border-slate-300 p-2.5 text-xs font-mono font-bold focus:border-indigo-600 focus:outline-none"
+                className="w-full rounded-lg border border-slate-300 dark:border-slate-600 dark:bg-slate-800 dark:text-white dark:placeholder-slate-500 p-2.5 text-xs font-mono font-bold focus:border-blue-600 focus:ring-2 focus:ring-blue-500/30 focus:outline-none"
                 value={form.sku}
                 onChange={(e) => setForm({ ...form, sku: e.target.value.toUpperCase() })}
               />
             </div>
 
             <div>
-              <label className="block text-xs font-bold text-slate-700 mb-1">
+              <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
                 Nombre del Producto *
               </label>
               <input
                 required
                 placeholder="Ej: Arroz Diana Especial 1kg"
-                className="w-full rounded-xl border border-slate-300 p-2.5 text-xs font-semibold focus:border-indigo-600 focus:outline-none"
+                className="w-full rounded-lg border border-slate-300 dark:border-slate-600 dark:bg-slate-800 dark:text-white dark:placeholder-slate-500 p-2.5 text-xs font-semibold focus:border-blue-600 focus:ring-2 focus:ring-blue-500/30 focus:outline-none"
                 value={form.name}
                 onChange={(e) => setForm({ ...form, name: e.target.value })}
               />
             </div>
 
             <div>
-              <label className="block text-xs font-bold text-slate-700 mb-1">
+              <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
                 Categoría
               </label>
               <input
                 placeholder="Ej: Granos, Lácteos, Aseo..."
-                className="w-full rounded-xl border border-slate-300 p-2.5 text-xs focus:border-indigo-600 focus:outline-none"
+                className="w-full rounded-lg border border-slate-300 dark:border-slate-600 dark:bg-slate-800 dark:text-white dark:placeholder-slate-500 p-2.5 text-xs focus:border-blue-600 focus:ring-2 focus:ring-blue-500/30 focus:outline-none"
                 value={form.category}
                 onChange={(e) => setForm({ ...form, category: e.target.value })}
               />
             </div>
 
             <div>
-              <label className="block text-xs font-bold text-slate-700 mb-1">
+              <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
                 Unidad de Medida
               </label>
               <select
-                className="w-full rounded-xl border border-slate-300 p-2.5 text-xs bg-white focus:border-indigo-600 focus:outline-none font-semibold"
+                className="w-full rounded-lg border border-slate-300 dark:border-slate-600 dark:bg-slate-800 dark:text-white bg-white p-2.5 text-xs focus:border-blue-600 focus:ring-2 focus:ring-blue-500/30 focus:outline-none font-semibold"
                 value={form.unit}
                 onChange={(e) => setForm({ ...form, unit: e.target.value })}
               >
@@ -355,42 +355,42 @@ export function ProductsPanel({
             </div>
 
             <div>
-              <label className="block text-xs font-bold text-slate-700 mb-1">
+              <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
                 Código de Barras (Opcional)
               </label>
               <input
                 placeholder="EAN / UPC / Barra"
-                className="w-full rounded-xl border border-slate-300 p-2.5 text-xs font-mono focus:border-indigo-600 focus:outline-none"
+                className="w-full rounded-lg border border-slate-300 dark:border-slate-600 dark:bg-slate-800 dark:text-white dark:placeholder-slate-500 p-2.5 text-xs font-mono focus:border-blue-600 focus:ring-2 focus:ring-blue-500/30 focus:outline-none"
                 value={form.barcode}
                 onChange={(e) => setForm({ ...form, barcode: e.target.value })}
               />
             </div>
 
             <div className="sm:col-span-2 md:col-span-3">
-              <label className="block text-xs font-bold text-slate-700 mb-1">
+              <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
                 Descripción / Notas
               </label>
               <input
                 placeholder="Detalle adicional del producto..."
-                className="w-full rounded-xl border border-slate-300 p-2.5 text-xs focus:border-indigo-600 focus:outline-none"
+                className="w-full rounded-lg border border-slate-300 dark:border-slate-600 dark:bg-slate-800 dark:text-white dark:placeholder-slate-500 p-2.5 text-xs focus:border-blue-600 focus:ring-2 focus:ring-blue-500/30 focus:outline-none"
                 value={form.description}
                 onChange={(e) => setForm({ ...form, description: e.target.value })}
               />
             </div>
           </div>
 
-          <div className="flex justify-end gap-2 pt-2 border-t">
+          <div className="flex justify-end gap-2 pt-2 border-t dark:border-slate-800">
             <button
               type="button"
               onClick={() => setShowAddForm(false)}
-              className="rounded-xl border border-slate-300 px-4 py-2 text-xs font-bold text-slate-600 hover:bg-slate-50 transition"
+              className="rounded-lg border border-slate-300 dark:border-slate-600 px-4 py-2 text-xs font-bold text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 transition"
             >
               Cancelar
             </button>
             <button
               type="submit"
               disabled={submitting}
-              className="rounded-xl bg-indigo-600 px-6 py-2 text-xs font-bold text-white hover:bg-indigo-700 shadow-sm transition disabled:opacity-50 flex items-center gap-2"
+              className="rounded-lg bg-indigo-600 px-6 py-2 text-xs font-bold text-white hover:bg-indigo-700 shadow-sm transition disabled:opacity-50 flex items-center gap-2"
             >
               {submitting ? 'Guardando...' : 'Crear Producto'}
             </button>
@@ -410,7 +410,7 @@ export function ProductsPanel({
               </span>
               <input
                 placeholder="Buscar por SKU, nombre del producto o categoría..."
-                className="w-full rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50/70 dark:bg-slate-800 py-2.5 pl-9 pr-4 text-xs font-medium text-slate-900 dark:text-slate-100 focus:bg-white dark:focus:bg-slate-900 focus:border-blue-600 focus:outline-none shadow-2xs"
+                className="w-full rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50/70 dark:bg-slate-800 py-2.5 pl-9 pr-4 text-xs font-medium text-slate-900 dark:text-slate-100 focus:bg-white dark:focus:bg-slate-900 focus:border-blue-600 focus:ring-2 focus:ring-blue-500/30 focus:outline-none shadow-2xs"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 onKeyDown={(e) => {
@@ -439,14 +439,14 @@ export function ProductsPanel({
                 setIsFilterFromScan(false);
                 void load(search, 1);
               }}
-              className="rounded-2xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-4 py-2.5 text-xs font-bold text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 shadow-2xs transition cursor-pointer"
+              className="rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-4 py-2.5 text-xs font-bold text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 shadow-2xs transition cursor-pointer"
             >
               Buscar
             </button>
             <button
               type="button"
               onClick={() => setScannerOpen(true)}
-              className="flex items-center gap-1.5 rounded-2xl bg-orange-600 hover:bg-orange-700 active:bg-orange-800 text-white px-3.5 py-2.5 text-xs font-bold shadow-2xs transition cursor-pointer active:scale-95 shrink-0"
+              className="flex items-center gap-1.5 rounded-lg bg-orange-600 hover:bg-orange-700 active:bg-orange-800 text-white px-3.5 py-2.5 text-xs font-bold shadow-2xs transition cursor-pointer active:scale-95 shrink-0"
               title="Escanear SKU o código de barras con cámara / OCR / manual"
             >
               <Icon name="scan-barcode" size={15} />
@@ -459,7 +459,7 @@ export function ProductsPanel({
             <select
               value={selectedCategory}
               onChange={(e) => setSelectedCategory(e.target.value)}
-              className="rounded-2xl border border-slate-200 bg-slate-50/70 px-3 py-2 text-xs font-bold text-slate-700 focus:outline-none"
+              className="rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50/70 dark:bg-slate-800 px-3 py-2 text-xs font-bold text-slate-700 dark:text-slate-200 focus:border-blue-600 focus:ring-2 focus:ring-blue-500/30 focus:outline-none"
             >
               <option value="ALL">Todas las Categorías ({allProducts.length})</option>
               {categories.map((cat) => (
@@ -472,7 +472,7 @@ export function ProductsPanel({
             <select
               value={selectedStatus}
               onChange={(e) => setSelectedStatus(e.target.value as any)}
-              className="rounded-2xl border border-slate-200 bg-slate-50/70 px-3 py-2 text-xs font-bold text-slate-700 focus:outline-none"
+              className="rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50/70 dark:bg-slate-800 px-3 py-2 text-xs font-bold text-slate-700 dark:text-slate-200 focus:border-blue-600 focus:ring-2 focus:ring-blue-500/30 focus:outline-none"
             >
               <option value="ALL">Todos los Estados</option>
               <option value="ACTIVE">Solo Activos</option>
@@ -722,21 +722,21 @@ export function ProductsPanel({
         >
           <form
             onSubmit={submitEdit}
-            className="w-full max-w-md rounded-3xl bg-white p-6 shadow-2xl border border-slate-200 space-y-4"
+            className="w-full max-w-md rounded-3xl bg-white dark:bg-slate-900 p-6 shadow-2xl border border-slate-200 dark:border-slate-800 space-y-4"
           >
-            <div className="flex items-center justify-between border-b pb-3">
+            <div className="flex items-center justify-between border-b dark:border-slate-800 pb-3">
               <div>
                 <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
                   Editar Producto
                 </span>
-                <h3 className="font-mono font-black text-indigo-950 text-base">
+                <h3 className="font-mono font-black text-indigo-950 dark:text-indigo-300 text-base">
                   [{editingProduct.sku}]
                 </h3>
               </div>
               <button
                 type="button"
                 onClick={() => setEditingProduct(null)}
-                className="rounded-lg p-1 text-slate-400 hover:text-slate-600 font-bold"
+                className="rounded-lg p-1 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 font-bold cursor-pointer"
               >
                 ✕
               </button>
@@ -744,68 +744,68 @@ export function ProductsPanel({
 
             <div className="space-y-3 text-xs">
               <div>
-                <label className="block font-bold text-slate-700 mb-1">Nombre</label>
+                <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">Nombre</label>
                 <input
                   required
                   value={editForm.name}
                   onChange={(e) => setEditForm({ ...editForm, name: e.target.value })}
-                  className="w-full rounded-xl border border-slate-300 p-2 font-semibold"
+                  className="w-full rounded-lg border border-slate-300 dark:border-slate-600 dark:bg-slate-800 dark:text-white dark:placeholder-slate-500 p-2 font-semibold focus:border-blue-600 focus:ring-2 focus:ring-blue-500/30 focus:outline-none"
                 />
               </div>
 
               <div>
-                <label className="block font-bold text-slate-700 mb-1">Categoría</label>
+                <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">Categoría</label>
                 <input
                   value={editForm.category}
                   onChange={(e) => setEditForm({ ...editForm, category: e.target.value })}
-                  className="w-full rounded-xl border border-slate-300 p-2"
+                  className="w-full rounded-lg border border-slate-300 dark:border-slate-600 dark:bg-slate-800 dark:text-white dark:placeholder-slate-500 p-2 focus:border-blue-600 focus:ring-2 focus:ring-blue-500/30 focus:outline-none"
                 />
               </div>
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block font-bold text-slate-700 mb-1">Unidad</label>
+                  <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">Unidad</label>
                   <input
                     value={editForm.unit}
                     onChange={(e) => setEditForm({ ...editForm, unit: e.target.value })}
-                    className="w-full rounded-xl border border-slate-300 p-2"
+                    className="w-full rounded-lg border border-slate-300 dark:border-slate-600 dark:bg-slate-800 dark:text-white dark:placeholder-slate-500 p-2 focus:border-blue-600 focus:ring-2 focus:ring-blue-500/30 focus:outline-none"
                   />
                 </div>
                 <div>
-                  <label className="block font-bold text-slate-700 mb-1">Código de Barras</label>
+                  <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">Código de Barras</label>
                   <input
                     value={editForm.barcode}
                     onChange={(e) => setEditForm({ ...editForm, barcode: e.target.value })}
-                    className="w-full rounded-xl border border-slate-300 p-2 font-mono"
+                    className="w-full rounded-lg border border-slate-300 dark:border-slate-600 dark:bg-slate-800 dark:text-white dark:placeholder-slate-500 p-2 font-mono focus:border-blue-600 focus:ring-2 focus:ring-blue-500/30 focus:outline-none"
                   />
                 </div>
               </div>
 
               <div className="pt-1">
-                <label className="flex items-center gap-2 font-bold text-slate-700 cursor-pointer">
+                <label className="flex items-center gap-2 font-bold text-slate-700 dark:text-slate-300 cursor-pointer">
                   <input
                     type="checkbox"
                     checked={editForm.active}
                     onChange={(e) => setEditForm({ ...editForm, active: e.target.checked })}
-                    className="h-4 w-4 rounded text-indigo-600"
+                    className="h-4 w-4 rounded text-blue-600 focus:ring-blue-500"
                   />
                   <span>Producto Activo en Catálogo</span>
                 </label>
               </div>
             </div>
 
-            <div className="flex justify-end gap-2 pt-3 border-t">
+            <div className="flex justify-end gap-2 pt-3 border-t dark:border-slate-800">
               <button
                 type="button"
                 onClick={() => setEditingProduct(null)}
-                className="rounded-xl border border-slate-300 px-4 py-2 text-xs font-bold text-slate-600 hover:bg-slate-50"
+                className="rounded-lg border border-slate-300 dark:border-slate-600 px-4 py-2 text-xs font-bold text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 cursor-pointer"
               >
                 Cancelar
               </button>
               <button
                 type="submit"
                 disabled={submitting}
-                className="rounded-xl bg-indigo-600 px-5 py-2 text-xs font-bold text-white hover:bg-indigo-700"
+                className="rounded-lg bg-indigo-600 px-5 py-2 text-xs font-bold text-white hover:bg-indigo-700 cursor-pointer disabled:opacity-50"
               >
                 {submitting ? 'Guardando...' : 'Guardar Cambios'}
               </button>

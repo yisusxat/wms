@@ -431,7 +431,7 @@ export function Dashboard({
                   card.action();
                 }
               }}
-              className="group relative flex flex-col justify-between rounded-xl border border-slate-200 bg-white p-4 shadow-xs transition hover:border-blue-400 hover:shadow-md cursor-pointer dark:border-slate-800 dark:bg-slate-900 dark:hover:border-blue-600"
+              className="group relative flex flex-col justify-between rounded-xl border border-slate-200 bg-white p-4 shadow-xs transition duration-150 hover:scale-[1.01] active:scale-[0.99] hover:border-blue-400 hover:shadow-md cursor-pointer dark:border-slate-800 dark:bg-slate-900 dark:hover:border-blue-600"
             >
               <div>
                 <div className="flex items-center justify-between">

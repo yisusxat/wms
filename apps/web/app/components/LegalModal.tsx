@@ -42,11 +42,11 @@ export function LegalModal({ isOpen, onClose, token, onAnonymized }: Props) {
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 p-3 sm:p-4 backdrop-blur-xs">
-      <div className="w-full max-w-2xl max-h-[90vh] sm:max-h-[85vh] flex flex-col rounded-2xl bg-white p-4 sm:p-6 shadow-2xl border border-slate-100">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 p-3 sm:p-4 backdrop-blur-xs" role="dialog" aria-modal="true" aria-labelledby="legal-modal-title">
+      <div className="w-full max-w-2xl max-h-[90vh] sm:max-h-[85vh] flex flex-col rounded-xl bg-white dark:bg-slate-900 p-4 sm:p-6 shadow-2xl border border-slate-200 dark:border-slate-800">
         <div className="flex items-start justify-between border-b border-slate-100 pb-3">
           <div>
-            <h3 className="text-base sm:text-lg font-bold text-slate-900">Marco Legal, SLA y Privacidad</h3>
+            <h3 id="legal-modal-title" className="text-base sm:text-lg font-bold text-slate-900 dark:text-white">Marco Legal, SLA y Privacidad</h3>
             <p className="text-[11px] sm:text-xs text-slate-500">Términos operativos, acuerdo de nivel de servicio y cumplimiento de datos</p>
           </div>
           <button onClick={onClose} className="text-slate-400 hover:text-slate-600 p-1 text-lg">✕</button>

@@ -4,6 +4,7 @@ import React, { useState, useEffect, useMemo } from "react";
 import dynamic from "next/dynamic";
 import { apiFetch, Location } from "../../lib/api";
 import { Icon } from "./Icon";
+import { useToast } from "./Toast";
 
 const BarcodeScanner = dynamic(
   () => import("./BarcodeScanner").then((mod) => mod.BarcodeScanner),
@@ -83,6 +84,7 @@ function getProximityLabel(position: number): { label: string; badgeClass: strin
 }
 
 export function Exit2DModal({ isOpen, onClose, token, onSuccess }: Props) {
+  const { showToast } = useToast();
   const [items, setItems] = useState<InventoryLocationItem[]>([]);
   const [loading, setLoading] = useState(false);
   const [selectedItemIds, setSelectedItemIds] = useState<Set<string>>(new Set());
@@ -253,7 +255,7 @@ export function Exit2DModal({ isOpen, onClose, token, onSuccess }: Props) {
 
   const handleProceedToPreReport = () => {
     if (sortedSelectedItems.length === 0) {
-      alert("Por favor selecciona al menos un producto o posición para dar salida.");
+      showToast({ message: "Por favor selecciona al menos un producto o posición para dar salida.", type: "warning" });
       return;
     }
     setStep("PRE_REPORT");
@@ -311,7 +313,7 @@ export function Exit2DModal({ isOpen, onClose, token, onSuccess }: Props) {
       setStep("SUCCESS");
       onSuccess();
     } catch (err: any) {
-      alert(err?.message || "Ocurrió un error al procesar la salida de mercadería.");
+      showToast({ message: err?.message || "Ocurrió un error al procesar la salida de mercadería.", type: "error" });
     } finally {
       setSubmitting(false);
     }
@@ -349,16 +351,21 @@ export function Exit2DModal({ isOpen, onClose, token, onSuccess }: Props) {
 
       {/* SCREEN MODAL DIALOG */}
       <div className="print:hidden fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 p-4 backdrop-blur-xs animate-fadeIn">
-        <div className="w-full max-w-4xl max-h-[92vh] flex flex-col rounded-3xl bg-white shadow-2xl border border-slate-200 overflow-hidden">
+        <div 
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="exit-2d-modal-title"
+          className="w-full max-w-4xl max-h-[92vh] flex flex-col rounded-xl bg-white dark:bg-slate-900 shadow-2xl border border-slate-200 dark:border-slate-800 dark:text-white overflow-hidden"
+        >
           {/* Header */}
-          <div className="flex items-center justify-between border-b px-4 sm:px-6 py-3.5 sm:py-4 bg-orange-50 text-orange-950">
+          <div className="flex items-center justify-between border-b dark:border-slate-800 px-4 sm:px-6 py-3.5 sm:py-4 bg-orange-50 dark:bg-slate-900 text-orange-950 dark:text-white">
             <div className="flex items-center gap-3">
-              <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-orange-600 text-white shadow-xs font-bold shrink-0">
+              <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-orange-600 text-white shadow-xs font-bold shrink-0">
                 <Icon name="arrow-left-right" className="h-5 w-5" />
               </span>
               <div>
-                <h3 className="font-black text-sm sm:text-base">Salida y Despacho de Productos (Layout 2D)</h3>
-                <p className="text-[11px] sm:text-xs text-orange-800">
+                <h3 id="exit-2d-modal-title" className="font-black text-sm sm:text-base">Salida y Despacho de Productos (Layout 2D)</h3>
+                <p className="text-[11px] sm:text-xs text-orange-800 dark:text-slate-400">
                   {step === "SELECT" && "Selección de posiciones con inventario · Orden de picking optimizado"}
                   {step === "PRE_REPORT" && "Verificación de ruta y orden de extracción antes de confirmar"}
                   {step === "SUCCESS" && "Reporte oficial emitido · Listo para imprimir orden de picking"}

@@ -14,6 +14,7 @@ import {
 } from "../../lib/api";
 import { useWmsRealtimeSync, notifyWmsDataChanged } from "../../lib/syncEvents";
 import { Icon } from "./Icon";
+import { useToast } from "./Toast";
 
 const BarcodeScanner = dynamic(
   () => import("./BarcodeScanner").then((mod) => mod.BarcodeScanner),
@@ -150,6 +151,7 @@ function MappingModalInner({
   inline = false,
   refreshKey,
 }: Props) {
+  const { showToast } = useToast();
   const [locationsList, setLocationsList] = useState<Location[]>(() => {
     if (Array.isArray(locations) && locations.length > 0) return locations;
     return getWarehouseSeedLocations();
@@ -660,7 +662,7 @@ function MappingModalInner({
     const targetQty = Number(editForm.physicalQuantity);
 
     if (targetQty > 0 && !targetProdId) {
-      alert("Por favor selecciona un producto para asignar a esta posición.");
+      showToast({ message: "Por favor selecciona un producto para asignar a esta posición.", type: "warning" });
       return;
     }
 
@@ -958,11 +960,11 @@ function MappingModalInner({
   // Add empty location to audit
   const handleAddEmptyLocation = () => {
     if (!addEmptyLocationId) {
-      alert("Selecciona la ubicación en rack.");
+      showToast({ message: "Selecciona la ubicación en rack.", type: "warning" });
       return;
     }
     if (!addEmptyProductId) {
-      alert("Selecciona el producto encontrado físicamente.");
+      showToast({ message: "Selecciona el producto encontrado físicamente.", type: "warning" });
       return;
     }
 
@@ -1241,7 +1243,7 @@ function MappingModalInner({
       onSuccess();
       loadData();
     } catch (err) {
-      alert(`Error al procesar el mapeo: ${(err as Error).message}`);
+      showToast({ message: `Error al procesar el mapeo: ${(err as Error).message}`, type: "error" });
     } finally {
       setSubmitting(false);
     }
@@ -1945,15 +1947,18 @@ function MappingModalInner({
               }
             }}
             className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 p-4 backdrop-blur-xs animate-fadeIn"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="audit-popup-title"
           >
-            <div className="w-full max-w-md sm:max-w-lg max-h-[92vh] flex flex-col rounded-3xl bg-white shadow-2xl border border-slate-200 overflow-hidden">
+            <div className="w-full max-w-md sm:max-w-lg max-h-[92vh] flex flex-col rounded-xl bg-white dark:bg-slate-900 shadow-2xl border border-slate-200 dark:border-slate-800 overflow-hidden">
               {/* Modal Header */}
-              <div className="flex items-center justify-between border-b px-6 py-4 bg-slate-50">
+              <div className="flex items-center justify-between border-b px-6 py-4 bg-slate-50 dark:bg-slate-800/80 dark:border-slate-700">
                 <div>
-                  <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-400">
                     Auditoría y Modificación
                   </span>
-                  <h4 className="text-xl font-black text-indigo-950 font-mono">
+                  <h4 id="audit-popup-title" className="text-xl font-black text-indigo-950 dark:text-white font-mono">
                     {activeSelectedItem.locationCode}
                   </h4>
                 </div>
@@ -2770,7 +2775,7 @@ function MappingModalInner({
 
     return (
       <>
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/70 p-2 sm:p-4 backdrop-blur-sm animate-fadeIn">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/70 p-2 sm:p-4 backdrop-blur-sm animate-fadeIn" role="dialog" aria-modal="true" aria-labelledby="mapping-modal-title">
           {renderContent()}
         </div>
         {scannerOpen && (

@@ -838,7 +838,7 @@ export default function BarcodeScanner({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/75 p-0 sm:p-4 backdrop-blur-xs">
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/75 p-0 sm:p-4 backdrop-blur-xs" role="dialog" aria-modal="true" aria-labelledby="barcode-scanner-title">
       <div className="bg-white dark:bg-slate-900 rounded-t-2xl sm:rounded-xl w-full max-w-lg shadow-2xl overflow-hidden animate-fadeIn border border-slate-200 dark:border-slate-800 flex flex-col max-h-[92vh]">
         {/* Mobile handle indicator */}
         <div className="pt-2 pb-1 flex justify-center sm:hidden bg-slate-900">
@@ -877,7 +877,7 @@ export default function BarcodeScanner({
           <div className="flex items-center gap-2.5">
             <Icon name="scan-barcode" size={20} className="text-orange-500" />
             <div>
-              <p className="font-semibold text-sm leading-tight">Escáner de Código & Inventario</p>
+              <h3 id="barcode-scanner-title" className="font-semibold text-sm leading-tight">Escáner de Código & Inventario</h3>
               <p className="text-xs text-slate-400">{label}</p>
             </div>
           </div>

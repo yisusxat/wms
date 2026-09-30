@@ -1,5 +1,24 @@
 "use client";
 import { useState } from "react";
+import {
+  Package,
+  RefreshCw,
+  AlertTriangle,
+  BarChart3,
+  FileText,
+  Wrench,
+  CheckCircle2,
+  XCircle,
+  Loader2,
+  Download,
+  Clipboard,
+  Search,
+  Save,
+  Send,
+  Clock,
+  Check
+} from "lucide-react";
+import { useToast } from "./Toast";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "https://wms-api-service.onrender.com";
 
@@ -15,34 +34,34 @@ interface Props {
   refreshKey?: number;
 }
 
-const REPORTS: { id: ReportType; label: string; description: string; icon: string; hasPeriod: boolean }[] = [
+const REPORTS: { id: ReportType; label: string; description: string; icon: React.ReactNode; hasPeriod: boolean }[] = [
   {
     id: "inventory",
     label: "Inventario Consolidado",
     description: "Stock actual con ubicaciones, cantidades disponibles y reservadas.",
-    icon: "📦",
+    icon: <Package className="h-6 w-6" />,
     hasPeriod: false,
   },
   {
     id: "movements",
     label: "Historial de Movimientos",
     description: "Todas las entradas, salidas, transferencias y ajustes en el período seleccionado.",
-    icon: "🔄",
+    icon: <RefreshCw className="h-6 w-6" />,
     hasPeriod: true,
   },
   {
     id: "break-risk",
     label: "Análisis de Quiebres de Stock",
     description: "SKUs clasificados por días de cobertura con alerta de riesgo crítico.",
-    icon: "🚨",
+    icon: <AlertTriangle className="h-6 w-6" />,
     hasPeriod: false,
   },
 ];
 
-const FORMAT_LABELS: Record<ReportFormat, { label: string; icon: string; description: string }> = {
-  xlsx: { label: "Excel", icon: "📊", description: ".xlsx con estilos corporativos" },
-  csv: { label: "CSV", icon: "📄", description: "UTF-8 BOM — compatible con Excel" },
-  json: { label: "JSON", icon: "🔧", description: "Para integraciones con ERPs" },
+const FORMAT_LABELS: Record<ReportFormat, { label: string; icon: React.ReactNode; description: string }> = {
+  xlsx: { label: "Excel", icon: <BarChart3 className="h-4 w-4" />, description: ".xlsx con estilos corporativos" },
+  csv: { label: "CSV", icon: <FileText className="h-4 w-4" />, description: "UTF-8 BOM — compatible con Excel" },
+  json: { label: "JSON", icon: <Wrench className="h-4 w-4" />, description: "Para integraciones con ERPs" },
 };
 
 interface DownloadState {
@@ -71,6 +90,7 @@ interface DryRunResponse {
 }
 
 export default function ReportsPanel({ token, organizationId, onDataChanged }: Props) {
+  const { showToast } = useToast();
   const [subTab, setSubTab] = useState<PanelSubTab>("reports");
   const [selectedFormat, setSelectedFormat] = useState<ReportFormat>("xlsx");
   const [selectedPeriod, setSelectedPeriod] = useState<Period>("30d");
@@ -88,7 +108,7 @@ export default function ReportsPanel({ token, organizationId, onDataChanged }: P
   const [scheduleFormat, setScheduleFormat] = useState<ReportFormat>("xlsx");
   const [scheduleEmail, setScheduleEmail] = useState("yisusxat@gmail.com");
   const [scheduleSending, setScheduleSending] = useState(false);
-  const [scheduleStatus, setScheduleStatus] = useState<string | null>(null);
+  const [scheduleStatus, setScheduleStatus] = useState<{ message: React.ReactNode; type: "success" | "error" } | null>(null);
 
   const isDownloading = (reportId: ReportType, format: ReportFormat) =>
     downloads.some((d) => d.reportId === reportId && d.format === format && d.status === "loading");
@@ -167,7 +187,7 @@ export default function ReportsPanel({ token, organizationId, onDataChanged }: P
   const handleDryRun = async () => {
     const items = parseBulkItems(bulkRawText);
     if (items.length === 0) {
-      alert("Por favor ingresa al menos una fila con formato: SKU, UBICACION, CANTIDAD");
+      showToast({ message: "Por favor ingresa al menos una fila con formato: SKU, UBICACION, CANTIDAD", type: "error" });
       return;
     }
 
@@ -183,7 +203,7 @@ export default function ReportsPanel({ token, organizationId, onDataChanged }: P
       const data: DryRunResponse = await res.json();
       setDryRunData(data);
     } catch (err) {
-      alert((err as Error).message);
+      showToast({ message: (err as Error).message, type: "error" });
     } finally {
       setBulkLoading(false);
     }
@@ -207,7 +227,7 @@ export default function ReportsPanel({ token, organizationId, onDataChanged }: P
       setBulkRawText("");
       onDataChanged?.();
     } catch (err) {
-      alert((err as Error).message);
+      showToast({ message: (err as Error).message, type: "error" });
     } finally {
       setBulkLoading(false);
     }
@@ -229,9 +249,15 @@ export default function ReportsPanel({ token, organizationId, onDataChanged }: P
       });
       if (!res.ok) throw new Error(await res.text());
       const data = await res.json();
-      setScheduleStatus(`✅ Despachado con éxito a ${scheduleEmail} (ID: ${data.emailId})`);
+      setScheduleStatus({
+        message: <span className="flex items-center gap-1.5"><CheckCircle2 className="h-4 w-4 text-emerald-600 dark:text-emerald-400" /> Despachado con éxito a {scheduleEmail} (ID: {data.emailId})</span>,
+        type: "success"
+      });
     } catch (err) {
-      setScheduleStatus(`⚠️ Error: ${(err as Error).message}`);
+      setScheduleStatus({
+        message: <span className="flex items-center gap-1.5"><AlertTriangle className="h-4 w-4 text-red-600 dark:text-red-400" /> Error: {(err as Error).message}</span>,
+        type: "error"
+      });
     } finally {
       setScheduleSending(false);
     }
@@ -242,37 +268,37 @@ export default function ReportsPanel({ token, organizationId, onDataChanged }: P
       {/* Header */}
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div>
-          <h2 className="text-xl font-bold text-slate-800">📑 Centro de Reportes & Operaciones Masivas</h2>
-          <p className="text-sm text-slate-500">
+          <h2 className="text-xl font-bold text-slate-800 dark:text-white"><span className="flex items-center gap-2"><FileText className="h-5 w-5" /> Centro de Reportes & Operaciones Masivas</span></h2>
+          <p className="text-sm text-slate-500 dark:text-slate-400">
             Descarga multiformato, carga masiva con dry-run y automatización con Resend
           </p>
         </div>
 
         {/* Sub-tab pills */}
-        <div className="flex bg-slate-100 p-1 rounded-xl overflow-x-auto max-w-full">
+        <div className="flex bg-slate-100 dark:bg-slate-800 p-1 rounded-xl overflow-x-auto max-w-full">
           <button
             onClick={() => setSubTab("reports")}
             className={`px-3 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition ${
-              subTab === "reports" ? "bg-white text-slate-800 shadow-xs" : "text-slate-500"
+              subTab === "reports" ? "bg-white dark:bg-slate-900 text-slate-800 dark:text-white shadow-xs" : "text-slate-500 dark:text-slate-400"
             }`}
           >
-            📊 Reportes Multiformato
+            <span className="flex items-center gap-1.5"><BarChart3 className="h-4 w-4" /> Reportes Multiformato</span>
           </button>
           <button
             onClick={() => setSubTab("bulk")}
             className={`px-3 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition ${
-              subTab === "bulk" ? "bg-white text-slate-800 shadow-xs" : "text-slate-500"
+              subTab === "bulk" ? "bg-white dark:bg-slate-900 text-slate-800 dark:text-white shadow-xs" : "text-slate-500 dark:text-slate-400"
             }`}
           >
-            📦 Carga Masiva (Dry-Run)
+            <span className="flex items-center gap-1.5"><Package className="h-4 w-4" /> Carga Masiva (Dry-Run)</span>
           </button>
           <button
             onClick={() => setSubTab("schedule")}
             className={`px-3 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition ${
-              subTab === "schedule" ? "bg-white text-slate-800 shadow-xs" : "text-slate-500"
+              subTab === "schedule" ? "bg-white dark:bg-slate-900 text-slate-800 dark:text-white shadow-xs" : "text-slate-500 dark:text-slate-400"
             }`}
           >
-            ⏰ Envíos Programados
+            <span className="flex items-center gap-1.5"><Clock className="h-4 w-4" /> Envíos Programados</span>
           </button>
         </div>
       </div>
@@ -280,11 +306,11 @@ export default function ReportsPanel({ token, organizationId, onDataChanged }: P
       {/* 1. REPORTS MULTIFORMAT SUBTAB */}
       {subTab === "reports" && (
         <div className="space-y-4">
-          <div className="bg-white rounded-xl border border-slate-200 p-4 shadow-sm">
-            <h3 className="font-semibold text-slate-700 mb-3 text-sm">Configuración de descarga</h3>
+          <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 p-4 shadow-sm">
+            <h3 className="font-semibold text-slate-700 dark:text-slate-300 mb-3 text-sm">Configuración de descarga</h3>
             <div className="flex flex-wrap gap-3">
               <div>
-                <label className="block text-xs font-medium text-slate-500 mb-1.5">Formato</label>
+                <label className="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1.5">Formato</label>
                 <div className="flex gap-2">
                   {(Object.keys(FORMAT_LABELS) as ReportFormat[]).map((fmt) => {
                     const { label, icon } = FORMAT_LABELS[fmt];
@@ -294,8 +320,8 @@ export default function ReportsPanel({ token, organizationId, onDataChanged }: P
                         onClick={() => setSelectedFormat(fmt)}
                         className={`flex items-center gap-1.5 px-3 py-2 rounded-lg border text-sm font-medium transition-all ${
                           selectedFormat === fmt
-                            ? "border-blue-500 bg-blue-50 text-blue-700"
-                            : "border-slate-200 bg-white text-slate-600 hover:border-slate-300"
+                            ? "border-blue-500 bg-blue-50 dark:bg-blue-900/30 text-blue-700"
+                            : "border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-300 hover:border-slate-300"
                         }`}
                       >
                         {icon} {label}
@@ -307,7 +333,7 @@ export default function ReportsPanel({ token, organizationId, onDataChanged }: P
               </div>
 
               <div>
-                <label className="block text-xs font-medium text-slate-500 mb-1.5">Período (movimientos)</label>
+                <label className="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1.5">Período (movimientos)</label>
                 <div className="flex gap-2">
                   {(["7d", "30d", "all"] as Period[]).map((p) => (
                     <button
@@ -315,8 +341,8 @@ export default function ReportsPanel({ token, organizationId, onDataChanged }: P
                       onClick={() => setSelectedPeriod(p)}
                       className={`px-3 py-2 rounded-lg border text-sm font-medium transition-all ${
                         selectedPeriod === p
-                          ? "border-blue-500 bg-blue-50 text-blue-700"
-                          : "border-slate-200 bg-white text-slate-600 hover:border-slate-300"
+                          ? "border-blue-500 bg-blue-50 dark:bg-blue-900/30 text-blue-700"
+                          : "border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-300 hover:border-slate-300"
                       }`}
                     >
                       {p === "7d" ? "7 días" : p === "30d" ? "30 días" : "Todo"}
@@ -335,19 +361,19 @@ export default function ReportsPanel({ token, organizationId, onDataChanged }: P
               return (
                 <div
                   key={report.id}
-                  className="bg-white rounded-xl border border-slate-200 p-4 sm:p-5 shadow-sm flex flex-col sm:flex-row sm:items-start gap-3 sm:gap-4"
+                  className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 p-4 sm:p-5 shadow-sm flex flex-col sm:flex-row sm:items-start gap-3 sm:gap-4"
                 >
                   <div className="flex items-center gap-3 sm:block">
                     <div className="text-3xl sm:text-4xl shrink-0">{report.icon}</div>
-                    <h3 className="font-semibold text-slate-800 sm:hidden">{report.label}</h3>
+                    <h3 className="font-semibold text-slate-800 dark:text-white sm:hidden">{report.label}</h3>
                   </div>
                   <div className="flex-1 min-w-0">
-                    <h3 className="hidden sm:block font-semibold text-slate-800 mb-1">{report.label}</h3>
-                    <p className="text-xs sm:text-sm text-slate-500 mb-2 sm:mb-3">{report.description}</p>
+                    <h3 className="hidden sm:block font-semibold text-slate-800 dark:text-white mb-1">{report.label}</h3>
+                    <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400 mb-2 sm:mb-3">{report.description}</p>
                     {report.hasPeriod && (
                       <p className="text-xs text-slate-400 mb-2">
                         Período:{" "}
-                        <span className="font-medium text-slate-600">
+                        <span className="font-medium text-slate-600 dark:text-slate-300">
                           {selectedPeriod === "7d"
                             ? "Últimos 7 días"
                             : selectedPeriod === "30d"
@@ -356,25 +382,25 @@ export default function ReportsPanel({ token, organizationId, onDataChanged }: P
                         </span>
                       </p>
                     )}
-                    {state?.status === "error" && <p className="text-xs text-red-600 mb-2">⚠️ {state.error}</p>}
-                    {state?.status === "done" && <p className="text-xs text-green-600 mb-2">✅ Descarga iniciada</p>}
+                    {state?.status === "error" && <p className="text-xs text-red-600 dark:text-red-400 mb-2"><span className="flex items-center gap-1.5"><AlertTriangle className="h-4 w-4 text-red-600 dark:text-red-400" /> {state.error}</span></p>}
+                    {state?.status === "done" && <p className="text-xs text-green-600 mb-2"><span className="flex items-center gap-1.5"><CheckCircle2 className="h-4 w-4 text-emerald-600 dark:text-emerald-400" /> Descarga iniciada</span></p>}
                   </div>
                   <button
                     onClick={() => downloadReport(report.id)}
                     disabled={isLoading}
                     className={`w-full sm:w-auto shrink-0 flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold transition-all ${
                       isLoading
-                        ? "bg-slate-100 text-slate-400 cursor-not-allowed"
+                        ? "bg-slate-100 dark:bg-slate-800 text-slate-400 cursor-not-allowed"
                         : "bg-blue-600 hover:bg-blue-700 text-white shadow-sm active:scale-95"
                     }`}
                   >
                     {isLoading ? (
                       <>
-                        <span className="animate-spin">⏳</span> Generando...
+                        <Loader2 className="animate-spin h-4 w-4" /> Generando...
                       </>
                     ) : (
                       <>
-                        ⬇️ {FORMAT_LABELS[selectedFormat].icon} {FORMAT_LABELS[selectedFormat].label}
+                        <Download className="h-4 w-4" /> {FORMAT_LABELS[selectedFormat].icon} {FORMAT_LABELS[selectedFormat].label}
                       </>
                     )}
                   </button>
@@ -388,11 +414,11 @@ export default function ReportsPanel({ token, organizationId, onDataChanged }: P
       {/* 2. BULK IMPORT (DRY-RUN) SUBTAB */}
       {subTab === "bulk" && (
         <div className="space-y-4">
-          <div className="bg-white rounded-xl border border-slate-200 p-5 shadow-sm space-y-4">
+          <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 p-5 shadow-sm space-y-4">
             <div className="flex items-center justify-between">
               <div>
-                <h3 className="font-bold text-slate-800">Carga Masiva con Dry-Run (Validación Previa)</h3>
-                <p className="text-xs text-slate-500 mt-0.5">
+                <h3 className="font-bold text-slate-800 dark:text-white">Carga Masiva con Dry-Run (Validación Previa)</h3>
+                <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
                   Pega filas en formato CSV o separado por tabulación (SKU, UBICACIÓN, CANTIDAD).
                 </p>
               </div>
@@ -403,15 +429,15 @@ export default function ReportsPanel({ token, organizationId, onDataChanged }: P
                     "SKU,UBICACION,CANTIDAD\nSKU-001,A-A-01-01,10\nSKU-002,A-A-01-02,25\nSKU-003,A-B-02-01,5"
                   )
                 }
-                className="text-xs font-semibold text-blue-600 hover:text-blue-800 bg-blue-50 px-3 py-1.5 rounded-lg border border-blue-200"
+                className="text-xs font-semibold text-blue-600 hover:text-blue-800 bg-blue-50 dark:bg-blue-900/30 px-3 py-1.5 rounded-lg border border-blue-200 dark:border-blue-800/50"
               >
-                📋 Cargar Ejemplo
+                <span className="flex items-center gap-1.5"><Clipboard className="h-4 w-4" /> Cargar Ejemplo</span>
               </button>
             </div>
 
             <textarea
               rows={6}
-              className="w-full rounded-xl border p-3 font-mono text-xs focus:ring-2 focus:ring-blue-500"
+              className="w-full rounded-xl border p-3 font-mono text-xs focus:ring-2 focus:ring-blue-500 dark:bg-slate-800 dark:border-slate-600 dark:text-white border-slate-200 dark:border-slate-800"
               placeholder="SKU,UBICACION,CANTIDAD&#10;SKU-001,A-A-01-01,10&#10;SKU-002,A-A-01-02,25"
               value={bulkRawText}
               onChange={(e) => setBulkRawText(e.target.value)}
@@ -419,8 +445,8 @@ export default function ReportsPanel({ token, organizationId, onDataChanged }: P
 
             <div className="flex flex-wrap items-center justify-between gap-3 pt-2">
               <div className="flex items-center gap-3">
-                <span className="text-xs font-medium text-slate-600">Modo de aplicación:</span>
-                <label className="flex items-center gap-1.5 text-xs text-slate-700 cursor-pointer">
+                <span className="text-xs font-medium text-slate-600 dark:text-slate-300">Modo de aplicación:</span>
+                <label className="flex items-center gap-1.5 text-xs text-slate-700 dark:text-slate-300 cursor-pointer">
                   <input
                     type="radio"
                     name="bulkMode"
@@ -430,7 +456,7 @@ export default function ReportsPanel({ token, organizationId, onDataChanged }: P
                   />
                   Reabastecimiento (+ suma entradas)
                 </label>
-                <label className="flex items-center gap-1.5 text-xs text-slate-700 cursor-pointer">
+                <label className="flex items-center gap-1.5 text-xs text-slate-700 dark:text-slate-300 cursor-pointer">
                   <input
                     type="radio"
                     name="bulkMode"
@@ -447,13 +473,13 @@ export default function ReportsPanel({ token, organizationId, onDataChanged }: P
                 disabled={bulkLoading || !bulkRawText.trim()}
                 className="bg-blue-600 hover:bg-blue-700 text-white font-semibold text-sm px-5 py-2.5 rounded-xl shadow disabled:opacity-50"
               >
-                {bulkLoading ? "Analizando..." : "🔍 Fase 1: Validar con Dry-Run"}
+                {bulkLoading ? "Analizando..." : <span className="flex items-center gap-1.5 justify-center"><Search className="h-4 w-4" /> Fase 1: Validar con Dry-Run</span>}
               </button>
             </div>
 
             {applyResult && (
-              <div className="rounded-xl bg-emerald-50 border border-emerald-300 p-4 text-emerald-800 text-sm">
-                🎉 Carga completada con éxito: <strong>{applyResult.applied}</strong> filas aplicadas transaccionalmente
+              <div className="rounded-xl bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-300 p-4 text-emerald-800 dark:text-emerald-300 text-sm">
+                Carga completada con éxito: <strong>{applyResult.applied}</strong> filas aplicadas transaccionalmente
                 ({applyResult.skipped} descartadas).
               </div>
             )}
@@ -461,14 +487,14 @@ export default function ReportsPanel({ token, organizationId, onDataChanged }: P
 
           {/* Dry Run Interactive Table */}
           {dryRunData && (
-            <div className="bg-white rounded-xl border border-slate-200 p-5 shadow-sm space-y-4">
+            <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 p-5 shadow-sm space-y-4">
               <div className="flex items-center justify-between">
                 <div>
-                  <h4 className="font-bold text-slate-800 text-sm">Resultado de la Simulación en Memoria</h4>
-                  <p className="text-xs text-slate-500">
+                  <h4 className="font-bold text-slate-800 dark:text-white text-sm">Resultado de la Simulación en Memoria</h4>
+                  <p className="text-xs text-slate-500 dark:text-slate-400">
                     Total: {dryRunData.totalRows} | Válidas:{" "}
-                    <span className="text-emerald-600 font-bold">{dryRunData.validRows}</span> | Errores:{" "}
-                    <span className="text-red-600 font-bold">{dryRunData.invalidRows}</span>
+                    <span className="text-emerald-600 dark:text-emerald-400 font-bold">{dryRunData.validRows}</span> | Errores:{" "}
+                    <span className="text-red-600 dark:text-red-400 font-bold">{dryRunData.invalidRows}</span>
                   </p>
                 </div>
 
@@ -477,13 +503,13 @@ export default function ReportsPanel({ token, organizationId, onDataChanged }: P
                   disabled={bulkLoading || dryRunData.validRows === 0}
                   className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-sm px-5 py-2.5 rounded-xl shadow disabled:opacity-50"
                 >
-                  {bulkLoading ? "Aplicando..." : `💾 Fase 2: Aplicar ${dryRunData.validRows} Filas a Base de Datos`}
+                  {bulkLoading ? "Aplicando..." : <span className="flex items-center gap-1.5 justify-center"><Save className="h-4 w-4" /> Fase 2: Aplicar {dryRunData.validRows} Filas a Base de Datos</span>}
                 </button>
               </div>
 
               <div className="overflow-x-auto border rounded-xl">
                 <table className="w-full text-left text-xs">
-                  <thead className="bg-slate-50 text-slate-600 uppercase font-semibold">
+                  <thead className="bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-300 uppercase font-semibold">
                     <tr>
                       <th className="p-2.5">Fila</th>
                       <th className="p-2.5">Estado</th>
@@ -495,27 +521,27 @@ export default function ReportsPanel({ token, organizationId, onDataChanged }: P
                   </thead>
                   <tbody className="divide-y divide-slate-100">
                     {dryRunData.rows.map((row) => (
-                      <tr key={row.row} className={row.valid ? "bg-white" : "bg-red-50/70"}>
+                      <tr key={row.row} className={row.valid ? "bg-white dark:bg-slate-900" : "bg-red-50 dark:bg-red-900/20/70"}>
                         <td className="p-2.5 font-mono text-slate-400">#{row.row}</td>
                         <td className="p-2.5">
                           {row.valid ? (
-                            <span className="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 font-semibold">
-                              ✓ Válida
+                            <span className="px-2 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-900/40 text-emerald-800 dark:text-emerald-300 font-semibold">
+                              <span className="flex items-center gap-1"><Check className="h-3 w-3" /> Válida</span>
                             </span>
                           ) : (
-                            <span className="px-2 py-0.5 rounded-full bg-red-100 text-red-800 font-semibold">
-                              ⚠️ Error
+                            <span className="px-2 py-0.5 rounded-full bg-red-100 dark:bg-red-900/40 text-red-800 dark:text-red-300 font-semibold flex items-center gap-1 w-fit">
+                              <AlertTriangle className="h-3 w-3" /> Error
                             </span>
                           )}
                         </td>
-                        <td className="p-2.5 font-mono font-bold text-slate-800">{row.sku}</td>
-                        <td className="p-2.5 font-mono text-slate-700">{row.locationCode}</td>
+                        <td className="p-2.5 font-mono font-bold text-slate-800 dark:text-white">{row.sku}</td>
+                        <td className="p-2.5 font-mono text-slate-700 dark:text-slate-300">{row.locationCode}</td>
                         <td className="p-2.5 font-semibold text-right">{row.quantity}</td>
-                        <td className="p-2.5 text-slate-500">
+                        <td className="p-2.5 text-slate-500 dark:text-slate-400">
                           {row.valid ? (
                             <span>{row.productName} (Stock previo: {row.currentStock} u)</span>
                           ) : (
-                            <span className="text-red-600 font-medium">{row.errors.join(", ")}</span>
+                            <span className="text-red-600 dark:text-red-400 font-medium">{row.errors.join(", ")}</span>
                           )}
                         </td>
                       </tr>
@@ -530,46 +556,46 @@ export default function ReportsPanel({ token, organizationId, onDataChanged }: P
 
       {/* 3. SCHEDULED REPORTS SUBTAB */}
       {subTab === "schedule" && (
-        <div className="bg-white rounded-xl border border-slate-200 p-5 shadow-sm space-y-5">
+        <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 p-5 shadow-sm space-y-5">
           <div>
-            <h3 className="font-bold text-slate-800">⏰ Reportes Automatizados Programados (Resend)</h3>
-            <p className="text-xs text-slate-500 mt-0.5">
+            <h3 className="font-bold text-slate-800 dark:text-white"><span className="flex items-center gap-2"><Clock className="h-5 w-5" /> Reportes Automatizados Programados (Resend)</span></h3>
+            <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
               Configura envíos periódicos con archivo adjunto directo a tu correo electrónico.
             </p>
           </div>
 
           <div className="grid gap-4 sm:grid-cols-3">
             <div>
-              <label className="block text-xs font-semibold text-slate-600 mb-1">Tipo de Reporte</label>
+              <label className="block text-xs font-semibold text-slate-600 dark:text-slate-300 mb-1">Tipo de Reporte</label>
               <select
-                className="w-full rounded-lg border p-2.5 text-sm"
+                className="w-full rounded-lg border p-2.5 text-sm dark:bg-slate-800 dark:border-slate-600 dark:text-white border-slate-200 dark:border-slate-800"
                 value={scheduleType}
                 onChange={(e) => setScheduleType(e.target.value as ReportType)}
               >
-                <option value="inventory">📦 Inventario Consolidado</option>
-                <option value="movements">🔄 Movimientos (30 días)</option>
-                <option value="break-risk">🚨 Riesgo de Quiebre</option>
+                <option value="inventory">Inventario Consolidado</option>
+                <option value="movements">Movimientos (30 días)</option>
+                <option value="break-risk">Riesgo de Quiebre</option>
               </select>
             </div>
 
             <div>
-              <label className="block text-xs font-semibold text-slate-600 mb-1">Formato Adjunto</label>
+              <label className="block text-xs font-semibold text-slate-600 dark:text-slate-300 mb-1">Formato Adjunto</label>
               <select
-                className="w-full rounded-lg border p-2.5 text-sm"
+                className="w-full rounded-lg border p-2.5 text-sm dark:bg-slate-800 dark:border-slate-600 dark:text-white border-slate-200 dark:border-slate-800"
                 value={scheduleFormat}
                 onChange={(e) => setScheduleFormat(e.target.value as ReportFormat)}
               >
-                <option value="xlsx">📊 Excel (.xlsx)</option>
-                <option value="csv">📄 CSV UTF-8 BOM (.csv)</option>
-                <option value="json">🔧 JSON con metadatos (.json)</option>
+                <option value="xlsx">Excel (.xlsx)</option>
+                <option value="csv">CSV UTF-8 BOM (.csv)</option>
+                <option value="json">JSON con metadatos (.json)</option>
               </select>
             </div>
 
             <div>
-              <label className="block text-xs font-semibold text-slate-600 mb-1">Correo Destinatario</label>
+              <label className="block text-xs font-semibold text-slate-600 dark:text-slate-300 mb-1">Correo Destinatario</label>
               <input
                 type="email"
-                className="w-full rounded-lg border p-2.5 text-sm"
+                className="w-full rounded-lg border p-2.5 text-sm dark:bg-slate-800 dark:border-slate-600 dark:text-white border-slate-200 dark:border-slate-800"
                 value={scheduleEmail}
                 onChange={(e) => setScheduleEmail(e.target.value)}
               />
@@ -585,19 +611,19 @@ export default function ReportsPanel({ token, organizationId, onDataChanged }: P
               disabled={scheduleSending || !scheduleEmail}
               className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white font-semibold text-sm px-5 py-2.5 rounded-xl shadow disabled:opacity-50"
             >
-              {scheduleSending ? "Enviando adjunto..." : "✉️ Despachar Reporte de Prueba"}
+              {scheduleSending ? "Enviando adjunto..." : <span className="flex items-center gap-1.5 justify-center"><Send className="h-4 w-4" /> Despachar Reporte de Prueba</span>}
             </button>
           </div>
 
           {scheduleStatus && (
             <div
               className={`p-3 rounded-lg text-xs font-medium ${
-                scheduleStatus.startsWith("✅")
-                  ? "bg-emerald-50 text-emerald-800 border border-emerald-200"
-                  : "bg-red-50 text-red-800 border border-red-200"
+                scheduleStatus.type === "success"
+                  ? "bg-emerald-50 dark:bg-emerald-900/20 text-emerald-800 dark:text-emerald-300 border border-emerald-200"
+                  : "bg-red-50 dark:bg-red-900/20 text-red-800 dark:text-red-300 border border-red-200"
               }`}
             >
-              {scheduleStatus}
+              {scheduleStatus.message}
             </div>
           )}
         </div>

@@ -49,24 +49,29 @@ export function ForgotPasswordModal({ isOpen, onClose, apiBaseUrl = 'http://loca
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 p-3 sm:p-4 backdrop-blur-xs">
-      <div className="w-full max-w-md max-h-[92vh] sm:max-h-[90vh] overflow-y-auto rounded-2xl bg-white p-4 sm:p-6 shadow-xl border border-slate-100">
-        <div className="flex items-start justify-between border-b border-slate-100 pb-3">
+    <div 
+      className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 p-3 sm:p-4 backdrop-blur-xs"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="forgot-password-title"
+    >
+      <div className="w-full max-w-md max-h-[92vh] sm:max-h-[90vh] overflow-y-auto rounded-xl bg-white dark:bg-slate-900 p-4 sm:p-6 shadow-xl border border-slate-200 dark:border-slate-800">
+        <div className="flex items-start justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
           <div>
-            <h3 className="text-base sm:text-lg font-bold text-slate-900">Restablecer Contraseña</h3>
-            <p className="text-[11px] sm:text-xs text-slate-500">Recibe un enlace seguro en tu correo electrónico</p>
+            <h3 id="forgot-password-title" className="text-base sm:text-lg font-bold text-slate-900 dark:text-white">Restablecer Contraseña</h3>
+            <p className="text-[11px] sm:text-xs text-slate-500 dark:text-slate-400">Recibe un enlace seguro en tu correo electrónico</p>
           </div>
-          <button onClick={handleClose} className="text-slate-400 hover:text-slate-600 p-1 text-lg">✕</button>
+          <button onClick={handleClose} className="text-slate-400 hover:text-slate-600 dark:text-slate-500 dark:hover:text-slate-300 p-1 text-lg">✕</button>
         </div>
 
         {sent ? (
           <div className="py-6 text-center space-y-3">
-            <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-emerald-100 text-emerald-600 text-2xl font-bold">
+            <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-emerald-100 dark:bg-emerald-900/20 text-emerald-600 dark:text-emerald-400 text-2xl font-bold">
               ✓
             </div>
-            <h4 className="font-semibold text-slate-900">Correo enviado con éxito</h4>
-            <p className="text-xs text-slate-600 max-w-xs mx-auto">
-              Si el correo <strong>{email}</strong> está registrado, hemos despachado las instrucciones para restablecer tu clave mediante nuestro servicio transaccional.
+            <h4 className="font-semibold text-slate-900 dark:text-white">Correo enviado con éxito</h4>
+            <p className="text-xs text-slate-600 dark:text-slate-300 max-w-xs mx-auto">
+              Si el correo <strong className="dark:text-white">{email}</strong> está registrado, hemos despachado las instrucciones para restablecer tu clave mediante nuestro servicio transaccional.
             </p>
             <button
               onClick={handleClose}
@@ -77,12 +82,12 @@ export function ForgotPasswordModal({ isOpen, onClose, apiBaseUrl = 'http://loca
           </div>
         ) : (
           <form onSubmit={handleSubmit} className="mt-5 space-y-4">
-            <p className="text-xs text-slate-600 leading-relaxed">
+            <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed">
               Ingresa el correo asociado a tu cuenta. Te enviaremos un enlace con validez de 30 minutos para crear una nueva contraseña.
             </p>
 
             <div>
-              <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1">
+              <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-1">
                 Correo Electrónico
               </label>
               <input
@@ -91,17 +96,17 @@ export function ForgotPasswordModal({ isOpen, onClose, apiBaseUrl = 'http://loca
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 placeholder="tu.correo@empresa.com"
-                className="w-full rounded-lg border border-slate-300 p-2.5 text-sm focus:border-blue-600 focus:outline-hidden"
+                className="w-full rounded-lg border border-slate-300 dark:border-slate-600 p-2.5 text-sm focus:border-blue-600 dark:focus:border-blue-500 focus:outline-hidden bg-white dark:bg-slate-800 text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-slate-500"
               />
             </div>
 
-            {error && <p className="rounded-lg bg-red-50 p-2.5 text-xs text-red-700">{error}</p>}
+            {error && <p className="rounded-lg bg-red-50 dark:bg-red-900/20 p-2.5 text-xs text-red-700 dark:text-red-400">{error}</p>}
 
             <div className="flex flex-col-reverse sm:flex-row gap-2 pt-2">
               <button
                 type="button"
                 onClick={handleClose}
-                className="w-full sm:flex-1 rounded-lg border border-slate-300 py-2.5 text-sm font-medium text-slate-700 hover:bg-slate-50 transition text-center"
+                className="w-full sm:flex-1 rounded-lg border border-slate-300 dark:border-slate-600 py-2.5 text-sm font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 transition text-center"
               >
                 Cancelar
               </button>

@@ -9,6 +9,7 @@ import { PickingModal } from "./PickingModal";
 import { queueOfflineMovement, getPendingMovements, syncOfflineMovements, PendingMovement } from "../../lib/offlineSync";
 import { playSuccessSound, playErrorSound, playClickSound } from "../../lib/audioCues";
 import Icon from "./Icon";
+import { useToast } from './Toast';
 
 type Mode = "entry" | "exit" | "transfer" | "adjustment";
 
@@ -38,6 +39,7 @@ export function MovementsPanel({
   onDataChanged?: () => void;
   refreshKey?: number;
 }) {
+  const { showToast } = useToast();
   const [mode, setMode] = useState<Mode>("entry");
   const [isGuidedMode, setIsGuidedMode] = useState(false);
   const [guidedStep, setGuidedStep] = useState<1 | 2 | 3>(1);
@@ -209,7 +211,7 @@ export function MovementsPanel({
         await loadMovements();
         notifyWmsDataChanged({ type: "movement", action: "sync" });
         onDataChanged?.();
-        alert(`✅ Sincronizados ${result.synced} movimientos pendientes de la cola offline.`);
+        showToast({ message: `Sincronizados ${result.synced} movimientos pendientes de la cola offline.`, type: 'success' });
       }
       const updated = await getPendingMovements();
       setPendingOffline(updated);
@@ -289,7 +291,7 @@ export function MovementsPanel({
         });
         const updated = await getPendingMovements();
         setPendingOffline(updated);
-        setSuccessMsg("📶 Estás sin conexión: el movimiento fue guardado en IndexedDB local y se sincronizará automáticamente al recuperar señal.");
+        setSuccessMsg("Estás sin conexión: el movimiento fue guardado en IndexedDB local y se sincronizará automáticamente al recuperar señal.");
       } catch (err: any) {
         setLocalError("Error guardando en cola offline: " + err.message);
       } finally {
@@ -326,7 +328,7 @@ export function MovementsPanel({
           ? `Transferencia confirmada: ${form.quantity} unidades de ${prodName} movidas a ${locationLabel(form.destinationLocationId)}`
           : `Ajuste de inventario aplicado (${form.delta > 0 ? "+" : ""}${form.delta}) en ${locCode}`;
 
-      setSuccessMsg(`✅ ${actionText}.`);
+      setSuccessMsg(`${actionText}.`);
       playSuccessSound();
       if (isGuidedMode) setGuidedStep(1);
 
@@ -350,7 +352,7 @@ export function MovementsPanel({
           });
           const updated = await getPendingMovements();
           setPendingOffline(updated);
-          setSuccessMsg("📶 Conexión perdida: el movimiento se guardó localmente en la cola offline y se sincronizará al reconectar.");
+          setSuccessMsg("Conexión perdida: el movimiento se guardó localmente en la cola offline y se sincronizará al reconectar.");
         } catch {
           setLocalError("Error al encolar movimiento offline.");
         }
@@ -373,7 +375,7 @@ export function MovementsPanel({
         setForm({ ...form, productId: match.id });
         setScannerTarget(null);
       } else {
-        alert(`No se encontró producto con SKU/código: ${code}`);
+        showToast({ message: `No se encontró producto con SKU/código: ${code}`, type: 'warning' });
       }
     } else if (scannerTarget === "location") {
       const match = locations.find((l) => l.code.toUpperCase() === code.toUpperCase());
@@ -381,7 +383,7 @@ export function MovementsPanel({
         setForm({ ...form, locationId: match.id });
         setScannerTarget(null);
       } else {
-        alert(`No se encontró ubicación con código: ${code}`);
+        showToast({ message: `No se encontró ubicación con código: ${code}`, type: 'warning' });
       }
     }
   };
@@ -684,7 +686,7 @@ export function MovementsPanel({
       )}
 
       {/* Main Movement Form */}
-      <form onSubmit={submit} className="space-y-4 rounded-xl bg-white p-5 shadow-sm border border-slate-100">
+      <form onSubmit={submit} className="space-y-4 rounded-xl bg-white p-5 shadow-sm border border-slate-100 dark:bg-slate-900 dark:border-slate-800">
         {/* Stepper Progress Bar (Only visible in Guided Mode) */}
         {isGuidedMode && (
           <div className="border-b border-slate-100 pb-4 mb-4">
@@ -761,13 +763,15 @@ export function MovementsPanel({
                 type="button"
                 onClick={() => setScannerTarget("product")}
                 className="text-xs font-semibold text-blue-600 hover:text-blue-800 flex items-center gap-1"
+                aria-label="Escanear código de barras"
               >
                 📷 Escanear SKU/QR
               </button>
             </div>
             <select
               required
-              className="w-full rounded-lg border p-3 text-sm"
+              className="w-full rounded-lg border p-3 text-sm dark:bg-slate-800 dark:border-slate-600 dark:text-white"
+              aria-label="Seleccionar producto"
               value={form.productId}
               onChange={(e) => setForm({ ...form, productId: e.target.value })}
             >
@@ -789,13 +793,15 @@ export function MovementsPanel({
                 type="button"
                 onClick={() => setScannerTarget("location")}
                 className="text-xs font-semibold text-blue-600 hover:text-blue-800 flex items-center gap-1"
+                aria-label="Escanear código de barras"
               >
                 📷 Escanear Ubicación
               </button>
             </div>
             <select
               required
-              className="w-full rounded-lg border p-3 text-sm"
+              className="w-full rounded-lg border p-3 text-sm dark:bg-slate-800 dark:border-slate-600 dark:text-white"
+              aria-label="Seleccionar ubicación"
               value={form.locationId}
               onChange={(e) => setForm({ ...form, locationId: e.target.value })}
             >
@@ -817,7 +823,8 @@ export function MovementsPanel({
               Destino
               <select
                 required
-                className="mt-1 w-full rounded-lg border p-3 text-sm"
+                className="mt-1 w-full rounded-lg border p-3 text-sm dark:bg-slate-800 dark:border-slate-600 dark:text-white"
+                aria-label="Seleccionar ubicación de destino"
                 value={form.destinationLocationId}
                 onChange={(e) => setForm({ ...form, destinationLocationId: e.target.value })}
               >
@@ -840,7 +847,7 @@ export function MovementsPanel({
                 type="number"
                 inputMode="numeric"
                 pattern="-?[0-9]*"
-                className="mt-1.5 w-full rounded-xl border border-slate-300 p-3 min-h-[48px] text-base font-semibold focus:border-blue-600 focus:outline-none"
+                className="mt-1.5 w-full rounded-xl border border-slate-300 p-3 min-h-[48px] text-base font-semibold focus:border-blue-600 focus:outline-none dark:bg-slate-800 dark:border-slate-600 dark:text-white"
                 value={form.delta}
                 onChange={(e) => setForm({ ...form, delta: Number(e.target.value) })}
               />
@@ -854,7 +861,7 @@ export function MovementsPanel({
                 type="number"
                 inputMode="numeric"
                 pattern="[0-9]*"
-                className="mt-1.5 w-full rounded-xl border border-slate-300 p-3 min-h-[48px] text-base font-semibold focus:border-blue-600 focus:outline-none"
+                className="mt-1.5 w-full rounded-xl border border-slate-300 p-3 min-h-[48px] text-base font-semibold focus:border-blue-600 focus:outline-none dark:bg-slate-800 dark:border-slate-600 dark:text-white"
                 value={form.quantity}
                 onChange={(e) => setForm({ ...form, quantity: Number(e.target.value) })}
               />
@@ -864,7 +871,7 @@ export function MovementsPanel({
           <label className="text-sm font-semibold text-slate-700">
             Referencia
             <input
-              className="mt-1.5 w-full rounded-xl border border-slate-300 p-3 min-h-[48px] text-sm sm:text-base focus:border-blue-600 focus:outline-none"
+              className="mt-1.5 w-full rounded-xl border border-slate-300 p-3 min-h-[48px] text-sm sm:text-base focus:border-blue-600 focus:outline-none dark:bg-slate-800 dark:border-slate-600 dark:text-white"
               value={form.reference}
               onChange={(e) => setForm({ ...form, reference: e.target.value })}
               placeholder="Ej. Guía de Despacho #4092"
@@ -874,7 +881,7 @@ export function MovementsPanel({
           <label className="text-sm font-semibold text-slate-700 md:col-span-2">
             Motivo
             <input
-              className="mt-1.5 w-full rounded-xl border border-slate-300 p-3 min-h-[48px] text-sm sm:text-base focus:border-blue-600 focus:outline-none"
+              className="mt-1.5 w-full rounded-xl border border-slate-300 p-3 min-h-[48px] text-sm sm:text-base focus:border-blue-600 focus:outline-none dark:bg-slate-800 dark:border-slate-600 dark:text-white"
               value={form.reason}
               onChange={(e) => setForm({ ...form, reason: e.target.value })}
               placeholder="Ej. Recepción de proveedor o preparación de pedido"
@@ -972,7 +979,7 @@ export function MovementsPanel({
       </form>
 
       {/* Movements Table */}
-      <div className="rounded-xl bg-white p-5 shadow-sm border border-slate-100">
+      <div className="rounded-xl bg-white p-5 shadow-sm border border-slate-100 dark:bg-slate-900 dark:border-slate-800">
         <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
           <h3 className="font-bold text-gray-800 text-sm">Historial Reciente de Movimientos</h3>
           <div className="inline-flex rounded-xl border border-slate-200 bg-slate-50 p-0.5">

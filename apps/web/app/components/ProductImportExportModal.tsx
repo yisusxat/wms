@@ -3,6 +3,7 @@
 import { useState, useRef, ChangeEvent, DragEvent } from 'react';
 import * as XLSX from 'xlsx';
 import { apiFetch, Product } from '../../lib/api';
+import { useToast } from './Toast';
 
 export interface ParsedProductRow {
   sku: string;
@@ -477,17 +478,20 @@ export function ProductImportModal({
         if (e.target === e.currentTarget && !importing) onClose();
       }}
       className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 p-4 backdrop-blur-xs animate-fadeIn"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="import-modal-title"
     >
-      <div className="flex flex-col w-full max-w-2xl max-h-[92vh] rounded-3xl bg-white shadow-2xl border border-slate-200 overflow-hidden">
+      <div className="flex flex-col w-full max-w-2xl max-h-[92vh] rounded-xl bg-white dark:bg-slate-900 shadow-2xl border border-slate-200 dark:border-slate-800 overflow-hidden">
         {/* Modal Header */}
-        <div className="flex items-center justify-between border-b px-4 sm:px-6 py-3.5 sm:py-4 bg-slate-50">
+        <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 px-4 sm:px-6 py-3.5 sm:py-4 bg-slate-50 dark:bg-slate-900/50">
           <div className="flex items-center gap-3">
-            <span className="flex h-10 w-10 items-center justify-center rounded-2xl bg-indigo-100 text-indigo-700 text-xl font-bold shrink-0">
+            <span className="flex h-10 w-10 items-center justify-center rounded-lg bg-indigo-100 dark:bg-indigo-900/50 text-indigo-700 dark:text-indigo-400 text-xl font-bold shrink-0">
               📥
             </span>
             <div>
-              <h3 className="text-base sm:text-lg font-black text-slate-900">Importar Catálogo de Productos</h3>
-              <p className="text-[11px] sm:text-xs text-slate-500">
+              <h3 id="import-modal-title" className="text-base sm:text-lg font-black text-slate-900 dark:text-white">Importar Catálogo de Productos</h3>
+              <p className="text-[11px] sm:text-xs text-slate-500 dark:text-slate-400">
                 Formatos compatibles: Excel (.xlsx, .xls), CSV (.csv) o JSON (.json)
               </p>
             </div>
@@ -495,7 +499,7 @@ export function ProductImportModal({
           <button
             onClick={onClose}
             disabled={importing}
-            className="rounded-xl p-2 text-slate-400 hover:bg-slate-200 hover:text-slate-700 font-bold transition disabled:opacity-50"
+            className="rounded-lg p-2 text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-800 hover:text-slate-700 dark:hover:text-slate-200 font-bold transition disabled:opacity-50"
           >
             ✕
           </button>
@@ -504,9 +508,9 @@ export function ProductImportModal({
         {/* Modal Body */}
         <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-4 sm:space-y-5">
           {/* Download Templates Banner */}
-          <div className="rounded-2xl border border-indigo-100 bg-indigo-50/50 p-4 space-y-2">
+          <div className="rounded-xl border border-indigo-100 dark:border-indigo-900/50 bg-indigo-50/50 dark:bg-indigo-900/20 p-4 space-y-2">
             <div className="flex items-center justify-between">
-              <span className="text-xs font-bold text-indigo-950">
+              <span className="text-xs font-bold text-indigo-950 dark:text-indigo-300">
                 ¿Aún no tienes el archivo? Descarga una plantilla de ejemplo:
               </span>
             </div>
@@ -514,21 +518,21 @@ export function ProductImportModal({
               <button
                 type="button"
                 onClick={() => downloadProductTemplate('xlsx')}
-                className="rounded-xl border border-emerald-300 bg-white px-3 py-1.5 text-xs font-bold text-emerald-800 hover:bg-emerald-50 transition shadow-2xs flex items-center gap-1.5 cursor-pointer"
+                className="rounded-lg border border-emerald-300 dark:border-emerald-800 bg-white dark:bg-slate-900 px-3 py-1.5 text-xs font-bold text-emerald-800 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-900/30 transition shadow-2xs flex items-center gap-1.5 cursor-pointer"
               >
                 <span>📗</span> Plantilla Excel (.xlsx)
               </button>
               <button
                 type="button"
                 onClick={() => downloadProductTemplate('csv')}
-                className="rounded-xl border border-blue-300 bg-white px-3 py-1.5 text-xs font-bold text-blue-800 hover:bg-blue-50 transition shadow-2xs flex items-center gap-1.5 cursor-pointer"
+                className="rounded-lg border border-blue-300 dark:border-blue-800 bg-white dark:bg-slate-900 px-3 py-1.5 text-xs font-bold text-blue-800 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/30 transition shadow-2xs flex items-center gap-1.5 cursor-pointer"
               >
                 <span>📄</span> Plantilla CSV (.csv)
               </button>
               <button
                 type="button"
                 onClick={() => downloadProductTemplate('json')}
-                className="rounded-xl border border-amber-300 bg-white px-3 py-1.5 text-xs font-bold text-amber-800 hover:bg-amber-50 transition shadow-2xs flex items-center gap-1.5 cursor-pointer"
+                className="rounded-lg border border-amber-300 dark:border-amber-800 bg-white dark:bg-slate-900 px-3 py-1.5 text-xs font-bold text-amber-800 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-900/30 transition shadow-2xs flex items-center gap-1.5 cursor-pointer"
               >
                 <span>📦</span> Plantilla JSON (.json)
               </button>
@@ -542,17 +546,17 @@ export function ProductImportModal({
               onDragOver={handleDragOver}
               onDragLeave={handleDragLeave}
               onClick={() => fileInputRef.current?.click()}
-              className={`flex flex-col items-center justify-center rounded-3xl border-2 border-dashed p-8 text-center transition cursor-pointer ${
+              className={`flex flex-col items-center justify-center rounded-xl border-2 border-dashed p-8 text-center transition cursor-pointer ${
                 isDragOver
-                  ? 'border-indigo-600 bg-indigo-50/70 scale-101'
-                  : 'border-slate-300 bg-slate-50/60 hover:bg-slate-100/80 hover:border-slate-400'
+                  ? 'border-indigo-600 bg-indigo-50/70 dark:bg-indigo-900/20 scale-101'
+                  : 'border-slate-300 dark:border-slate-700 bg-slate-50/60 dark:bg-slate-800/50 hover:bg-slate-100/80 dark:hover:bg-slate-800/80 hover:border-slate-400 dark:hover:border-slate-600'
               }`}
             >
               <span className="text-4xl mb-2">📁</span>
-              <p className="font-bold text-sm text-slate-800">
-                Arrastra tu archivo aquí o <span className="text-indigo-600 underline">haz clic para examinar</span>
+              <p className="font-bold text-sm text-slate-800 dark:text-slate-200">
+                Arrastra tu archivo aquí o <span className="text-indigo-600 dark:text-indigo-400 underline">haz clic para examinar</span>
               </p>
-              <p className="text-xs text-slate-400 mt-1">
+              <p className="text-xs text-slate-400 dark:text-slate-500 mt-1">
                 Soporta SKU, Nombre, Categoría, Unidad, Estado, Código de barras
               </p>
               <input
@@ -567,24 +571,24 @@ export function ProductImportModal({
 
           {/* Loading Indicator */}
           {loading && (
-            <div className="flex items-center justify-center gap-3 p-6 text-indigo-700 font-bold text-sm">
-              <div className="h-6 w-6 animate-spin rounded-full border-3 border-indigo-600 border-t-transparent" />
+            <div className="flex items-center justify-center gap-3 p-6 text-indigo-700 dark:text-indigo-400 font-bold text-sm">
+              <div className="h-6 w-6 animate-spin rounded-full border-3 border-indigo-600 dark:border-indigo-400 border-t-transparent" />
               Procesando y validando archivo...
             </div>
           )}
 
           {/* Alert Messages */}
           {errorMsg && (
-            <div className="rounded-2xl bg-red-50 border border-red-200 p-3 text-xs font-bold text-red-800 flex items-center justify-between">
+            <div className="rounded-xl bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800/50 p-3 text-xs font-bold text-red-800 dark:text-red-400 flex items-center justify-between">
               <span>⚠️ {errorMsg}</span>
-              <button onClick={() => setErrorMsg(null)} className="text-red-500 hover:text-red-700">✕</button>
+              <button onClick={() => setErrorMsg(null)} className="text-red-500 hover:text-red-700 dark:hover:text-red-300">✕</button>
             </div>
           )}
 
           {successMsg && (
-            <div className="rounded-2xl bg-emerald-50 border border-emerald-200 p-4 text-xs font-bold text-emerald-800 space-y-1">
+            <div className="rounded-xl bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800/50 p-4 text-xs font-bold text-emerald-800 dark:text-emerald-400 space-y-1">
               <p className="text-sm">🎉 {successMsg}</p>
-              <p className="text-emerald-600 font-normal">
+              <p className="text-emerald-600 dark:text-emerald-500 font-normal">
                 El catálogo en pantalla se ha actualizado con los nuevos registros.
               </p>
             </div>
@@ -593,12 +597,12 @@ export function ProductImportModal({
           {/* File Selected & Preview */}
           {file && parsedRows.length > 0 && (
             <div className="space-y-4">
-              <div className="flex items-center justify-between rounded-2xl bg-slate-100 p-3">
+              <div className="flex items-center justify-between rounded-xl bg-slate-100 dark:bg-slate-800/80 p-3">
                 <div className="flex items-center gap-2">
                   <span className="text-lg">📄</span>
                   <div>
-                    <p className="font-bold text-xs text-slate-900">{file.name}</p>
-                    <p className="text-[10px] text-slate-500">
+                    <p className="font-bold text-xs text-slate-900 dark:text-white">{file.name}</p>
+                    <p className="text-[10px] text-slate-500 dark:text-slate-400">
                       {(file.size / 1024).toFixed(1)} KB · {parsedRows.length} filas detectadas
                     </p>
                   </div>
@@ -606,7 +610,7 @@ export function ProductImportModal({
                 {!importing && (
                   <button
                     onClick={handleReset}
-                    className="text-xs font-bold text-indigo-600 hover:underline cursor-pointer"
+                    className="text-xs font-bold text-indigo-600 dark:text-indigo-400 hover:underline cursor-pointer"
                   >
                     Cambiar archivo
                   </button>
@@ -615,28 +619,28 @@ export function ProductImportModal({
 
               {/* Status summary counts */}
               <div className="grid grid-cols-2 gap-3 text-center">
-                <div className="rounded-xl border border-emerald-200 bg-emerald-50/70 p-2.5">
-                  <span className="text-[10px] font-bold uppercase text-emerald-700 block">
+                <div className="rounded-xl border border-emerald-200 dark:border-emerald-800 bg-emerald-50/70 dark:bg-emerald-900/20 p-2.5">
+                  <span className="text-[10px] font-bold uppercase text-emerald-700 dark:text-emerald-400 block">
                     Filas Válidas
                   </span>
-                  <span className="text-lg font-black text-emerald-900">{validCount}</span>
+                  <span className="text-lg font-black text-emerald-900 dark:text-emerald-100">{validCount}</span>
                 </div>
-                <div className="rounded-xl border border-amber-200 bg-amber-50/70 p-2.5">
-                  <span className="text-[10px] font-bold uppercase text-amber-700 block">
+                <div className="rounded-xl border border-amber-200 dark:border-amber-800 bg-amber-50/70 dark:bg-amber-900/20 p-2.5">
+                  <span className="text-[10px] font-bold uppercase text-amber-700 dark:text-amber-400 block">
                     Con Errores / Incompletas
                   </span>
-                  <span className="text-lg font-black text-amber-900">{invalidCount}</span>
+                  <span className="text-lg font-black text-amber-900 dark:text-amber-100">{invalidCount}</span>
                 </div>
               </div>
 
               {/* Import options */}
-              <div className="flex items-center justify-between rounded-xl border border-slate-200 p-3 bg-white text-xs">
-                <label className="flex items-center gap-2 font-bold text-slate-700 cursor-pointer">
+              <div className="flex items-center justify-between rounded-xl border border-slate-200 dark:border-slate-700 p-3 bg-white dark:bg-slate-800 text-xs">
+                <label className="flex items-center gap-2 font-bold text-slate-700 dark:text-slate-300 cursor-pointer">
                   <input
                     type="checkbox"
                     checked={updateExisting}
                     onChange={(e) => setUpdateExisting(e.target.checked)}
-                    className="h-4 w-4 rounded text-indigo-600"
+                    className="h-4 w-4 rounded text-indigo-600 dark:text-indigo-500"
                   />
                   <span>Actualizar productos si el SKU ya existe en el sistema</span>
                 </label>
@@ -644,12 +648,12 @@ export function ProductImportModal({
 
               {/* Preview Table */}
               <div className="space-y-1.5">
-                <span className="text-xs font-bold text-slate-700 block">
+                <span className="text-xs font-bold text-slate-700 dark:text-slate-300 block">
                   Vista Previa (primeras {Math.min(parsedRows.length, 25)} de {parsedRows.length}):
                 </span>
-                <div className="max-h-56 overflow-y-auto overflow-x-auto rounded-xl border border-slate-200 bg-white">
+                <div className="max-h-56 overflow-y-auto overflow-x-auto rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800">
                   <table className="w-full text-left text-xs min-w-[500px]">
-                    <thead className="sticky top-0 bg-slate-100 text-[10px] font-bold uppercase text-slate-600">
+                    <thead className="sticky top-0 bg-slate-100 dark:bg-slate-900 text-[10px] font-bold uppercase text-slate-600 dark:text-slate-400">
                       <tr>
                         <th className="p-2">Estado</th>
                         <th className="p-2">SKU</th>
@@ -658,29 +662,29 @@ export function ProductImportModal({
                         <th className="p-2">Unidad</th>
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-slate-100">
+                    <tbody className="divide-y divide-slate-100 dark:divide-slate-700/50">
                       {parsedRows.slice(0, 25).map((row, idx) => (
-                        <tr key={idx} className={row.isValid ? 'hover:bg-slate-50' : 'bg-red-50/60'}>
+                        <tr key={idx} className={row.isValid ? 'hover:bg-slate-50 dark:hover:bg-slate-700/50' : 'bg-red-50/60 dark:bg-red-900/20'}>
                           <td className="p-2 font-mono">
                             {row.isValid ? (
-                              <span className="rounded bg-emerald-100 px-1.5 py-0.5 text-[10px] font-bold text-emerald-800">
+                              <span className="rounded bg-emerald-100 dark:bg-emerald-900/50 px-1.5 py-0.5 text-[10px] font-bold text-emerald-800 dark:text-emerald-300">
                                 ✓ OK
                               </span>
                             ) : (
                               <span
-                                className="rounded bg-red-100 px-1.5 py-0.5 text-[10px] font-bold text-red-800"
+                                className="rounded bg-red-100 dark:bg-red-900/50 px-1.5 py-0.5 text-[10px] font-bold text-red-800 dark:text-red-300"
                                 title={row.errors.join(', ')}
                               >
                                 ⚠️ Error
                               </span>
                             )}
                           </td>
-                          <td className="p-2 font-mono font-bold text-slate-900">{row.sku || '—'}</td>
-                          <td className="p-2 font-medium text-slate-800 truncate max-w-[160px]">
+                          <td className="p-2 font-mono font-bold text-slate-900 dark:text-slate-100">{row.sku || '—'}</td>
+                          <td className="p-2 font-medium text-slate-800 dark:text-slate-200 truncate max-w-[160px]">
                             {row.name || '—'}
                           </td>
-                          <td className="p-2 text-slate-600">{row.category}</td>
-                          <td className="p-2 text-slate-600">{row.unit}</td>
+                          <td className="p-2 text-slate-600 dark:text-slate-400">{row.category}</td>
+                          <td className="p-2 text-slate-600 dark:text-slate-400">{row.unit}</td>
                         </tr>
                       ))}
                     </tbody>
@@ -691,13 +695,13 @@ export function ProductImportModal({
               {/* Progress Bar when importing */}
               {importing && (
                 <div className="space-y-1.5">
-                  <div className="flex items-center justify-between text-xs font-bold text-indigo-900">
+                  <div className="flex items-center justify-between text-xs font-bold text-indigo-900 dark:text-indigo-300">
                     <span>Importando productos al sistema...</span>
                     <span>{progress}%</span>
                   </div>
-                  <div className="h-2.5 w-full overflow-hidden rounded-full bg-slate-200">
+                  <div className="h-2.5 w-full overflow-hidden rounded-full bg-slate-200 dark:bg-slate-700">
                     <div
-                      className="h-full bg-indigo-600 transition-all duration-200"
+                      className="h-full bg-indigo-600 dark:bg-indigo-500 transition-all duration-200"
                       style={{ width: `${progress}%` }}
                     />
                   </div>
@@ -708,12 +712,12 @@ export function ProductImportModal({
         </div>
 
         {/* Modal Footer */}
-        <div className="flex flex-col-reverse sm:flex-row sm:items-center justify-between gap-2.5 border-t px-4 sm:px-6 py-3 sm:py-4 bg-slate-50">
+        <div className="flex flex-col-reverse sm:flex-row sm:items-center justify-between gap-2.5 border-t border-slate-200 dark:border-slate-800 px-4 sm:px-6 py-3 sm:py-4 bg-slate-50 dark:bg-slate-900/50">
           <button
             type="button"
             onClick={onClose}
             disabled={importing}
-            className="w-full sm:w-auto rounded-xl border border-slate-300 px-4 py-2.5 text-xs font-bold text-slate-700 hover:bg-slate-100 transition cursor-pointer disabled:opacity-50 text-center"
+            className="w-full sm:w-auto rounded-lg border border-slate-300 dark:border-slate-700 px-4 py-2.5 text-xs font-bold text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition cursor-pointer disabled:opacity-50 text-center"
           >
             {successMsg ? 'Cerrar' : 'Cancelar'}
           </button>
@@ -723,7 +727,7 @@ export function ProductImportModal({
               type="button"
               onClick={handleExecuteImport}
               disabled={importing || validCount === 0}
-              className="w-full sm:w-auto rounded-xl bg-indigo-600 px-6 py-2.5 text-xs font-bold text-white hover:bg-indigo-700 shadow-md transition disabled:opacity-50 cursor-pointer flex items-center justify-center gap-2"
+              className="w-full sm:w-auto rounded-lg bg-indigo-600 dark:bg-indigo-500 px-6 py-2.5 text-xs font-bold text-white hover:bg-indigo-700 dark:hover:bg-indigo-600 shadow-md transition disabled:opacity-50 cursor-pointer flex items-center justify-center gap-2"
             >
               {importing ? (
                 <>
@@ -756,13 +760,14 @@ export function ProductExportMenu({
 }) {
   const [isOpen, setIsOpen] = useState(false);
   const [exporting, setExporting] = useState(false);
+  const { showToast } = useToast();
 
   const handleExport = async (format: 'xlsx' | 'csv' | 'json') => {
     setExporting(true);
     try {
       await exportProductsToFile(token, format, products);
     } catch (err: any) {
-      alert(err.message || 'Error al exportar');
+      showToast({ message: err.message || 'Error al exportar', type: 'error' });
     } finally {
       setExporting(false);
       setIsOpen(false);
@@ -775,11 +780,11 @@ export function ProductExportMenu({
         type="button"
         onClick={() => setIsOpen(!isOpen)}
         disabled={exporting}
-        className="rounded-xl border border-slate-300 bg-white px-3.5 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50 hover:border-slate-400 shadow-xs transition flex items-center gap-2 cursor-pointer disabled:opacity-50"
+        className="rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-3.5 py-2 text-xs font-bold text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 hover:border-slate-400 dark:hover:border-slate-600 shadow-xs transition flex items-center gap-2 cursor-pointer disabled:opacity-50"
       >
         <span>📤</span>
         <span>{exporting ? 'Generando...' : 'Exportar'}</span>
-        <span className="text-[10px] text-slate-400">▼</span>
+        <span className="text-[10px] text-slate-400 dark:text-slate-500">▼</span>
       </button>
 
       {isOpen && (
@@ -788,50 +793,50 @@ export function ProductExportMenu({
             onClick={() => setIsOpen(false)}
             className="fixed inset-0 z-40"
           />
-          <div className="absolute right-0 mt-2 w-56 rounded-2xl border border-slate-200 bg-white p-1.5 shadow-xl z-50 animate-fadeIn space-y-1 text-xs">
-            <div className="px-3 py-1.5 text-[10px] font-bold uppercase text-slate-400 border-b border-slate-100">
+          <div className="absolute right-0 mt-2 w-56 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-1.5 shadow-xl z-50 animate-fadeIn space-y-1 text-xs">
+            <div className="px-3 py-1.5 text-[10px] font-bold uppercase text-slate-400 dark:text-slate-500 border-b border-slate-100 dark:border-slate-800">
               Formato de Exportación
             </div>
 
             <button
               type="button"
               onClick={() => handleExport('xlsx')}
-              className="w-full flex items-center gap-2.5 rounded-xl px-3 py-2 text-left font-bold text-slate-800 hover:bg-emerald-50 hover:text-emerald-800 transition cursor-pointer"
+              className="w-full flex items-center gap-2.5 rounded-lg px-3 py-2 text-left font-bold text-slate-800 dark:text-slate-200 hover:bg-emerald-50 dark:hover:bg-emerald-900/30 hover:text-emerald-800 dark:hover:text-emerald-400 transition cursor-pointer"
             >
               <span className="text-base">📗</span>
               <div>
                 <p className="leading-tight">Excel (.xlsx)</p>
-                <p className="text-[10px] font-normal text-slate-400">Hoja de cálculo completa</p>
+                <p className="text-[10px] font-normal text-slate-400 dark:text-slate-500">Hoja de cálculo completa</p>
               </div>
             </button>
 
             <button
               type="button"
               onClick={() => handleExport('csv')}
-              className="w-full flex items-center gap-2.5 rounded-xl px-3 py-2 text-left font-bold text-slate-800 hover:bg-blue-50 hover:text-blue-800 transition cursor-pointer"
+              className="w-full flex items-center gap-2.5 rounded-lg px-3 py-2 text-left font-bold text-slate-800 dark:text-slate-200 hover:bg-blue-50 dark:hover:bg-blue-900/30 hover:text-blue-800 dark:hover:text-blue-400 transition cursor-pointer"
             >
               <span className="text-base">📄</span>
               <div>
                 <p className="leading-tight">CSV (.csv)</p>
-                <p className="text-[10px] font-normal text-slate-400">Valores separados por coma UTF-8</p>
+                <p className="text-[10px] font-normal text-slate-400 dark:text-slate-500">Valores separados por coma UTF-8</p>
               </div>
             </button>
 
             <button
               type="button"
               onClick={() => handleExport('json')}
-              className="w-full flex items-center gap-2.5 rounded-xl px-3 py-2 text-left font-bold text-slate-800 hover:bg-amber-50 hover:text-amber-800 transition cursor-pointer"
+              className="w-full flex items-center gap-2.5 rounded-lg px-3 py-2 text-left font-bold text-slate-800 dark:text-slate-200 hover:bg-amber-50 dark:hover:bg-amber-900/30 hover:text-amber-800 dark:hover:text-amber-400 transition cursor-pointer"
             >
               <span className="text-base">📦</span>
               <div>
                 <p className="leading-tight">JSON (.json)</p>
-                <p className="text-[10px] font-normal text-slate-400">Estructura cruda para integración</p>
+                <p className="text-[10px] font-normal text-slate-400 dark:text-slate-500">Estructura cruda para integración</p>
               </div>
             </button>
 
             {products.length > 0 && (
-              <div className="px-3 py-1 text-[10px] text-slate-400 border-t border-slate-100 mt-1">
-                Total a exportar: <strong>{products.length}</strong> productos
+              <div className="px-3 py-1 text-[10px] text-slate-400 dark:text-slate-500 border-t border-slate-100 dark:border-slate-800 mt-1">
+                Total a exportar: <strong className="dark:text-slate-300">{products.length}</strong> productos
                 {currentSearch ? ` (filtrados)` : ''}
               </div>
             )}
