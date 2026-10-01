@@ -18,6 +18,7 @@ import { AuditModule } from './audit/audit.module';
 import { OrganizationsModule } from './organizations/organizations.module';
 import { ReportsModule } from './reports/reports.module';
 import { OperationsModule } from './operations/operations.module';
+import { WavesModule } from './waves/waves.module';
 
 @Module({
   imports: [
@@ -35,6 +36,7 @@ import { OperationsModule } from './operations/operations.module';
     DashboardModule,
     ReportsModule,
     OperationsModule,
+    WavesModule,
     WarehousesModule,
     UsersModule,
   ],

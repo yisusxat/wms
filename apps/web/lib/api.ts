@@ -223,81 +223,112 @@ async function fallbackInsforge<T>(path: string, token: string, init?: RequestIn
   }
 
   if (cleanPath === '/dashboard/summary') {
-    const [locRes, prodRes, invRes, movRes] = await Promise.all([
-      fetch(`${insforgeUrl}/api/database/records/locations?select=id,status,code`, { headers }).catch(() => null),
-      fetch(`${insforgeUrl}/api/database/records/products?select=id,sku,name,unit`, { headers }).catch(() => null),
-      fetch(`${insforgeUrl}/api/database/records/inventory?select=id,location_id,product_id,quantity`, { headers }).catch(() => null),
-      fetch(`${insforgeUrl}/api/database/records/movements?select=id,type,product_id,quantity,source_location_id,destination_location_id,created_at&order=created_at.desc&limit=20`, { headers }).catch(() => null),
-    ]);
+    const computeSummaryFallback = async () => {
+      const [locRes, prodRes, invRes, movRes] = await Promise.all([
+        fetch(`${insforgeUrl}/api/database/records/locations?select=id,status,code`, { headers }).catch(() => null),
+        fetch(`${insforgeUrl}/api/database/records/products?select=id,sku,name,unit`, { headers }).catch(() => null),
+        fetch(`${insforgeUrl}/api/database/records/inventory?select=id,location_id,product_id,quantity`, { headers }).catch(() => null),
+        fetch(`${insforgeUrl}/api/database/records/movements?select=id,type,product_id,quantity,source_location_id,destination_location_id,created_at&order=created_at.desc&limit=20`, { headers }).catch(() => null),
+      ]);
 
-    const locs: any[] = locRes && locRes.ok ? await locRes.json().catch(() => []) : [];
-    const prods: any[] = prodRes && prodRes.ok ? await prodRes.json().catch(() => []) : [];
-    const invs: any[] = invRes && invRes.ok ? await invRes.json().catch(() => []) : [];
-    const movs: any[] = movRes && movRes.ok ? await movRes.json().catch(() => []) : [];
+      const locs: any[] = locRes && locRes.ok ? await locRes.json().catch(() => []) : [];
+      const prods: any[] = prodRes && prodRes.ok ? await prodRes.json().catch(() => []) : [];
+      const invs: any[] = invRes && invRes.ok ? await invRes.json().catch(() => []) : [];
+      const movs: any[] = movRes && movRes.ok ? await movRes.json().catch(() => []) : [];
 
-    const now = new Date();
-    const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
-    const entriesToday = movs.filter((m) => m.type === 'RECEIPT' && new Date(m.created_at).getTime() >= startOfDay).length;
-    const issuesToday = movs.filter((m) => m.type === 'ISSUE' && new Date(m.created_at).getTime() >= startOfDay).length;
+      const now = new Date();
+      const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+      const entriesToday = movs.filter((m) => m.type === 'RECEIPT' && new Date(m.created_at).getTime() >= startOfDay).length;
+      const issuesToday = movs.filter((m) => m.type === 'ISSUE' && new Date(m.created_at).getTime() >= startOfDay).length;
 
-    const occupiedLocations = Array.isArray(locs) ? locs.filter((l) => l.status === 'OCCUPIED').length : 0;
-    const availableLocations = Array.isArray(locs) ? locs.filter((l) => l.status === 'AVAILABLE').length : 0;
-    const totalUnits = Array.isArray(invs) ? invs.reduce((acc, i) => acc + (i.quantity || 0), 0) : 0;
+      const occupiedLocations = Array.isArray(locs) ? locs.filter((l) => l.status === 'OCCUPIED').length : 0;
+      const availableLocations = Array.isArray(locs) ? locs.filter((l) => l.status === 'AVAILABLE').length : 0;
+      const totalUnits = Array.isArray(invs) ? invs.reduce((acc, i) => acc + (i.quantity || 0), 0) : 0;
 
-    let aisleAOcc = 0;
-    let aisleATot = 0;
-    let aisleBOcc = 0;
-    let aisleBTot = 0;
-    for (const l of locs) {
-      const code = l.code || '';
-      if (code.startsWith('A-')) {
-        aisleATot++;
-        if (l.status === 'OCCUPIED') aisleAOcc++;
-      } else if (code.startsWith('B-')) {
-        aisleBTot++;
-        if (l.status === 'OCCUPIED') aisleBOcc++;
+      let aisleAOcc = 0;
+      let aisleATot = 0;
+      let aisleBOcc = 0;
+      let aisleBTot = 0;
+      for (const l of locs) {
+        const code = l.code || '';
+        if (code.startsWith('A-')) {
+          aisleATot++;
+          if (l.status === 'OCCUPIED') aisleAOcc++;
+        } else if (code.startsWith('B-')) {
+          aisleBTot++;
+          if (l.status === 'OCCUPIED') aisleBOcc++;
+        }
       }
+
+      const prodMap = new Map(prods.map((p) => [p.id, p]));
+      const locMap = new Map(locs.map((l) => [l.id, l]));
+
+      const recentMovements = movs.slice(0, 8).map((m) => ({
+        ...m,
+        product: prodMap.get(m.product_id) || { sku: 'SKU-N/A', name: 'Producto' },
+        sourceLocation: locMap.get(m.source_location_id) || null,
+        destinationLocation: locMap.get(m.destination_location_id) || null,
+      }));
+
+      return {
+        products: Array.isArray(prods) ? prods.length : 0,
+        locations: Array.isArray(locs) ? locs.length : 0,
+        occupiedLocations,
+        availableLocations,
+        totalUnits,
+        entriesToday,
+        issuesToday,
+        recentMovements,
+        aisles: {
+          aisleA: {
+            code: 'A',
+            name: 'Pasillo A (Norte)',
+            total: aisleATot || 74,
+            occupied: aisleAOcc,
+            rate: aisleATot > 0 ? Math.round((aisleAOcc / aisleATot) * 1000) / 10 : 0,
+          },
+          aisleB: {
+            code: 'B',
+            name: 'Pasillo B (Sur)',
+            total: aisleBTot || 74,
+            occupied: aisleBOcc,
+            rate: aisleBTot > 0 ? Math.round((aisleBOcc / aisleBTot) * 1000) / 10 : 0,
+          },
+        },
+      } as T;
+    };
+
+    try {
+      const res = await fetch(`${insforgeUrl}/api/database/records/v_dashboard_summary?limit=1`, { headers });
+      if (!res.ok) throw new Error('View not available');
+      const rows = await res.json();
+      const summaryRows = rows[0];
+      if (!summaryRows) throw new Error('No data');
+
+      return {
+        products:      summaryRows.total_products,
+        locations:     summaryRows.total_locations,
+        occupiedLocations:  summaryRows.occupied_locations,
+        availableLocations: summaryRows.available_locations,
+        totalUnits:         summaryRows.total_units,
+        entriesToday:       summaryRows.entries_today,
+        issuesToday:        summaryRows.issues_today,
+        transfersToday:     summaryRows.transfers_today,
+        occupationPct:      summaryRows.occupation_percentage,
+        lastRefreshed:      summaryRows.last_refreshed_at,
+        recentMovements: [], // Fallback since vista materializada doesn't have it
+        aisles: {
+          aisleA: { code: 'A', name: 'Pasillo A (Norte)', total: 74, occupied: 0, rate: 0 },
+          aisleB: { code: 'B', name: 'Pasillo B (Sur)', total: 74, occupied: 0, rate: 0 }
+        }
+      } as T;
+    } catch (e) {
+      return computeSummaryFallback();
     }
-
-    const prodMap = new Map(prods.map((p) => [p.id, p]));
-    const locMap = new Map(locs.map((l) => [l.id, l]));
-
-    const recentMovements = movs.slice(0, 8).map((m) => ({
-      ...m,
-      product: prodMap.get(m.product_id) || { sku: 'SKU-N/A', name: 'Producto' },
-      sourceLocation: locMap.get(m.source_location_id) || null,
-      destinationLocation: locMap.get(m.destination_location_id) || null,
-    }));
-
-    return {
-      products: Array.isArray(prods) ? prods.length : 0,
-      locations: Array.isArray(locs) ? locs.length : 0,
-      occupiedLocations,
-      availableLocations,
-      totalUnits,
-      entriesToday,
-      issuesToday,
-      recentMovements,
-      aisles: {
-        aisleA: {
-          code: 'A',
-          name: 'Pasillo A (Norte)',
-          total: aisleATot || 74,
-          occupied: aisleAOcc,
-          rate: aisleATot > 0 ? Math.round((aisleAOcc / aisleATot) * 1000) / 10 : 0,
-        },
-        aisleB: {
-          code: 'B',
-          name: 'Pasillo B (Sur)',
-          total: aisleBTot || 74,
-          occupied: aisleBOcc,
-          rate: aisleBTot > 0 ? Math.round((aisleBOcc / aisleBTot) * 1000) / 10 : 0,
-        },
-      },
-    } as T;
   }
 
   if (cleanPath === '/dashboard/kpis') {
+  const computeKpisFallback = async () => {
     const [locRes, prodRes, invRes, movRes] = await Promise.all([
       fetch(`${insforgeUrl}/api/database/records/locations?select=id,code,status,level,position,rack:racks(code,aisle:aisles(code,zone:zones(code,name)))`, { headers }).catch(() => null),
       fetch(`${insforgeUrl}/api/database/records/products?select=id,sku,name,active`, { headers }).catch(() => null),
@@ -479,7 +510,42 @@ async function fallbackInsforge<T>(path: string, token: string, init?: RequestIn
       availableCategories,
       activeCategory: null,
     } as T;
+  };
+  try {
+    const res = await fetch(`${insforgeUrl}/api/database/records/v_dashboard_kpis?order=total_issued_30d.desc`, { headers });
+    if (!res.ok) throw new Error('View not available');
+    const kpiRows = await res.json();
+    if (!kpiRows || kpiRows.length === 0) throw new Error('No data');
+
+    return {
+      abcAnalysis: kpiRows.map((r: any) => ({
+        productId:   r.product_id,
+        sku:         r.sku,
+        name:        r.product_name,
+        category:    r.category,
+        issued30d:   r.total_issued_30d,
+        received30d: r.total_received_30d,
+        stock:       r.current_stock,
+        abcClass:    r.abc_class,
+      })),
+      lastRefreshed: kpiRows[0]?.last_refreshed_at,
+      occupancy: { rate: 0, occupied: 0, total: 0, alert: false, byZone: [] },
+      abcClassification: { classA: {skuCount:0, percentage:0, items:[]}, classB: {skuCount:0, percentage:0, items:[]}, classC: {skuCount:0, percentage:0, items:[]} },
+      deadStock: { count: 0, items: [] },
+      dsi: { value: 0, totalStock: 0, avgDailyIssues: 0, alert: false },
+      throughput: { trend: [], totalReceipts7d: 0, totalIssues7d: 0, balance: 0 },
+      ira: { percentage: 0, totalAdjustments: 0, totalStock: 0, deviationRate: 0, alert: false },
+      breakRisk: { count: 0, items: [] },
+      cycleTimes: { dockToStockHours: 0, targetDockToStockHours: 0, orderCycleMinutes: 0, pickingUph: 0 },
+      cubeUtilization: { totalCubicMeters: 0, usedCubicMeters: 0, cubeRate: 0 },
+      skuAffinity: [],
+      availableCategories: [],
+      activeCategory: null,
+    } as T;
+  } catch (e) {
+    return computeKpisFallback();
   }
+}
 
   if (cleanPath === '/locations') {
     try {

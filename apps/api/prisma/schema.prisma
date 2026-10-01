@@ -132,6 +132,7 @@ model Product {
   organization Organization? @relation(fields: [organizationId], references: [id])
   inventory Inventory[]
   movements Movement[]
+  outboundOrderLines OutboundOrderLine[]
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
   @@index([organizationId])
@@ -237,4 +238,44 @@ model AuditLog {
   @@index([action])
   @@index([createdAt])
   @@map("audit_logs")
+}
+
+model Wave {
+  id        String          @id @default(uuid()) @db.Uuid
+  name      String
+  status    String          @default("OPEN")
+  route     Json?
+  orders    OutboundOrder[]
+  createdAt DateTime        @default(now()) @map("created_at")
+  updatedAt DateTime        @updatedAt @map("updated_at")
+
+  @@map("waves")
+}
+
+model OutboundOrder {
+  id        String              @id @default(uuid()) @db.Uuid
+  reference String              @unique
+  status    String              @default("PENDING")
+  priority  Int                 @default(5)
+  notes     String?
+  waveId    String?             @map("wave_id") @db.Uuid
+  wave      Wave?               @relation(fields: [waveId], references: [id])
+  lines     OutboundOrderLine[]
+  createdAt DateTime            @default(now()) @map("created_at")
+  updatedAt DateTime            @updatedAt @map("updated_at")
+
+  @@map("outbound_orders")
+}
+
+model OutboundOrderLine {
+  id        String        @id @default(uuid()) @db.Uuid
+  orderId   String        @map("order_id") @db.Uuid
+  productId String        @map("product_id") @db.Uuid
+  quantity  Int
+  pickedQty Int           @default(0) @map("picked_qty")
+  order     OutboundOrder @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  product   Product       @relation(fields: [productId], references: [id])
+  createdAt DateTime      @default(now()) @map("created_at")
+
+  @@map("outbound_order_lines")
 }
