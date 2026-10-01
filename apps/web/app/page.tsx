@@ -13,6 +13,7 @@ import {
   FileBarChart,
   Gauge,
   Grid3x3,
+  Layers,
   LayoutDashboard,
   LifeBuoy,
   Loader2,
@@ -34,6 +35,7 @@ import {
 } from 'lucide-react';
 import { insforge } from '../lib/insforge';
 import dynamic from 'next/dynamic';
+import { WavePickingModal } from './components/WavePickingModal';
 import { apiFetch, CurrentUser, InventoryItem, Location, Page, Product, Summary, isWarehouseLocationCode } from '../lib/api';
 import { useWmsRealtimeSync, notifyWmsDataChanged } from '../lib/syncEvents';
 import { locationStatusClass, locationStatusLabel } from '../lib/locationStatus';
@@ -270,6 +272,7 @@ function HomePageContent() {
   const [loading, setLoading] = useState(true);
 
   // Modals state
+  const [isWavePickingOpen, setIsWavePickingOpen] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [supportOpen, setSupportOpen] = useState(false);
   const [forgotOpen, setForgotOpen] = useState(false);
@@ -844,6 +847,13 @@ function HomePageContent() {
 
           <div className="flex flex-wrap items-center gap-2">
             <button
+              onClick={() => setIsWavePickingOpen(true)}
+              className="flex items-center gap-1.5 rounded-xl bg-indigo-600 px-3 py-2 text-xs font-semibold text-white transition hover:bg-indigo-500 dark:bg-indigo-700 dark:hover:bg-indigo-600"
+            >
+              <Layers className="h-3.5 w-3.5" />
+              Ola de Picking
+            </button>
+            <button
               onClick={() => setCommandPaletteOpen(true)}
               className="flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-sm font-medium text-slate-700 shadow-sm transition hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700"
               title="Abrir paleta de comandos (Ctrl+K)"
@@ -1095,6 +1105,13 @@ function HomePageContent() {
       {auditOpen ? <AuditLogsModal isOpen={auditOpen} onClose={() => setAuditOpen(false)} token={token} /> : null}
       {legalOpen ? <LegalModal isOpen={legalOpen} onClose={() => setLegalOpen(false)} token={token} onAnonymized={signOut} /> : null}
       {twoFactorOpen ? <TwoFactorModal isOpen={twoFactorOpen} onClose={() => setTwoFactorOpen(false)} userEmail={user?.email} /> : null}
+      {isWavePickingOpen && (
+        <WavePickingModal
+          isOpen={isWavePickingOpen}
+          onClose={() => setIsWavePickingOpen(false)}
+          token={token || ''}
+        />
+      )}
       {/* Global Command Palette (Ctrl+K) */}
       <CommandPalette
         isOpen={commandPaletteOpen}
