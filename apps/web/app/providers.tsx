@@ -6,6 +6,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ReactQueryDevtools } from '@tanstack/react-query-devtools';
 import { ThemeProvider } from './components/ThemeContext';
 import { ToastProvider } from './components/Toast';
+import { WarehouseProvider } from '../lib/WarehouseContext';
 
 export function Providers({ children }: { children: React.ReactNode }) {
   // useState ensures a new QueryClient is NOT created on every render
@@ -26,7 +27,9 @@ export function Providers({ children }: { children: React.ReactNode }) {
     <QueryClientProvider client={queryClient}>
       <ThemeProvider>
         <ToastProvider>
-          {children}
+          <WarehouseProvider>
+            {children}
+          </WarehouseProvider>
         </ToastProvider>
       </ThemeProvider>
       {process.env.NODE_ENV === 'development' && <ReactQueryDevtools initialIsOpen={false} />}

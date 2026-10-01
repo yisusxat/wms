@@ -6,6 +6,7 @@ import {
   ArrowLeftRight,
   Boxes,
   Box,
+  Building2,
   Check,
   Eye,
   EyeOff,
@@ -40,6 +41,8 @@ import { MovementsPanel } from './components/MovementsPanel';
 import { ProductsPanel } from './components/ProductsPanel';
 import { RoleBadge, UserMenu } from './components/UserMenu';
 import { EmptyState } from './components/ui/EmptyState';
+import { WarehouseSelector } from './components/WarehouseSelector';
+import { useWarehouse } from '../lib/WarehouseContext';
 
 const Dashboard = dynamic(
   () => import('./components/Dashboard').then((m) => m.Dashboard),
@@ -208,6 +211,8 @@ function HomePageContent() {
   const [profile, setProfile] = useState<CurrentUser | null>(null);
   const [token, setToken] = useState<string | null>(null);
   const [summary, setSummary] = useState<Summary | null>(null);
+
+  const { loadWarehouses, activeWarehouse, warehouses } = useWarehouse();
 
   // Command palette & sound & theme states
   const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
@@ -386,6 +391,7 @@ function HomePageContent() {
 
   useEffect(() => {
     if (!token) return;
+    loadWarehouses(token);
     void Promise.all([
       apiFetch<Summary>('/dashboard/summary', token),
       apiFetch<CurrentUser>('/auth/me', token),
@@ -824,9 +830,12 @@ function HomePageContent() {
         <header className="flex flex-col justify-between gap-3 border-b border-slate-200 pb-4 sm:flex-row sm:items-center dark:border-slate-800">
           <div>
             <div className="flex items-center gap-2">
-              <span className="inline-flex items-center gap-1.5 rounded-full bg-blue-100 px-2.5 py-0.5 text-xs font-semibold text-blue-800 dark:bg-blue-950 dark:text-blue-200">
-                <Warehouse className="h-3.5 w-3.5" /> Bodega Central
-              </span>
+              {warehouses.length === 1 && activeWarehouse && (
+                <span className="hidden items-center gap-1 text-xs text-slate-500 dark:text-slate-400 sm:flex">
+                  <Building2 className="h-3 w-3" />
+                  {activeWarehouse.name}
+                </span>
+              )}
             </div>
             <h1 className="mt-1 text-2xl font-semibold text-slate-900 sm:text-3xl dark:text-white">
               {visibleTabs.find(item => item.id === tab)?.label ?? 'Dashboard'}
@@ -853,6 +862,7 @@ function HomePageContent() {
               <ScanBarcode className="h-4 w-4" /> Escanear
             </button>
             <ThemeToggle />
+            <WarehouseSelector />
             <UserMenu
               email={user.email}
               role={profile?.role}

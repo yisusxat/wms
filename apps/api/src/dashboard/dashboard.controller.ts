@@ -1,4 +1,4 @@
-import { Controller, Get, Query, UseGuards } from '@nestjs/common';
+import { Controller, Get, Post, Query, UseGuards } from '@nestjs/common';
 import { AuthGuard } from '../auth/auth.guard';
 import { RolesGuard } from '../auth/roles.guard';
 import { DashboardService } from './dashboard.service';
@@ -19,5 +19,11 @@ export class DashboardController {
     @Query('category') category?: string,
   ) {
     return this.dashboard.getKpis(organizationId, category);
+  }
+
+  @Post('refresh')
+  async refresh() {
+    await this.dashboard.refreshDashboardViews();
+    return { success: true };
   }
 }

@@ -504,4 +504,9 @@ export class DashboardService {
       activeCategory: category || null,
     };
   }
+
+  async refreshDashboardViews(): Promise<void> {
+    await this.prisma.$executeRaw`REFRESH MATERIALIZED VIEW CONCURRENTLY v_dashboard_summary`;
+    await this.prisma.$executeRaw`REFRESH MATERIALIZED VIEW CONCURRENTLY v_dashboard_kpis`;
+  }
 }
