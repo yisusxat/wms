@@ -5,10 +5,25 @@ import dynamic from "next/dynamic";
 import { apiFetch, Product, Location, resolveLocationUuid } from "../../lib/api";
 import Icon from "./Icon";
 
+import { useToast } from './Toast';
+
 const BarcodeScanner = dynamic(
   () => import("./BarcodeScanner"),
   { ssr: false }
 );
+
+interface SlottingSuggestion {
+  locationId: string;
+  locationCode: string;
+  zone: string;
+  aisle: string;
+  rack: string;
+  level: number;
+  position: number;
+  score: number;
+  abcClass: "A" | "B" | "C";
+  reasons: string[];
+}
 
 interface Props {
   isOpen: boolean;
@@ -34,6 +49,7 @@ export function Entry2DModal({
   onReturnToPlan,
   onSuccess,
 }: Props) {
+  const { showToast } = useToast();
   const safeLocations = useMemo(() => {
     return Array.isArray(selectedLocations) ? selectedLocations.filter((l): l is Location => Boolean(l && l.code)) : [];
   }, [selectedLocations]);
@@ -52,6 +68,9 @@ export function Entry2DModal({
   const [scannerOpen, setScannerOpen] = useState(false);
   const [scannerTargetLocation, setScannerTargetLocation] = useState<string | null>(null);
   const [scanFeedback, setScanFeedback] = useState<string | null>(null);
+
+  const [slottingSuggestions, setSlottingSuggestions] = useState<SlottingSuggestion[]>([]);
+  const [slottingLoading, setSlottingLoading] = useState(false);
 
   // Load products catalog
   useEffect(() => {
@@ -109,6 +128,18 @@ export function Entry2DModal({
       });
     }
   }, [safeLocations, products, selectedProductId]);
+
+  useEffect(() => {
+    if (!selectedProductId || !token) {
+      setSlottingSuggestions([]);
+      return;
+    }
+    setSlottingLoading(true);
+    apiFetch<SlottingSuggestion[]>(`/operations/slotting/suggest/${selectedProductId}`, token)
+      .then((suggestions) => setSlottingSuggestions(suggestions ?? []))
+      .catch(() => setSlottingSuggestions([]))
+      .finally(() => setSlottingLoading(false));
+  }, [selectedProductId, token]);
 
   const filteredProducts = useMemo(() => {
     const valid = products.filter((p): p is Product => Boolean(p && p.id));
@@ -517,6 +548,43 @@ export function Entry2DModal({
                             {selectedProduct.category}
                           </span>
                         )}
+                      </div>
+                    )}
+
+                    {/* Sugerencias de slotting inteligente */}
+                    {slottingLoading && (
+                      <p className="mt-1.5 text-xs text-slate-500 dark:text-slate-400">Calculando ubicaciones óptimas...</p>
+                    )}
+                    {!slottingLoading && slottingSuggestions.length > 0 && (
+                      <div className="mt-2 rounded-lg border border-blue-200 bg-blue-50 p-2.5 dark:border-blue-800 dark:bg-blue-950/30">
+                        <p className="mb-1.5 text-xs font-semibold text-blue-700 dark:text-blue-300">
+                          Ubicaciones recomendadas por el sistema:
+                        </p>
+                        <div className="space-y-1">
+                          {slottingSuggestions.slice(0, 3).map((s) => (
+                            <button
+                              key={s.locationId}
+                              type="button"
+                              onClick={() => {
+                                showToast({ message: "Por favor, selecciona esta ubicación en el plano 2D principal.", type: "warning" });
+                              }}
+                              className="flex w-full items-center justify-between gap-2 rounded-md px-2 py-1.5 text-xs transition hover:bg-blue-100 dark:hover:bg-blue-900/40 cursor-pointer"
+                            >
+                              <span className="font-mono font-bold text-slate-800 dark:text-slate-100">
+                                {s.locationCode}
+                              </span>
+                              <span className="text-slate-500 dark:text-slate-400">
+                                Zona {s.zone} · Clase {s.abcClass}
+                              </span>
+                              <span className="ml-auto rounded-full bg-blue-600 px-2 py-0.5 font-semibold text-white">
+                                {s.score}%
+                              </span>
+                            </button>
+                          ))}
+                        </div>
+                        <p className="mt-1.5 text-[10px] leading-tight text-slate-500 dark:text-slate-400">
+                          *Las sugerencias son referenciales. Cierra este panel para seleccionar estas posiciones en el plano 2D.
+                        </p>
                       </div>
                     )}
                   </div>
