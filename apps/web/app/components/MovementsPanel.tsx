@@ -10,6 +10,7 @@ import { queueOfflineMovement, getPendingMovements, syncOfflineMovements, Pendin
 import { playSuccessSound, playErrorSound, playClickSound } from "../../lib/audioCues";
 import Icon from "./Icon";
 import { useToast } from './Toast';
+import { useHardwareScanner } from "../../lib/hooks/useHardwareScanner";
 
 type Mode = "entry" | "exit" | "transfer" | "adjustment";
 
@@ -447,6 +448,15 @@ export function MovementsPanel({
   const canOperate = role === "ADMIN" || role === "SUPERVISOR" || role === "OPERATOR";
   const canAdjust = role === "ADMIN" || role === "SUPERVISOR";
   const availableModes = ["entry", "exit", "transfer", ...(canAdjust ? ["adjustment"] : [])] as Mode[];
+
+  // TODO: conectar con flujo de escaneo activo
+  useHardwareScanner({
+    enabled: false, 
+    onScan: (code) => {
+      handleScanCode(code);
+    },
+    minLength: 4,
+  });
 
   return (
     <section className="space-y-5">

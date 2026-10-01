@@ -3,6 +3,8 @@
 import { useRef, useState, useEffect, useCallback, useMemo } from "react";
 import { BrowserMultiFormatReader, BarcodeFormat } from "@zxing/browser";
 import { DecodeHintType } from "@zxing/library";
+import { Wifi } from "lucide-react";
+import { useHardwareScanner } from "../../lib/hooks/useHardwareScanner";
 import Icon from "./Icon";
 import {
   preprocessCanvasForOCR,
@@ -837,6 +839,16 @@ export default function BarcodeScanner({
     void triggerAutofocus(x, y);
   };
 
+  // Soporte para escáneres HID (pistolas láser industriales)
+  useHardwareScanner({
+    enabled: true,
+    onScan: (code) => {
+      handleDetectedCode(code, true);
+    },
+    minLength: 4,
+    maxInterKeyDelay: 80,
+  });
+
   return (
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/75 p-0 sm:p-4 backdrop-blur-xs" role="dialog" aria-modal="true" aria-labelledby="barcode-scanner-title">
       <div className="bg-white dark:bg-slate-900 rounded-t-2xl sm:rounded-xl w-full max-w-lg shadow-2xl overflow-hidden animate-fadeIn border border-slate-200 dark:border-slate-800 flex flex-col max-h-[92vh]">
@@ -970,6 +982,12 @@ export default function BarcodeScanner({
             <Icon name="keyboard" size={15} />
             <span>Manual</span>
           </button>
+        </div>
+
+        <div className="bg-slate-50 dark:bg-slate-900/50 px-4 py-1.5 border-b border-slate-200 dark:border-slate-800 flex justify-center shrink-0">
+          <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-medium text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400">
+            <Wifi className="h-3 w-3" /> Pistola láser compatible
+          </span>
         </div>
 
         {/* Scrollable Scanner Body */}

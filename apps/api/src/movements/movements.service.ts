@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, ConflictException, BadRequestException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { IssueStockDto } from './dto/issue-stock.dto';
@@ -48,32 +48,46 @@ export class MovementsService {
     return paginated(items, total, page, pageSize);
   }
 
+  private handleStockError(err: any): never {
+    // 55P03 = lock_not_available (otro proceso tiene el lock)
+    if (err?.code === '55P03') {
+      throw new ConflictException(
+        'Otro operario está procesando este casillero en este momento. Intenta nuevamente en unos segundos.'
+      );
+    }
+    // P0001 = stock insuficiente (RAISE con ERRCODE P0001)
+    if (err?.code === 'P0001' || err?.message?.includes('insuficiente')) {
+      throw new BadRequestException(err.message ?? 'Stock insuficiente para esta operación.');
+    }
+    throw err;
+  }
+
   receive(data: ReceiveStockDto, userId: string) {
     return this.callMovementFunction(Prisma.sql`
-      SELECT public.wms_receive_stock(
+      SELECT public.wms_receive_stock_v2(
         ${data.productId}::uuid, ${data.locationId}::uuid, ${data.quantity}::integer,
         ${data.reason ?? null}, ${userId}::uuid, ${data.reference ?? null}
       ) AS "movementId"
-    `);
+    `).catch((err) => this.handleStockError(err));
   }
 
   issue(data: IssueStockDto, userId: string) {
     return this.callMovementFunction(Prisma.sql`
-      SELECT public.wms_issue_stock(
+      SELECT public.wms_issue_stock_v2(
         ${data.productId}::uuid, ${data.locationId}::uuid, ${data.quantity}::integer,
         ${data.reason ?? null}, ${userId}::uuid, ${data.reference ?? null}
       ) AS "movementId"
-    `);
+    `).catch((err) => this.handleStockError(err));
   }
 
   transfer(data: TransferStockDto, userId: string) {
     return this.callMovementFunction(Prisma.sql`
-      SELECT public.wms_transfer_stock(
+      SELECT public.wms_transfer_stock_v2(
         ${data.productId}::uuid, ${data.sourceLocationId}::uuid,
         ${data.destinationLocationId}::uuid, ${data.quantity}::integer,
         ${data.reason ?? null}, ${userId}::uuid, ${data.reference ?? null}
       ) AS "movementId"
-    `);
+    `).catch((err) => this.handleStockError(err));
   }
 
   adjustment(data: AdjustStockDto, userId: string) {

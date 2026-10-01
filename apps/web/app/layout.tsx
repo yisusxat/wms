@@ -1,6 +1,7 @@
 import type { Viewport } from 'next';
 import './globals.css';
 import '../sentry.client.config';
+import { Providers } from './providers';
 
 export const viewport: Viewport = {
   width: 'device-width',
@@ -22,7 +23,9 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
         <link rel="manifest" href="/manifest.json" />
       </head>
       <body className="bg-surface text-ink antialiased">
-        {children}
+        <Providers>
+          {children}
+        </Providers>
         <script
           dangerouslySetInnerHTML={{
             __html: `

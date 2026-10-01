@@ -1,6 +1,8 @@
 "use client";
 import { useState } from "react";
 import { Tag, Printer, X, Clipboard, Check } from "lucide-react";
+import { printZpl, PrintMethod } from "../../lib/printers/zebra";
+import { useToast } from "./Toast";
 
 export interface LabelModalData {
   code: string;
@@ -19,11 +21,43 @@ export function LabelModal({
   onClose: () => void;
 }) {
   const [copiedZpl, setCopiedZpl] = useState(false);
+  const [printMethod, setPrintMethod] = useState<PrintMethod>('browser');
+  const [printerIp, setPrinterIp] = useState<string>(
+    typeof window !== 'undefined' ? localStorage.getItem('wms_printer_ip') ?? '' : ''
+  );
+  const [printing, setPrinting] = useState(false);
+  const { showToast } = useToast();
 
   if (!data) return null;
 
-  const handlePrint = () => {
-    window.print();
+  const handlePrint = async () => {
+    const zpl = data?.zpl;
+    if (!zpl) {
+      showToast({ message: 'No hay datos ZPL disponibles para esta etiqueta.', type: 'warning' });
+      return;
+    }
+
+    if (printMethod === 'network') {
+      localStorage.setItem('wms_printer_ip', printerIp);
+    }
+
+    setPrinting(true);
+    try {
+      const result = await printZpl(zpl, {
+        method: printMethod,
+        networkIp: printerIp,
+        networkPort: 9100,
+      });
+      if (result.ok) {
+        showToast({ message: 'Etiqueta enviada a la impresora correctamente.', type: 'success' });
+      } else {
+        showToast({ message: result.error ?? 'Error al imprimir.', type: 'error' });
+      }
+    } catch (err: any) {
+      showToast({ message: err?.message ?? 'Error inesperado al imprimir.', type: 'error' });
+    } finally {
+      setPrinting(false);
+    }
   };
 
   const copyZpl = () => {
@@ -86,19 +120,51 @@ export function LabelModal({
         </div>
 
         {/* Actions */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-2">
-          <button
-            onClick={handlePrint}
-            className="flex items-center justify-center gap-1.5 rounded-xl bg-blue-600 px-4 py-3 min-h-[48px] text-sm font-bold text-white hover:bg-blue-700 transition shadow-sm cursor-pointer active:scale-98"
-          >
-            🖨️ Imprimir
-          </button>
-          <button
-            onClick={copyZpl}
-            className="flex items-center justify-center gap-1.5 rounded-xl border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-4 py-3 min-h-[48px] text-sm font-bold text-gray-700 dark:text-slate-200 hover:bg-gray-50 dark:hover:bg-slate-700 transition cursor-pointer active:scale-98"
-          >
-            {copiedZpl ? '✓ ¡Copiado!' : 'Copiar ZPL (Zebra)'}
-          </button>
+        <div className="pt-2">
+          {/* Selector de método de impresión */}
+          <div className="mb-3 space-y-2">
+            <label className="block text-xs font-medium text-slate-700 dark:text-slate-300">
+              Método de impresión
+            </label>
+            <select
+              value={printMethod}
+              onChange={(e) => setPrintMethod(e.target.value as PrintMethod)}
+              className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200"
+            >
+              <option value="browser">Impresora del sistema (navegador)</option>
+              <option value="bluetooth">Zebra Bluetooth (Web BT)</option>
+              <option value="network">Zebra en red (IP:9100)</option>
+            </select>
+            {printMethod === 'network' && (
+              <input
+                type="text"
+                value={printerIp}
+                onChange={(e) => setPrinterIp(e.target.value)}
+                placeholder="192.168.1.100"
+                className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 placeholder-slate-400 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200 dark:placeholder-slate-500"
+              />
+            )}
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+            <button
+              onClick={handlePrint}
+              disabled={printing}
+              className="flex items-center justify-center gap-1.5 rounded-xl bg-blue-600 px-4 py-3 min-h-[48px] text-sm font-bold text-white hover:bg-blue-700 transition shadow-sm cursor-pointer active:scale-98 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {printing ? (
+                <span>Enviando...</span>
+              ) : (
+                <>🖨️ Imprimir</>
+              )}
+            </button>
+            <button
+              onClick={copyZpl}
+              className="flex items-center justify-center gap-1.5 rounded-xl border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-4 py-3 min-h-[48px] text-sm font-bold text-gray-700 dark:text-slate-200 hover:bg-gray-50 dark:hover:bg-slate-700 transition cursor-pointer active:scale-98"
+            >
+              {copiedZpl ? '✓ ¡Copiado!' : 'Copiar ZPL (Zebra)'}
+            </button>
+          </div>
         </div>
       </div>
     </div>
