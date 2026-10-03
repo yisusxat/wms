@@ -9,9 +9,17 @@
    - Start: `npm run start:api`
    - Health check: `/api/health`
 3. Configurar los secretos `DATABASE_URL`, `INSFORGE_URL`,
-   `INSFORGE_ANON_KEY` y `WEB_ORIGIN`.
+   `INSFORGE_ANON_KEY`, `WEB_ORIGIN`, `RESEND_API_KEY` y `EMAIL_FROM`.
+   `JWT_SECRET` lo genera Render automáticamente (`generateValue: true`).
+   `WEB_ORIGIN` es la URL del frontend, sin barra final (acepta varias separadas por coma).
 4. Ejecutar las migraciones remotas exclusivamente con InsForge CLI antes de
    apuntar la API productiva a la base de datos.
+5. Verificar el despliegue: `GET https://<tu-api>.onrender.com/api/health` debe
+   responder `200` con `"database":{"status":"connected"}`, y
+   `GET /api/products` sin token debe responder `401`.
+
+> El plan `free` de Render duerme el servicio tras ~15 min sin tráfico; la primera
+> petición posterior puede tardar ~50 s.
 
 ## Frontend en Vercel
 

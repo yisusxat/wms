@@ -10,6 +10,8 @@ services:
     envVars:
       - key: NODE_ENV
         value: production
+      - key: NODE_VERSION
+        value: 22
       - key: PORT
         value: 10000
       - key: DATABASE_URL
@@ -19,4 +21,13 @@ services:
       - key: INSFORGE_ANON_KEY
         sync: false
       - key: WEB_ORIGIN
+        sync: false
+      # Secreto fuerte generado por Render: evita el valor por defecto 'wms-secret' (hallazgo C5)
+      - key: JWT_SECRET
+        generateValue: true
+      - key: RESEND_API_KEY
+        sync: false
+      - key: EMAIL_FROM
+        sync: false
+      - key: SENTRY_DSN
         sync: false
