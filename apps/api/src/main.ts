@@ -41,8 +41,14 @@ async function bootstrap() {
       if (allowedOrigins.some((allowed) => origin === allowed || allowed === '*')) {
         return callback(null, true);
       }
-      if (/\.vercel\.app$/.test(origin)) return callback(null, true);
-      return callback(new Error(`Origin ${origin} not allowed by CORS`));
+      if (
+        /\.pages\.dev$/.test(origin) ||
+        /\.workers\.dev$/.test(origin) ||
+        /\.vercel\.app$/.test(origin)
+      ) {
+        return callback(null, true);
+      }
+      return callback(null, false);
     },
     credentials: true,
   });

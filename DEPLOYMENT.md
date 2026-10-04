@@ -21,18 +21,26 @@
 > El plan `free` de Render duerme el servicio tras ~15 min sin tráfico; la primera
 > petición posterior puede tardar ~50 s.
 
-## Frontend en Vercel
+## Frontend en Cloudflare (Pages / Workers con OpenNext)
 
-1. En el dashboard de Vercel, ve a **Settings** > **General** de tu proyecto (o configúralo al importarlo).
-2. En la sección **Root Directory**, haz clic en **Edit**, escribe `apps/web` y guarda los cambios.
-3. Vercel detectará automáticamente **Next.js**, los comandos de instalación (`npm install` respetando el monorepo) y el build (`next build`).
-4. Configurar las variables de entorno en Vercel (**Settings** > **Environment Variables**):
-   - `NEXT_PUBLIC_API_URL`: URL pública de la API en Render (ejemplo: `https://tu-api.onrender.com`).
-   - `NEXT_PUBLIC_INSFORGE_URL`: URL pública de InsForge (`https://jirv3k8h.us-east.insforge.app`).
+1. En el dashboard de Cloudflare:
+   - Si usas **Cloudflare Pages**: Conecta el repositorio `yisusxat/wms`.
+     - **Root directory:** `apps/web`
+     - **Build command:** `npx @opennextjs/cloudflare build` (o `npm run build:worker`)
+     - **Output directory:** `.open-next/assets`
+   - Si despliegas con **Wrangler CLI**:
+     ```bash
+     cd apps/web
+     npm run build:worker
+     npx wrangler deploy
+     ```
+2. Configurar las variables de entorno en Cloudflare (**Settings** > **Environment variables**):
+   - `NEXT_PUBLIC_API_URL`: URL pública de la API en Render (ejemplo: `https://wms-262o.onrender.com`).
+   - `NEXT_PUBLIC_INSFORGE_URL`: `https://jirv3k8h.us-east.insforge.app`.
    - `NEXT_PUBLIC_INSFORGE_ANON_KEY`: anon key pública de InsForge.
+3. Recuerda configurar el dominio de tu frontend (ejemplo: `https://wms.pages.dev` o tu dominio personalizado) en la variable `WEB_ORIGIN` del servicio `wms-api` en Render para autorizar el tráfico CORS con credenciales.
 
-La `DATABASE_URL`, las claves administrativas y las credenciales E2E nunca
-deben configurarse como variables públicas de Vercel.
+La `DATABASE_URL`, las claves administrativas y los secretos de backend nunca deben configurarse en el frontend.
 
 ## E2E autenticado
 
