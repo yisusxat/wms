@@ -106,7 +106,7 @@ export default function ReportsPanel({ token, organizationId, onDataChanged }: P
   // Scheduled report state
   const [scheduleType, setScheduleType] = useState<ReportType>("inventory");
   const [scheduleFormat, setScheduleFormat] = useState<ReportFormat>("xlsx");
-  const [scheduleEmail, setScheduleEmail] = useState("yisusxat@gmail.com");
+  const [scheduleEmail, setScheduleEmail] = useState("");
   const [scheduleSending, setScheduleSending] = useState(false);
   const [scheduleStatus, setScheduleStatus] = useState<{ message: React.ReactNode; type: "success" | "error" } | null>(null);
 
@@ -595,6 +595,7 @@ export default function ReportsPanel({ token, organizationId, onDataChanged }: P
               <label className="block text-xs font-semibold text-slate-600 dark:text-slate-300 mb-1">Correo Destinatario</label>
               <input
                 type="email"
+                placeholder="correo@empresa.com"
                 className="w-full rounded-lg border p-2.5 text-sm dark:bg-slate-800 dark:border-slate-600 dark:text-white border-slate-200 dark:border-slate-800"
                 value={scheduleEmail}
                 onChange={(e) => setScheduleEmail(e.target.value)}

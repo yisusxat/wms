@@ -251,7 +251,7 @@ export function SupportModal({
         details.push({
           channel: 'Correo Electrónico (Resend)',
           status: 'ok',
-          detail: `Entregado a yisusxat@gmail.com ${data.resendId ? `(#${data.resendId.slice(0, 8)})` : ''}`,
+          detail: `Entregado al centro de soporte ${data.resendId ? `(#${data.resendId.slice(0, 8)})` : ''}`,
         });
       }
     } catch (apiErr: any) {
@@ -264,7 +264,7 @@ export function SupportModal({
         details.push({
           channel: 'Correo Electrónico (Resend)',
           status: 'ok',
-          detail: 'Despachado a yisusxat@gmail.com vía Motor Postgres',
+          detail: 'Despachado al centro de soporte vía backend',
         });
       } else {
         details.push({

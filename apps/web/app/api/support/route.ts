@@ -2,17 +2,14 @@ import { NextResponse } from 'next/server';
 
 export const dynamic = 'force-dynamic';
 
-// Fallback decoded at runtime to prevent plain-text push protection blocking
-const FALLBACK_RESEND_KEY = Buffer.from('cmVfR1JaMkZlOGRfQ1NlcE0xWURkTHpTS3FXR2lOWTd6QUxD', 'base64').toString('utf8');
-
 export async function POST(req: Request) {
   try {
     const body = await req.json();
     const { subject, category, description, user, role, url, userAgent, screenResolution, section, tab, warehouse } = body;
 
-    const resendApiKey = process.env.RESEND_API_KEY || FALLBACK_RESEND_KEY;
+    const resendApiKey = process.env.RESEND_API_KEY || '';
     const emailFrom = process.env.EMAIL_FROM || 'WMS Soporte <onboarding@resend.dev>';
-    const supportTarget = process.env.SUPPORT_EMAIL_TARGET || 'yisusxat@gmail.com';
+    const supportTarget = process.env.SUPPORT_EMAIL_TARGET || 'support@wms-enterprise.local';
 
     let emailStatus = 'skipped';
     let resendId: string | null = null;
