@@ -44,7 +44,7 @@ export type CurrentUser = {
   id: string;
   email?: string;
   name?: string;
-  role: 'ADMIN' | 'SUPERVISOR' | 'OPERATOR' | 'VIEWER';
+  role: 'VIEWER' | 'OPERATOR' | 'SUPERVISOR' | 'ADMIN';
   organizationId?: string;
   permissions?: any;
   active?: boolean;
@@ -166,10 +166,9 @@ export async function apiFetch<T>(path: string, token: string, init?: RequestIni
         if (errMsg.toLowerCase().includes('stock') || errMsg.toLowerCase().includes('insuficiente') || errMsg.toLowerCase().includes('cantidad')) {
           throw new Error(errMsg);
         }
-        // If the error was on movements or locations due to role restriction or older schema, fall back to InsForge direct
-        if (response.status === 403 || response.status === 401 || response.status === 404) {
-          console.warn(`NestJS API ${requestPath} returned ${response.status}, falling back to direct InsForge BaaS`);
-          return fallbackInsforge<T>(requestPath, token, requestInit);
+        // 401 Unauthorized / 403 Forbidden: nunca hacer fallback, lanzar error inmediatamente
+        if ([401, 403].includes(response.status)) {
+          throw new Error(errMsg || (response.status === 401 ? 'Sesión expirada o no autorizada' : 'Acceso denegado: permisos insuficientes'));
         }
         throw new Error(errMsg);
       }
@@ -204,7 +203,7 @@ async function fallbackInsforge<T>(path: string, token: string, init?: RequestIn
     } catch {}
 
     let name = 'Usuario';
-    let role: CurrentUser['role'] = 'ADMIN';
+    let role: CurrentUser['role'] = 'VIEWER';
     let permissions = null;
 
     if (userId) {
@@ -992,14 +991,14 @@ async function fallbackInsforge<T>(path: string, token: string, init?: RequestIn
         id: rows[0].id,
         name: rows[0].name,
         slug: rows[0].slug,
-        userRole: 'ADMIN',
+        userRole: 'VIEWER',
       } as T;
     }
     return {
       id: 'a1b2c3d4-e5f6-7a8b-9c0d-1e2f3a4b5c6d',
       name: 'Bodega Central',
       slug: 'bodega-central',
-      userRole: 'ADMIN',
+      userRole: 'VIEWER',
     } as T;
   }
 

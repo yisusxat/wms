@@ -1,15 +1,18 @@
-﻿import { Body, Controller, Get, Post, Query, Req, Res, UseGuards } from "@nestjs/common";
+import { BadRequestException, Body, Controller, Get, Post, Query, Req, Res, UseGuards } from "@nestjs/common";
 import type { Response, Request } from "express";
 import { AuthGuard } from "../auth/auth.guard";
 import { RolesGuard } from "../auth/roles.guard";
+import { Roles } from "../auth/roles.decorator";
 import { ReportFormat, ReportPeriod, ReportsService } from "./reports.service";
 
 @Controller("reports")
 @UseGuards(AuthGuard, RolesGuard)
+@Roles("ADMIN", "SUPERVISOR")
 export class ReportsController {
   constructor(private readonly reports: ReportsService) {}
 
   @Get("inventory")
+  @Roles("ADMIN", "SUPERVISOR")
   async inventory(
     @Query("format") format: ReportFormat = "xlsx",
     @Query("organizationId") organizationId: string | undefined,
@@ -22,6 +25,7 @@ export class ReportsController {
   }
 
   @Get("movements")
+  @Roles("ADMIN", "SUPERVISOR")
   async movements(
     @Query("format") format: ReportFormat = "xlsx",
     @Query("period") period: ReportPeriod = "30d",
@@ -35,6 +39,7 @@ export class ReportsController {
   }
 
   @Get("break-risk")
+  @Roles("ADMIN", "SUPERVISOR")
   async breakRisk(
     @Query("format") format: ReportFormat = "xlsx",
     @Query("organizationId") organizationId: string | undefined,
@@ -47,6 +52,7 @@ export class ReportsController {
   }
 
   @Post("schedule/dispatch")
+  @Roles("ADMIN", "SUPERVISOR")
   async dispatchSchedule(
     @Body()
     body: {
@@ -56,15 +62,25 @@ export class ReportsController {
       organizationId?: string;
     }
   ) {
+    if (!body.recipients || !Array.isArray(body.recipients) || body.recipients.length === 0) {
+      throw new BadRequestException("Debe especificar al menos un destinatario de correo válido.");
+    }
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    const invalid = body.recipients.filter((r) => !emailRegex.test(r));
+    if (invalid.length > 0) {
+      throw new BadRequestException(`Direcciones de correo inválidas: ${invalid.join(", ")}`);
+    }
+
     return this.reports.dispatchScheduledReport(
       body.reportType,
       body.format ?? "xlsx",
-      body.recipients ?? ["yisusxat@gmail.com"],
+      body.recipients,
       body.organizationId
     );
   }
 
   @Post("bulk/dry-run")
+  @Roles("ADMIN", "SUPERVISOR")
   async bulkDryRun(
     @Body() body: { items: { sku: string; locationCode: string; quantity: number }[] }
   ) {
@@ -72,6 +88,7 @@ export class ReportsController {
   }
 
   @Post("bulk/apply")
+  @Roles("ADMIN", "SUPERVISOR")
   async bulkApply(
     @Body()
     body: {

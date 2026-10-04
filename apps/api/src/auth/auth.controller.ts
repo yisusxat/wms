@@ -19,7 +19,7 @@ class ResetPasswordDto {
   token!: string;
 
   @IsString({ message: 'La contraseña es requerida' })
-  @MinLength(8, { message: 'La contraseña debe tener al menos 8 caracteres' })
+  @MinLength(10, { message: 'La contraseña debe tener al menos 10 caracteres' })
   newPassword!: string;
 }
 

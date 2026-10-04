@@ -10,7 +10,7 @@ export class CreateUserDto {
   name!: string;
 
   @IsString()
-  @MinLength(6)
+  @MinLength(10, { message: 'La contraseña debe tener al menos 10 caracteres' })
   password!: string;
 
   @IsOptional()
