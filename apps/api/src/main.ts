@@ -43,8 +43,7 @@ async function bootstrap() {
       }
       if (
         /\.pages\.dev$/.test(origin) ||
-        /\.workers\.dev$/.test(origin) ||
-        /\.vercel\.app$/.test(origin)
+        /\.workers\.dev$/.test(origin)
       ) {
         return callback(null, true);
       }
@@ -54,14 +53,18 @@ async function bootstrap() {
   });
   app.useGlobalPipes(new ValidationPipe({ whitelist: true, transform: true }));
   app.useGlobalFilters(new HttpExceptionFilter());
-  const swaggerConfig = new DocumentBuilder()
-    .setTitle('WMS API')
-    .setDescription('API operacional para gestión de bodegas e inventario')
-    .setVersion('1.0')
-    .addBearerAuth()
-    .build();
-  const document = SwaggerModule.createDocument(app, swaggerConfig);
-  SwaggerModule.setup('api/docs', app, document);
+
+  if (config.get('NODE_ENV') !== 'production') {
+    const swaggerConfig = new DocumentBuilder()
+      .setTitle('WMS API')
+      .setDescription('API operacional para gestión de bodegas e inventario')
+      .setVersion('1.0')
+      .addBearerAuth()
+      .build();
+    const document = SwaggerModule.createDocument(app, swaggerConfig);
+    SwaggerModule.setup('api/docs', app, document);
+  }
+
   await app.listen(process.env.PORT ?? 3001);
 }
 

@@ -90,9 +90,9 @@ export class UsersService {
     const userId = authUsers[0].id;
 
     // 3. Mark email verified so user can log in immediately
-    await this.prisma.$executeRawUnsafe(`
-      UPDATE auth.users SET email_verified = true WHERE id = '${userId}'::uuid
-    `).catch(() => null);
+    await this.prisma.$executeRaw`
+      UPDATE auth.users SET email_verified = true WHERE id = ${userId}::uuid
+    `.catch(() => null);
 
     // 4. Upsert user profile
     const profile = await this.prisma.user.upsert({
@@ -217,15 +217,12 @@ export class UsersService {
 
   async anonymizeUser(userId: string) {
     const anonEmail = `anonymized_${userId.slice(0, 8)}@deleted.local`;
-    await this.prisma.$executeRawUnsafe(
-      `UPDATE "user_profiles" SET name = 'Usuario Anonimizado', active = false, updated_at = NOW() WHERE id = $1::uuid`,
-      userId,
-    );
-    await this.prisma.$executeRawUnsafe(
-      `UPDATE auth.users SET email = $1, email_verified = false, updated_at = NOW() WHERE id = $2::uuid`,
-      anonEmail,
-      userId,
-    );
+    await this.prisma.$executeRaw`
+      UPDATE "user_profiles" SET name = 'Usuario Anonimizado', active = false, updated_at = NOW() WHERE id = ${userId}::uuid
+    `;
+    await this.prisma.$executeRaw`
+      UPDATE auth.users SET email = ${anonEmail}, email_verified = false, updated_at = NOW() WHERE id = ${userId}::uuid
+    `;
     await this.audit.log({
       userId,
       action: 'USER_GDPR_ANONYMIZED',

@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useRef, ChangeEvent, DragEvent } from 'react';
-import * as XLSX from 'xlsx';
+import ExcelJS from 'exceljs';
 import { apiFetch, Product } from '../../lib/api';
 import { useToast } from './Toast';
 
@@ -64,7 +64,7 @@ const SAMPLE_PRODUCTS = [
   },
 ];
 
-export function downloadProductTemplate(format: 'xlsx' | 'csv' | 'json') {
+export async function downloadProductTemplate(format: 'xlsx' | 'csv' | 'json') {
   const filename = `plantilla_productos_wms.${format}`;
 
   if (format === 'json') {
@@ -91,14 +91,13 @@ export function downloadProductTemplate(format: 'xlsx' | 'csv' | 'json') {
     return;
   }
 
-  const worksheet = XLSX.utils.json_to_sheet(SAMPLE_PRODUCTS);
-  const workbook = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(workbook, worksheet, 'Plantilla');
-
   if (format === 'csv') {
-    const csvOutput = XLSX.utils.sheet_to_csv(worksheet);
-    // Add UTF-8 BOM so Excel opens accents correctly
-    const blob = new Blob(['\uFEFF' + csvOutput], { type: 'text/csv;charset=utf-8;' });
+    const headers = ['sku', 'nombre', 'categoria', 'unidad', 'estado', 'codigo_barras', 'descripcion'];
+    const rows = SAMPLE_PRODUCTS.map((p: any) =>
+      headers.map((h) => `"${String(p[h] ?? '').replace(/"/g, '""')}"`).join(',')
+    );
+    const csvOutput = '\uFEFF' + [headers.join(','), ...rows].join('\n');
+    const blob = new Blob([csvOutput], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
@@ -108,8 +107,27 @@ export function downloadProductTemplate(format: 'xlsx' | 'csv' | 'json') {
     return;
   }
 
-  // xlsx
-  XLSX.writeFile(workbook, filename);
+  // xlsx via ExcelJS
+  const workbook = new ExcelJS.Workbook();
+  const worksheet = workbook.addWorksheet('Plantilla');
+  worksheet.columns = [
+    { header: 'sku', key: 'sku', width: 16 },
+    { header: 'nombre', key: 'nombre', width: 28 },
+    { header: 'categoria', key: 'categoria', width: 20 },
+    { header: 'unidad', key: 'unidad', width: 12 },
+    { header: 'estado', key: 'estado', width: 12 },
+    { header: 'codigo_barras', key: 'codigo_barras', width: 18 },
+    { header: 'descripcion', key: 'descripcion', width: 32 },
+  ];
+  SAMPLE_PRODUCTS.forEach((p) => worksheet.addRow(p));
+  const buffer = await workbook.xlsx.writeBuffer();
+  const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(url);
 }
 
 // ==================== EXPORT UTILITY ====================
@@ -155,13 +173,13 @@ export async function exportProductsToFile(
     'Código de Barras': p.barcode || '',
   }));
 
-  const worksheet = XLSX.utils.json_to_sheet(exportRows);
-  const workbook = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(workbook, worksheet, 'Productos');
-
   if (format === 'csv') {
-    const csvOutput = XLSX.utils.sheet_to_csv(worksheet);
-    const blob = new Blob(['\uFEFF' + csvOutput], { type: 'text/csv;charset=utf-8;' });
+    const headers = ['SKU', 'Nombre', 'Categoría', 'Unidad', 'Estado', 'Código de Barras'];
+    const rows = exportRows.map((r: any) =>
+      headers.map((h) => `"${String(r[h] ?? '').replace(/"/g, '""')}"`).join(',')
+    );
+    const csvOutput = '\uFEFF' + [headers.join(','), ...rows].join('\n');
+    const blob = new Blob([csvOutput], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
@@ -171,8 +189,26 @@ export async function exportProductsToFile(
     return;
   }
 
-  // xlsx
-  XLSX.writeFile(workbook, filename);
+  // xlsx via ExcelJS
+  const workbook = new ExcelJS.Workbook();
+  const worksheet = workbook.addWorksheet('Productos');
+  worksheet.columns = [
+    { header: 'SKU', key: 'SKU', width: 16 },
+    { header: 'Nombre', key: 'Nombre', width: 28 },
+    { header: 'Categoría', key: 'Categoría', width: 20 },
+    { header: 'Unidad', key: 'Unidad', width: 12 },
+    { header: 'Estado', key: 'Estado', width: 12 },
+    { header: 'Código de Barras', key: 'Código de Barras', width: 20 },
+  ];
+  exportRows.forEach((r) => worksheet.addRow(r));
+  const buffer = await workbook.xlsx.writeBuffer();
+  const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(url);
 }
 
 // ==================== IMPORT MODAL COMPONENT ====================
@@ -226,18 +262,60 @@ export function ProductImportModal({
         } else {
           throw new Error('El archivo JSON debe contener un arreglo de productos.');
         }
-      } else if (
-        fileName.endsWith('.xlsx') ||
-        fileName.endsWith('.xls') ||
-        fileName.endsWith('.csv')
-      ) {
+      } else if (fileName.endsWith('.csv')) {
+        const text = await uploadedFile.text();
+        const lines = text.split(/\r?\n/).filter((l) => l.trim().length > 0);
+        if (lines.length < 2) throw new Error('El archivo CSV no contiene suficientes filas.');
+        const parseLine = (l: string) => {
+          const result: string[] = [];
+          let current = '';
+          let inQuotes = false;
+          for (let i = 0; i < l.length; i++) {
+            const char = l[i];
+            if (char === '"' && (i === 0 || l[i - 1] !== '\\')) {
+              inQuotes = !inQuotes;
+            } else if (char === ',' && !inQuotes) {
+              result.push(current.trim());
+              current = '';
+            } else {
+              current += char;
+            }
+          }
+          result.push(current.trim());
+          return result.map((s) => s.replace(/^"(.*)"$/, '$1'));
+        };
+        const headers = parseLine(lines[0]);
+        rawData = lines.slice(1).map((line) => {
+          const vals = parseLine(line);
+          const obj: Record<string, string> = {};
+          headers.forEach((h, idx) => {
+            obj[h] = vals[idx] ?? '';
+          });
+          return obj;
+        });
+      } else if (fileName.endsWith('.xlsx') || fileName.endsWith('.xls')) {
         const buffer = await uploadedFile.arrayBuffer();
-        const workbook = XLSX.read(buffer, { type: 'array' });
-        const firstSheet = workbook.SheetNames[0];
-        if (!firstSheet) {
+        const workbook = new ExcelJS.Workbook();
+        await workbook.xlsx.load(buffer);
+        const worksheet = workbook.worksheets[0];
+        if (!worksheet) {
           throw new Error('El archivo no contiene hojas de cálculo válidas.');
         }
-        rawData = XLSX.utils.sheet_to_json(workbook.Sheets[firstSheet], { defval: '' });
+        const rows: any[] = [];
+        let headers: string[] = [];
+        worksheet.eachRow((row, rowNumber) => {
+          const values = Array.isArray(row.values) ? row.values.slice(1) : [];
+          if (rowNumber === 1) {
+            headers = values.map((v: any) => String(v ?? '').trim());
+          } else {
+            const rowObj: Record<string, any> = {};
+            headers.forEach((h, idx) => {
+              rowObj[h] = values[idx] ?? '';
+            });
+            rows.push(rowObj);
+          }
+        });
+        rawData = rows;
       } else {
         throw new Error('Formato no compatible. Por favor sube un archivo .xlsx, .csv o .json');
       }

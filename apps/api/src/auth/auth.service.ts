@@ -129,15 +129,13 @@ export class AuthService {
   }
 
   async resetPassword(token: string, newPassword: string, ip?: string, userAgent?: string) {
-    if (!newPassword || newPassword.length < 8) {
-      throw new BadRequestException('La contraseña debe tener al menos 8 caracteres');
+    if (!newPassword || newPassword.length < 10) {
+      throw new BadRequestException('La contraseña debe tener al menos 10 caracteres');
     }
     const { userId, email } = this.verifyPasswordResetToken(token);
-    await this.prisma.$executeRawUnsafe(
-      `UPDATE auth.users SET password = crypt($1, gen_salt('bf')), updated_at = NOW() WHERE id = $2::uuid`,
-      newPassword,
-      userId,
-    );
+    await this.prisma.$executeRaw`
+      UPDATE auth.users SET password = crypt(${newPassword}, gen_salt('bf')), updated_at = NOW() WHERE id = ${userId}::uuid
+    `;
     await this.audit.log({
       userId,
       action: 'PASSWORD_RESET_COMPLETED',
