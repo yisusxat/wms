@@ -265,16 +265,26 @@ export class OperationsService {
   // ─────────────────────────────────────────────────────────────
   // 3. GENERADOR DE ETIQUETAS Y ZPL (ZEBRA)
   // ─────────────────────────────────────────────────────────────
+  private escapeZpl(val?: string): string {
+    if (!val) return "";
+    // Neutralizar caracteres de control ZPL (^ y ~)
+    return String(val).replace(/[\^~]/g, " ");
+  }
+
   generateLabel(code: string, type: "LOCATION" | "PALLET" | "PRODUCT", title: string, subtitle?: string): LabelData {
+    const safeTitle = this.escapeZpl(title);
+    const safeSubtitle = this.escapeZpl(subtitle);
+    const safeCode = this.escapeZpl(code);
+
     // Generar formato ZPL nativo para impresoras industriales Zebra (resolución 203 DPI standard 4x2 pulgadas)
     const zpl = `^XA
 ^PW812
 ^LL406
 ^FO50,40^A0N,36,36^FDWMS ENTERPRISE^FS
-^FO50,85^A0N,28,28^FD${type}: ${title}^FS
-${subtitle ? `^FO50,120^A0N,22,22^FD${subtitle}^FS` : ""}
-^FO50,160^BCN,100,Y,N,N^FD${code}^FS
-^FO550,160^BQN,2,5^FDQA,${code}^FS
+^FO50,85^A0N,28,28^FD${type}: ${safeTitle}^FS
+${safeSubtitle ? `^FO50,120^A0N,22,22^FD${safeSubtitle}^FS` : ""}
+^FO50,160^BCN,100,Y,N,N^FD${safeCode}^FS
+^FO550,160^BQN,2,5^FDQA,${safeCode}^FS
 ^XZ`;
 
     return {

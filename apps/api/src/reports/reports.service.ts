@@ -1,4 +1,5 @@
 import { Injectable, BadRequestException } from "@nestjs/common";
+import { ConfigService } from "@nestjs/config";
 import { PrismaService } from "../prisma/prisma.service";
 import * as ExcelJS from "exceljs";
 
@@ -25,7 +26,10 @@ export interface DryRunResult {
 
 @Injectable()
 export class ReportsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly config?: ConfigService
+  ) {}
 
   private periodToDate(period: ReportPeriod): Date | null {
     const now = new Date();
@@ -163,10 +167,22 @@ export class ReportsService {
       reportData = await this.generateBreakRiskReport(format, organizationId);
     }
 
-    const resendKey = Buffer.from("cmVfR1JaMkZlOGRfQ1NlcE0xWURkTHpTS3FXR2lOWTd6QUxD", "base64").toString("utf8");
+    const resendKey =
+      this.config?.get<string>("RESEND_API_KEY") || process.env.RESEND_API_KEY;
+
+    if (!resendKey) {
+      throw new BadRequestException(
+        "Servicio de correo no configurado (falta variable de entorno RESEND_API_KEY)."
+      );
+    }
+
+    const fromEmail =
+      this.config?.get<string>("EMAIL_FROM") ||
+      process.env.EMAIL_FROM ||
+      "WMS Enterprise <onboarding@resend.dev>";
 
     const emailPayload = {
-      from: "WMS Enterprise <onboarding@resend.dev>",
+      from: fromEmail,
       to: recipients,
       subject: `[WMS Reporte Automático] ${reportData.filename}`,
       html: `
@@ -380,7 +396,9 @@ export class ReportsService {
         ...data.map((row) =>
           headers
             .map((h) => {
-              const val = String(row[h] ?? "").replace(/"/g, '""');
+              const rawVal = row[h];
+              const sanitizedVal = this.sanitizeFormula(rawVal);
+              const val = String(sanitizedVal ?? "").replace(/"/g, '""');
               return /[,"\n\r]/.test(val) ? `"${val}"` : val;
             })
             .join(",")
@@ -411,7 +429,11 @@ export class ReportsService {
       headerRow.height = 22;
 
       data.forEach((row, idx) => {
-        const excelRow = sheet.addRow(row);
+        const sanitizedRow: Record<string, unknown> = {};
+        for (const [k, v] of Object.entries(row)) {
+          sanitizedRow[k] = this.sanitizeFormula(v);
+        }
+        const excelRow = sheet.addRow(sanitizedRow);
         excelRow.eachCell((cell) => {
           cell.fill = {
             type: "pattern",
@@ -431,6 +453,13 @@ export class ReportsService {
       filename: `${baseName}.xlsx`,
       mime: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
     };
+  }
+
+  private sanitizeFormula(value: unknown): unknown {
+    if (typeof value === "string" && /^[=+\-@\t\r]/.test(value)) {
+      return `'${value}`;
+    }
+    return value;
   }
 
   private dateStamp(): string {

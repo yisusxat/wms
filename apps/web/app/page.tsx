@@ -321,14 +321,26 @@ function HomePageContent() {
   useEffect(() => {
     let active = true;
 
-    // 1. Restore remembered credentials for login form if previously saved
+    // 1. Restore remembered credentials (SECURITY: email only, never password)
     try {
       const savedCreds = localStorage.getItem('wms_remembered_credentials');
       if (savedCreds) {
-        const parsed = JSON.parse(savedCreds);
-        if (parsed?.email) setEmail(parsed.email);
-        if (parsed?.password) setPassword(parsed.password);
-        setRememberPassword(true);
+        try {
+          const parsed = JSON.parse(savedCreds);
+          if (parsed?.email) {
+            setEmail(parsed.email);
+            localStorage.setItem('wms_remembered_email', parsed.email);
+            setRememberPassword(true);
+          }
+        } catch {}
+        // Purge legacy storage that contained plaintext password
+        localStorage.removeItem('wms_remembered_credentials');
+      } else {
+        const savedEmail = localStorage.getItem('wms_remembered_email');
+        if (savedEmail) {
+          setEmail(savedEmail);
+          setRememberPassword(true);
+        }
       }
     } catch {}
 
@@ -528,12 +540,13 @@ function HomePageContent() {
       }));
     } catch {}
 
-    // Save or clear remembered credentials
+    // Save or clear remembered credentials (SECURITY: store email only, NEVER plaintext password)
     try {
+      localStorage.removeItem('wms_remembered_credentials');
       if (rememberPassword) {
-        localStorage.setItem('wms_remembered_credentials', JSON.stringify({ email, password }));
+        localStorage.setItem('wms_remembered_email', email);
       } else {
-        localStorage.removeItem('wms_remembered_credentials');
+        localStorage.removeItem('wms_remembered_email');
       }
     } catch {}
   }
@@ -553,7 +566,7 @@ function HomePageContent() {
     try {
       localStorage.removeItem('wms_auth_session');
       localStorage.removeItem('wms_active_tab');
-      // Do NOT clear wms_remembered_credentials so user's password stays remembered if checked
+      // Do NOT clear wms_remembered_email so user's email stays remembered if checked
     } catch {}
   }
 

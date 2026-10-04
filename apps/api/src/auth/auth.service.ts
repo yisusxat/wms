@@ -4,7 +4,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { EmailService } from '../email/email.service';
 import { AuditService } from '../audit/audit.service';
 import { AuthenticatedUser, WmsRole } from './auth.types';
-import { createHmac } from 'node:crypto';
+import { createHmac, timingSafeEqual } from 'node:crypto';
 
 type InsForgeCurrentUser = {
   id: string;
@@ -69,8 +69,18 @@ export class AuthService {
     };
   }
 
+  private getJwtSecret(): string {
+    const secret = this.config.get<string>('JWT_SECRET') ?? process.env.JWT_SECRET;
+    if (!secret || secret === 'wms-secret' || secret.length < 32) {
+      throw new ServiceUnavailableException(
+        'CONFIG ERROR: JWT_SECRET debe estar configurado con una clave segura de al menos 32 caracteres (no se permite "wms-secret").'
+      );
+    }
+    return secret;
+  }
+
   createPasswordResetToken(userId: string, email: string): string {
-    const secret = this.config.get<string>('JWT_SECRET', 'wms-secret');
+    const secret = this.getJwtSecret();
     const exp = Date.now() + 30 * 60 * 1000; // 30 minutes
     const data = JSON.stringify({ userId, email, exp, type: 'pwd_reset' });
     const b64 = Buffer.from(data).toString('base64url');
@@ -79,11 +89,17 @@ export class AuthService {
   }
 
   verifyPasswordResetToken(token: string): { userId: string; email: string } {
-    const secret = this.config.get<string>('JWT_SECRET', 'wms-secret');
+    const secret = this.getJwtSecret();
     const [b64, sig] = token.split('.');
     if (!b64 || !sig) throw new BadRequestException('Token de restablecimiento inválido');
     const expectedSig = createHmac('sha256', secret).update(b64).digest('base64url');
-    if (sig !== expectedSig) throw new BadRequestException('Firma de token inválida');
+
+    const sigBuf = Buffer.from(sig);
+    const expectedBuf = Buffer.from(expectedSig);
+    if (sigBuf.length !== expectedBuf.length || !timingSafeEqual(sigBuf, expectedBuf)) {
+      throw new BadRequestException('Firma de token inválida');
+    }
+
     const payload = JSON.parse(Buffer.from(b64, 'base64url').toString('utf8'));
     if (Date.now() > payload.exp) throw new BadRequestException('El enlace de restablecimiento ha expirado');
     return { userId: payload.userId, email: payload.email };

@@ -98,7 +98,9 @@ check('C5', 'Prohibición de secreto por defecto ("wms-secret") en JWT', () => {
   const authServicePath = path.join(ROOT, 'apps/api/src/auth/auth.service.ts');
   const content = fs.readFileSync(authServicePath, 'utf8');
 
-  const hasDefaultSecret = /'JWT_SECRET',\s*['"]wms-secret['"]/.test(content) || content.includes("'wms-secret'");
+  const hasDefaultSecret =
+    /['"]JWT_SECRET['"],\s*['"]wms-secret['"]/.test(content) ||
+    /get<[^>]*>\(\s*['"]JWT_SECRET['"]\s*,\s*['"]wms-secret['"]\s*\)/.test(content);
 
   if (hasDefaultSecret) {
     return {

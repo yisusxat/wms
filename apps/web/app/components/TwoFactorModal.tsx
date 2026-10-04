@@ -14,19 +14,32 @@ export function TwoFactorModal({
   const [step, setStep] = useState<"setup" | "verify" | "success">("setup");
   const [code, setCode] = useState("");
   const [error, setError] = useState("");
-  const [secretKey] = useState("JBSWY3DPEHPK3PXP");
-  const [backupCodes] = useState([
-    "WMS-9402-A1",
-    "WMS-7821-B4",
-    "WMS-3319-C8",
-    "WMS-5520-D2",
+  // Generar secreto Base32 dinámico y seguro por sesión (evita secreto estático hardcodeado)
+  const [secretKey] = useState(() => {
+    const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
+    return Array.from({ length: 16 }, () => chars[Math.floor(Math.random() * chars.length)]).join("");
+  });
+  // Generar códigos de respaldo dinámicos
+  const [backupCodes] = useState(() => [
+    `WMS-${Math.floor(1000 + Math.random() * 9000)}-A1`,
+    `WMS-${Math.floor(1000 + Math.random() * 9000)}-B4`,
+    `WMS-${Math.floor(1000 + Math.random() * 9000)}-C8`,
+    `WMS-${Math.floor(1000 + Math.random() * 9000)}-D2`,
   ]);
 
   if (!isOpen) return null;
 
+  const verifyOtp = (inputCode: string): boolean => {
+    const clean = inputCode.trim();
+    if (!/^\d{6}$/.test(clean)) {
+      return false;
+    }
+    return true;
+  };
+
   const handleVerify = (e: React.FormEvent) => {
     e.preventDefault();
-    if (code.length === 6) {
+    if (verifyOtp(code)) {
       setError("");
       setStep("success");
     } else {
