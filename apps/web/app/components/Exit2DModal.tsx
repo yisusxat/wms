@@ -407,45 +407,60 @@ export function Exit2DModal({
           {/* STEP 1: SELECT ITEMS */}
           {step === "SELECT" && (
             <div className="p-4 sm:p-6 overflow-y-auto space-y-4 flex-1 text-sm">
-              {/* Quick Mode Switches: 2D Visual Map and S-Shape Wave Picking */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                <button
-                  type="button"
-                  onClick={() => {
-                    onClose();
-                    onOpenVisualPlanMode?.();
-                  }}
-                  className="flex items-center gap-2.5 p-3 rounded-xl border border-orange-200 dark:border-orange-800/60 bg-orange-50/80 dark:bg-orange-950/30 text-orange-950 dark:text-orange-200 hover:bg-orange-100 dark:hover:bg-orange-900/40 transition text-left cursor-pointer shadow-2xs"
-                >
-                  <span className="p-2 rounded-lg bg-orange-600 text-white shrink-0 shadow-xs">
-                    <Icon name="layers" size={16} />
-                  </span>
-                  <div>
-                    <p className="text-xs font-black">1. Selección Visual en Plano 2D</p>
-                    <p className="text-[10px] text-orange-800 dark:text-orange-300">
-                      Haz clic directamente en los casilleros del mapa en tiempo real
-                    </p>
-                  </div>
-                </button>
+              {/* Selector de Modalidad de Salida */}
+              <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-800/50 p-3 sm:p-4">
+                <p className="text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-2.5">
+                  Selecciona la modalidad de salida de mercancía:
+                </p>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      onClose();
+                      onOpenPickingWave?.();
+                    }}
+                    className="flex items-start gap-3 p-3.5 rounded-xl border-2 border-purple-300 dark:border-purple-800 bg-purple-50 dark:bg-purple-950/40 text-purple-950 dark:text-purple-100 hover:bg-purple-100 dark:hover:bg-purple-900/60 hover:border-purple-400 transition text-left cursor-pointer shadow-xs active:scale-[0.99]"
+                  >
+                    <span className="p-2.5 rounded-xl bg-purple-600 text-white shrink-0 shadow-sm mt-0.5">
+                      <Icon name="boxes" size={20} />
+                    </span>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-1.5">
+                        <span className="inline-block px-1.5 py-0.5 rounded text-[10px] font-black uppercase tracking-wide bg-purple-200 dark:bg-purple-900 text-purple-900 dark:text-purple-200">
+                          Opción 1
+                        </span>
+                        <p className="text-xs font-black">Ola de Picking (S-Shape)</p>
+                      </div>
+                      <p className="text-[11px] text-purple-800 dark:text-purple-300 mt-1 leading-snug">
+                        Agrega líneas y cantidades, calcula recorrido óptimo, descuenta stock automáticamente y genera informe oficial PDF para imprimir.
+                      </p>
+                    </div>
+                  </button>
 
-                <button
-                  type="button"
-                  onClick={() => {
-                    onClose();
-                    onOpenPickingWave?.();
-                  }}
-                  className="flex items-center gap-2.5 p-3 rounded-xl border border-purple-200 dark:border-purple-800/60 bg-purple-50/80 dark:bg-purple-950/30 text-purple-950 dark:text-purple-200 hover:bg-purple-100 dark:hover:bg-purple-900/40 transition text-left cursor-pointer shadow-2xs"
-                >
-                  <span className="p-2 rounded-lg bg-purple-600 text-white shrink-0 shadow-xs">
-                    <Icon name="boxes" size={16} />
-                  </span>
-                  <div>
-                    <p className="text-xs font-black">2. Ola de Picking (S-Shape)</p>
-                    <p className="text-[10px] text-purple-800 dark:text-purple-300">
-                      Ruta óptima en serpentina, descuento y PDF
-                    </p>
-                  </div>
-                </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      onClose();
+                      onOpenVisualPlanMode?.();
+                    }}
+                    className="flex items-start gap-3 p-3.5 rounded-xl border-2 border-rose-300 dark:border-rose-800 bg-rose-50 dark:bg-rose-950/40 text-rose-950 dark:text-rose-100 hover:bg-rose-100 dark:hover:bg-rose-900/60 hover:border-rose-400 transition text-left cursor-pointer shadow-xs active:scale-[0.99]"
+                  >
+                    <span className="p-2.5 rounded-xl bg-rose-600 text-white shrink-0 shadow-sm mt-0.5">
+                      <Icon name="layers" size={20} />
+                    </span>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-1.5">
+                        <span className="inline-block px-1.5 py-0.5 rounded text-[10px] font-black uppercase tracking-wide bg-rose-200 dark:bg-rose-900 text-rose-900 dark:text-rose-200">
+                          Opción 2
+                        </span>
+                        <p className="text-xs font-black">Selección en Plano 2D</p>
+                      </div>
+                      <p className="text-[11px] text-rose-800 dark:text-rose-300 mt-1 leading-snug">
+                        Formato como entrada pero en salida: visualiza el Plano de Planta 2D y haz clic en tiempo real sobre los casilleros para despachar.
+                      </p>
+                    </div>
+                  </button>
+                </div>
               </div>
 
               {initialSelectedLocationCodes && initialSelectedLocationCodes.size > 0 && (

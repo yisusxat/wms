@@ -829,11 +829,7 @@ export function Warehouse2D({ token, onError, onNavigate, onDataChanged, refresh
                 setIsExitSelectionMode(false);
                 setExitSelectedCodes(new Set());
               } else {
-                setIsExitSelectionMode(true);
-                setIsEntrySelectionMode(false);
-                if (exitSelectedCodes.size === 0) {
-                  setExitPositionsCount(1);
-                }
+                setExitModalOpen(true);
               }
             }}
             className={`flex items-center gap-1.5 rounded-lg px-3.5 py-1.5 text-xs font-semibold shadow-xs transition cursor-pointer ${
@@ -841,29 +837,10 @@ export function Warehouse2D({ token, onError, onNavigate, onDataChanged, refresh
                 ? 'bg-amber-600 text-white ring-2 ring-amber-300'
                 : 'bg-rose-600 text-white hover:bg-rose-700'
             }`}
-            title="Seleccionar en tiempo real casilleros con inventario en el plano 2D para despacho"
-          >
-            <Icon name="arrow-up-right" size={14} />
-            <span>{isExitSelectionMode ? '✕ Salir Modo Salida 2D' : 'Salida en Plano 2D'}</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => setPickingModalOpen(true)}
-            className="flex items-center gap-1.5 rounded-lg border border-purple-200 dark:border-purple-900 bg-purple-50 dark:bg-purple-950/40 px-3.5 py-1.5 text-xs font-semibold text-purple-900 dark:text-purple-300 hover:bg-purple-100 dark:hover:bg-purple-900/60 shadow-xs transition cursor-pointer"
-            title="Planificar ola de picking optimizada en serpentina (S-Shape) con recolección, descuento automático y PDF"
-          >
-            <Icon name="boxes" size={14} />
-            <span>Ola de Picking (S-Shape)</span>
-          </button>
-
-          <button
-            onClick={() => setExitModalOpen(true)}
-            className="flex items-center gap-1.5 rounded-lg bg-red-600 px-3.5 py-1.5 text-xs font-semibold text-white hover:bg-red-700 shadow-xs transition cursor-pointer"
-            title="Seleccionar productos y generar reporte de salida"
+            title="Salida de producto: elegir entre Ola de Picking (S-Shape) o Selección Visual en Plano 2D"
           >
             <Icon name="arrow-right" size={14} />
-            <span>Salida de Producto</span>
+            <span>{isExitSelectionMode ? '✕ Salir Modo Selección' : 'Salida de Producto'}</span>
           </button>
 
           <button
