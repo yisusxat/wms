@@ -18,7 +18,6 @@ import {
   ScanBarcode,
   ScrollText,
   Search,
-  ShieldCheck,
   Sun,
   Users,
   Volume2,
@@ -43,7 +42,6 @@ interface Props {
   onOpenScanner?: () => void;
   onOpenAudit?: () => void;
   onOpenSupport?: () => void;
-  onOpen2FA?: () => void;
   onOpenLegal?: () => void;
   onToggleTheme?: () => void;
   onToggleSound?: () => void;
@@ -58,7 +56,6 @@ export default function CommandPalette({
   onOpenScanner,
   onOpenAudit,
   onOpenSupport,
-  onOpen2FA,
   onOpenLegal,
   onToggleTheme,
   onToggleSound,
@@ -197,17 +194,6 @@ export default function CommandPalette({
 
       // Settings & Modals
       {
-        id: "set-2fa",
-        title: "Configurar Autenticación 2FA",
-        subtitle: "Seguridad de cuenta con código TOTP",
-        category: "Ajustes",
-        icon: ShieldCheck,
-        action: () => {
-          onOpen2FA?.();
-          onClose();
-        },
-      },
-      {
         id: "set-audit",
         title: "Ver Bitácora de Auditoría",
         subtitle: "Historial inmutable de eventos del sistema",
@@ -270,7 +256,6 @@ export default function CommandPalette({
     isSoundOn,
     onClose,
     onNavigate,
-    onOpen2FA,
     onOpenAudit,
     onOpenLegal,
     onOpenScanner,

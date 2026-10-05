@@ -1,4 +1,5 @@
 import { Body, Controller, Get, Post, Req, UseGuards } from '@nestjs/common';
+import { Throttle } from '@nestjs/throttler';
 import { AuthGuard } from './auth.guard';
 import { CurrentUser } from './current-user.decorator';
 import { AuthenticatedUser } from './auth.types';
@@ -33,6 +34,7 @@ export class AuthController {
     return user;
   }
 
+  @Throttle({ default: { limit: 5, ttl: 60000 } })
   @Post('forgot-password')
   async forgotPassword(@Req() req: Request, @Body() body: ForgotPasswordDto) {
     const ip = req.ip;
@@ -40,6 +42,7 @@ export class AuthController {
     return this.authService.forgotPassword(body.email, ip, userAgent);
   }
 
+  @Throttle({ default: { limit: 5, ttl: 60000 } })
   @Post('reset-password')
   async resetPassword(@Req() req: Request, @Body() body: ResetPasswordDto) {
     const ip = req.ip;

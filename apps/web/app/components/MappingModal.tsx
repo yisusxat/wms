@@ -1,5 +1,5 @@
 "use client";
-import { useState, useEffect, useMemo, useCallback, Component, ErrorInfo, ReactNode } from "react";
+import { useState, useEffect, useMemo, useCallback, useRef, Component, ErrorInfo, ReactNode } from "react";
 import dynamic from "next/dynamic";
 import {
   apiFetch,
@@ -11,6 +11,7 @@ import {
   resolveLocationCode,
   normalizeLocationCode,
   isWarehouseLocationCode,
+  isUuid,
 } from "../../lib/api";
 import { useWmsRealtimeSync, notifyWmsDataChanged } from "../../lib/syncEvents";
 import { Icon } from "./Icon";
@@ -175,6 +176,11 @@ function MappingModalInner({
   const [submitting, setSubmitting] = useState(false);
   const [generatedReport, setGeneratedReport] = useState<any>(null);
 
+  // Track location codes that were confirmed/committed in DB to prevent background re-staging as discrepancies
+  const committedLocationCodesRef = useRef<Set<string>>(new Set());
+  const prevIsOpenRef = useRef(false);
+  const prevInitialLocRef = useRef<string | null | undefined>(undefined);
+
   // State for the item currently being edited
   const [editForm, setEditForm] = useState<{
     physicalQuantity: number;
@@ -284,7 +290,7 @@ function MappingModalInner({
           const stagedMap = new Map<string, AuditItem>();
           if (Array.isArray(currentItems)) {
             for (const it of currentItems) {
-              if (it.status === "DISCREPANCY") {
+              if (it.status === "DISCREPANCY" && !committedLocationCodesRef.current.has(it.locationCode)) {
                 stagedMap.set(it.locationCode, it);
               }
             }
@@ -302,13 +308,33 @@ function MappingModalInner({
             const prod = inv && typeof inv.product === "object" ? inv.product : undefined;
 
             if (staged) {
+              const currentSysQty = hasInv ? inv?.quantity || 0 : 0;
+              const currentSysProdId = hasInv ? prod?.id : undefined;
+              const isNowInSync =
+                staged.physicalQuantity === currentSysQty &&
+                (staged.physicalProductId === currentSysProdId || (!staged.physicalProductId && !currentSysProdId));
+
+              if (isNowInSync || committedLocationCodesRef.current.has(loc.code)) {
+                return {
+                  ...staged,
+                  status: "MATCHED",
+                  systemProductId: currentSysProdId,
+                  systemProductName: hasInv ? prod?.name || "Producto Asignado" : "Posición Disponible (Vacía)",
+                  systemProductSku: hasInv ? prod?.sku || "SKU" : "VACÍO",
+                  systemProductUnit: prod?.unit || "u",
+                  systemQuantity: currentSysQty,
+                  reassignedLocationId: undefined,
+                  reassignedLocationCode: undefined,
+                };
+              }
+
               return {
                 ...staged,
-                systemProductId: hasInv ? prod?.id : undefined,
+                systemProductId: currentSysProdId,
                 systemProductName: hasInv ? prod?.name || "Producto Asignado" : "Posición Disponible (Vacía)",
                 systemProductSku: hasInv ? prod?.sku || "SKU" : "VACÍO",
                 systemProductUnit: prod?.unit || "u",
-                systemQuantity: hasInv ? inv?.quantity || 0 : 0,
+                systemQuantity: currentSysQty,
               };
             }
 
@@ -338,29 +364,48 @@ function MappingModalInner({
 
   // Hook up real-time sync across tabs and warehouse actions
   useWmsRealtimeSync(() => {
-    if (isOpen) {
+    if (isOpen && step !== "REPORT") {
       loadData();
     }
-  }, [isOpen, loadData]);
+  }, [isOpen, step, loadData]);
 
-  // Initialize data on open
+  // Initialize data only on modal open or explicit initialLocationCode change
   useEffect(() => {
-    if (!isOpen) return;
-
-    setStep("AUDIT");
-    setEditingCode(null);
-    setShowAddEmpty(false);
-    setDirectFeedback(null);
-    if (initialLocationCode) {
-      setSearch(initialLocationCode);
-      setSelectedLocationCode(initialLocationCode);
-    } else {
-      setSearch("");
-      setSelectedLocationCode(null);
+    if (!isOpen) {
+      prevIsOpenRef.current = false;
+      return;
     }
 
+    const isJustOpening = !prevIsOpenRef.current;
+    const isLocChanging = initialLocationCode !== prevInitialLocRef.current;
+    prevIsOpenRef.current = true;
+    prevInitialLocRef.current = initialLocationCode;
+
+    if (isJustOpening) {
+      setStep("AUDIT");
+      setEditingCode(null);
+      setShowAddEmpty(false);
+      setDirectFeedback(null);
+      if (initialLocationCode) {
+        setSearch(initialLocationCode);
+        setSelectedLocationCode(initialLocationCode);
+      } else {
+        setSearch("");
+        setSelectedLocationCode(null);
+      }
+      loadData();
+    } else if (isLocChanging && initialLocationCode) {
+      setSearch(initialLocationCode);
+      setSelectedLocationCode(initialLocationCode);
+    }
+  }, [isOpen, initialLocationCode, loadData]);
+
+  // Handle external refreshKey changes (background data updates) without resetting active step
+  useEffect(() => {
+    if (!isOpen) return;
+    if (step === "REPORT") return;
     loadData();
-  }, [isOpen, initialLocationCode, refreshKey, loadData]);
+  }, [refreshKey, isOpen, step, loadData]);
 
   // Index items by locationCode for instant O(1) 2D square lookups
   const auditMap = useMemo(() => {
@@ -453,6 +498,26 @@ function MappingModalInner({
     return getWarehouseSeedLocations();
   }, [locationsList]);
   const safeProducts = Array.isArray(products) ? products : [];
+
+  // Resolve robust Location UUID from safeLocations or static dict
+  const getLocUuid = useCallback(
+    (idOrCode?: string | null): string => {
+      if (!idOrCode) return "";
+      const trimmed = idOrCode.trim();
+      if (isUuid(trimmed)) return trimmed;
+      const found = safeLocations.find(
+        (l) =>
+          l.code === trimmed ||
+          l.id === trimmed ||
+          (l.code && normalizeLocationCode(l.code) === normalizeLocationCode(trimmed))
+      );
+      if (found?.id && isUuid(found.id)) return found.id;
+      const resolved = resolveLocationUuid(trimmed);
+      if (isUuid(resolved)) return resolved;
+      return found?.id || resolved || trimmed;
+    },
+    [safeLocations]
+  );
 
   // Filtered products list for real-time typing/filtering in the modal
   const filteredProducts = useMemo(() => {
@@ -551,6 +616,7 @@ function MappingModalInner({
 
   // Quick Action: Mark as Matched (Physical matches system)
   const handleMarkMatched = (locationCode: string, autoAdvance = true) => {
+    committedLocationCodesRef.current.delete(locationCode);
     setItems((curr) =>
       curr.map((item) =>
         item.locationCode === locationCode
@@ -618,6 +684,12 @@ function MappingModalInner({
       (effectiveDiffProd && targetProdId !== item?.systemProductId) ||
       editForm.reassignLocation;
 
+    if (isDiscrepancy) {
+      committedLocationCodesRef.current.delete(locationCode);
+    } else {
+      committedLocationCodesRef.current.add(locationCode);
+    }
+
     setItems((curr) =>
       curr.map((it) => {
         if (it.locationCode !== locationCode) return it;
@@ -671,9 +743,9 @@ function MappingModalInner({
 
     const now = new Date();
     const folio = `MAP-DIR-${now.getFullYear()}-${now.getTime().toString().slice(-5)}`;
-    const sourceLocId = resolveLocationUuid(item.locationId) || resolveLocationUuid(item.locationCode) || item.locationId;
+    const sourceLocId = getLocUuid(item.locationId) || getLocUuid(item.locationCode) || item.locationId;
     const destLocId = editForm.reassignLocation
-      ? (resolveLocationUuid(editForm.reassignedLocationId) || resolveLocationUuid(selectedLoc?.code) || editForm.reassignedLocationId)
+      ? (getLocUuid(editForm.reassignedLocationId) || getLocUuid(selectedLoc?.code) || editForm.reassignedLocationId)
       : undefined;
 
     try {
@@ -795,6 +867,7 @@ function MappingModalInner({
         })
       );
 
+      committedLocationCodesRef.current.add(locationCode);
       setEditingCode(null);
       setDirectFeedback({
         type: "success",
@@ -821,9 +894,9 @@ function MappingModalInner({
 
     const now = new Date();
     const folio = `MAP-DIR-${now.getFullYear()}-${now.getTime().toString().slice(-5)}`;
-    const sourceLocId = resolveLocationUuid(disc.locationId) || resolveLocationUuid(disc.locationCode) || disc.locationId;
+    const sourceLocId = getLocUuid(disc.locationId) || getLocUuid(disc.locationCode) || disc.locationId;
     const destLocId = disc.reassignedLocationId
-      ? (resolveLocationUuid(disc.reassignedLocationId) || resolveLocationUuid(disc.reassignedLocationCode) || disc.reassignedLocationId)
+      ? (getLocUuid(disc.reassignedLocationId) || getLocUuid(disc.reassignedLocationCode) || disc.reassignedLocationId)
       : undefined;
 
     try {
@@ -939,6 +1012,7 @@ function MappingModalInner({
         })
       );
 
+      committedLocationCodesRef.current.add(disc.locationCode);
       setDirectFeedback({
         type: "success",
         message: `¡Modificación de ${disc.locationCode} aplicada y sincronizada en tiempo real con la base de datos! (${disc.physicalQuantity} ${disc.physicalProductUnit})`
@@ -1036,17 +1110,19 @@ function MappingModalInner({
   // Confirm and execute all modifications
   const handleConfirmModifications = async () => {
     const discrepancies = items.filter((i) => i.status === "DISCREPANCY");
+    if (discrepancies.length === 0) return;
     setSubmitting(true);
 
     try {
       const now = new Date();
       const folio = `MAP-${now.getFullYear()}-${now.getTime().toString().slice(-5)}`;
       const executedLogs = [];
+      const successfulLocationCodes = new Set<string>();
 
       for (const disc of discrepancies) {
-        const sourceLocId = resolveLocationUuid(disc.locationId) || resolveLocationUuid(disc.locationCode) || disc.locationId;
+        const sourceLocId = getLocUuid(disc.locationId) || getLocUuid(disc.locationCode) || disc.locationId;
         const destLocId = disc.reassignedLocationId
-          ? (resolveLocationUuid(disc.reassignedLocationId) || resolveLocationUuid(disc.reassignedLocationCode) || disc.reassignedLocationId)
+          ? (getLocUuid(disc.reassignedLocationId) || getLocUuid(disc.reassignedLocationCode) || disc.reassignedLocationId)
           : undefined;
 
         // Discrepancy scenario 1: REASSIGNMENT (Physical inventory was moved to another location)
@@ -1070,6 +1146,7 @@ function MappingModalInner({
               detail: `Reasignado a ${disc.reassignedLocationCode} (${disc.physicalQuantity > 0 ? disc.physicalQuantity : disc.systemQuantity} u)`,
               reason: disc.reason,
             });
+            successfulLocationCodes.add(disc.locationCode);
           } catch (err: any) {
             console.error("Transfer err:", err);
             executedLogs.push({
@@ -1082,6 +1159,7 @@ function MappingModalInner({
         }
         // Discrepancy scenario 2: SKU REPLACEMENT / SUBSTITUTION (Different product physically found in this position)
         else if (disc.physicalProductId && disc.systemProductId && disc.physicalProductId !== disc.systemProductId) {
+          let subSuccess = true;
           // A) Clear out old system product stock
           if (disc.systemQuantity > 0) {
             try {
@@ -1103,6 +1181,13 @@ function MappingModalInner({
               });
             } catch (err: any) {
               console.error("Removal err:", err);
+              subSuccess = false;
+              executedLogs.push({
+                type: "ERROR_RETIRO",
+                location: disc.locationCode,
+                detail: `Error al retirar SKU anterior: ${err.message}`,
+                reason: disc.reason,
+              });
             }
           }
 
@@ -1127,6 +1212,7 @@ function MappingModalInner({
               });
             } catch (err: any) {
               console.error("Entry err:", err);
+              subSuccess = false;
               executedLogs.push({
                 type: "ERROR_REGULARIZACION",
                 location: disc.locationCode,
@@ -1134,6 +1220,10 @@ function MappingModalInner({
                 reason: disc.reason,
               });
             }
+          }
+
+          if (subSuccess) {
+            successfulLocationCodes.add(disc.locationCode);
           }
         }
         // Discrepancy scenario 3: NEW PRODUCT IN PREVIOUSLY EMPTY LOCATION
@@ -1155,6 +1245,7 @@ function MappingModalInner({
               detail: `Ingreso de producto encontrado: ${disc.physicalProductSku} (${disc.physicalQuantity} u)`,
               reason: disc.reason,
             });
+            successfulLocationCodes.add(disc.locationCode);
           } catch (err: any) {
             console.error("Entry err:", err);
             executedLogs.push({
@@ -1187,6 +1278,7 @@ function MappingModalInner({
               detail: `Stock ajustado: ${disc.systemQuantity} ➔ ${disc.physicalQuantity} (Delta: ${delta > 0 ? `+${delta}` : delta} u)`,
               reason: disc.reason,
             });
+            successfulLocationCodes.add(disc.locationCode);
           } catch (err: any) {
             console.error("Adjust err:", err);
             executedLogs.push({
@@ -1198,17 +1290,55 @@ function MappingModalInner({
           }
         }
 
-        // Also synchronize location operational status in real time (OCCUPIED if physicalQuantity > 0, AVAILABLE if 0)
-        const updatedStatus = disc.physicalQuantity > 0 ? "OCCUPIED" : "AVAILABLE";
-        try {
-          await apiFetch(`/locations/${sourceLocId}`, token, {
-            method: "PATCH",
-            body: JSON.stringify({ status: updatedStatus }),
-          });
-        } catch {
-          // Non-blocking fallback
+        // Also synchronize location operational status in real time if successful
+        if (successfulLocationCodes.has(disc.locationCode)) {
+          const updatedStatus = disc.physicalQuantity > 0 ? "OCCUPIED" : "AVAILABLE";
+          try {
+            await apiFetch(`/locations/${sourceLocId}`, token, {
+              method: "PATCH",
+              body: JSON.stringify({ status: updatedStatus }),
+            });
+          } catch {
+            // Non-blocking fallback
+          }
         }
       }
+
+      // Mark successfully processed items as MATCHED and update local inventory state
+      setItems((curr) =>
+        curr.map((it) => {
+          if (!successfulLocationCodes.has(it.locationCode)) return it;
+          const disc = discrepancies.find((d) => d.locationCode === it.locationCode);
+          if (!disc) return it;
+
+          const targetQty = disc.physicalQuantity;
+          const targetProdId = disc.physicalProductId;
+          const targetProdName = disc.physicalProductName || it.systemProductName;
+          const targetProdSku = disc.physicalProductSku || it.systemProductSku;
+          const targetProdUnit = disc.physicalProductUnit || it.systemProductUnit;
+
+          return {
+            ...it,
+            status: "MATCHED",
+            systemProductId: targetQty > 0 ? targetProdId : undefined,
+            systemProductName: targetQty > 0 ? targetProdName : "Posición Disponible (Vacía)",
+            systemProductSku: targetQty > 0 ? targetProdSku : "VACÍO",
+            systemProductUnit: targetProdUnit,
+            systemQuantity: targetQty,
+            physicalQuantity: targetQty,
+            physicalProductId: targetQty > 0 ? targetProdId : undefined,
+            physicalProductName: targetQty > 0 ? targetProdName : undefined,
+            physicalProductSku: targetQty > 0 ? targetProdSku : undefined,
+            physicalProductUnit: targetProdUnit,
+            reassignedLocationId: undefined,
+            reassignedLocationCode: undefined,
+            reason: disc.reason,
+            notes: disc.notes,
+          };
+        })
+      );
+
+      successfulLocationCodes.forEach((code) => committedLocationCodesRef.current.add(code));
 
       await apiFetch("/audit-logs", token, {
         method: "POST",
@@ -1218,30 +1348,45 @@ function MappingModalInner({
           details: {
             folio,
             totalAudited: stats.audited,
-            totalMatched: stats.matched,
-            totalDiscrepancies: discrepancies.length,
-            ira: stats.ira,
+            totalMatched: stats.matched + successfulLocationCodes.size,
+            totalDiscrepancies: discrepancies.length - successfulLocationCodes.size,
+            ira: Math.round(((stats.matched + successfulLocationCodes.size) / Math.max(1, stats.audited)) * 100),
             changes: executedLogs,
           },
         }),
       }).catch(() => {});
+
+      const errorLogs = executedLogs.filter((l) => l.type.startsWith("ERROR_"));
 
       setGeneratedReport({
         folio,
         timestamp: now.toLocaleString(),
         auditor: "Operador de Bodega / WMS",
         totalAudited: stats.audited,
-        matched: stats.matched,
-        discrepanciesCount: discrepancies.length,
-        ira: stats.ira,
+        matched: stats.matched + successfulLocationCodes.size,
+        discrepanciesCount: discrepancies.length - successfulLocationCodes.size,
+        ira: Math.round(((stats.matched + successfulLocationCodes.size) / Math.max(1, stats.audited)) * 100),
         discrepancies,
         executedLogs,
+        hasErrors: errorLogs.length > 0,
       });
 
       setStep("REPORT");
+
+      if (errorLogs.length > 0) {
+        showToast({
+          message: `Se aplicaron ${successfulLocationCodes.size} modificaciones, pero ${errorLogs.length} tuvieron observaciones. Revisa el reporte.`,
+          type: "warning",
+        });
+      } else {
+        showToast({
+          message: `¡Modificaciones aplicadas y sincronizadas exitosamente en la base de datos! (Folio: ${folio})`,
+          type: "success",
+        });
+      }
+
       notifyWmsDataChanged({ type: "audit", action: "sync" });
       onSuccess();
-      loadData();
     } catch (err) {
       showToast({ message: `Error al procesar el mapeo: ${(err as Error).message}`, type: "error" });
     } finally {
@@ -2637,11 +2782,16 @@ function MappingModalInner({
                           <th className="p-2.5 text-center">Ajuste</th>
                           <th className="p-2.5">Reasignación</th>
                           <th className="p-2.5">Motivo / Causa</th>
+                          <th className="p-2.5 text-center">Estado BD</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-100 font-medium">
                         {(generatedReport?.discrepancies || []).map((d: AuditItem) => {
                           const delta = d.physicalQuantity - d.systemQuantity;
+                          const errLog = (generatedReport?.executedLogs || []).find(
+                            (l: any) => l.location === d.locationCode && l.type.startsWith("ERROR_")
+                          );
+
                           return (
                             <tr key={d.locationCode} className="hover:bg-slate-50">
                               <td className="p-2.5 font-mono font-bold text-slate-900">{d.locationCode}</td>
@@ -2658,6 +2808,17 @@ function MappingModalInner({
                                 {d.reassignedLocationCode ? `➔ ${d.reassignedLocationCode}` : "—"}
                               </td>
                               <td className="p-2.5 text-slate-600">{d.reason}</td>
+                              <td className="p-2.5 text-center">
+                                {errLog ? (
+                                  <span className="inline-flex items-center gap-1 rounded-full bg-red-100 px-2 py-0.5 text-[10px] font-bold text-red-700">
+                                    ⚠️ Error
+                                  </span>
+                                ) : (
+                                  <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-bold text-emerald-700">
+                                    ✓ Sincronizado
+                                  </span>
+                                )}
+                              </td>
                             </tr>
                           );
                         })}
@@ -2738,15 +2899,27 @@ function MappingModalInner({
                 <span>Imprimir / Guardar PDF</span>
               </button>
 
-              <button
-                onClick={() => {
-                  onSuccess();
-                  onClose();
-                }}
-                className="rounded-xl bg-slate-900 px-6 py-2.5 font-bold text-white shadow-md hover:bg-slate-800 transition cursor-pointer"
-              >
-                {inline ? "Finalizar y Cerrar Sección" : "Finalizar y Volver al Plano 2D"}
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => {
+                    setStep("AUDIT");
+                    loadData();
+                  }}
+                  className="rounded-xl border border-slate-200 bg-white px-4 py-2 font-bold text-slate-700 hover:bg-slate-100 transition cursor-pointer"
+                >
+                  ← Volver al Plano de Mapeo
+                </button>
+
+                <button
+                  onClick={() => {
+                    onSuccess();
+                    onClose();
+                  }}
+                  className="rounded-xl bg-slate-900 px-6 py-2.5 font-bold text-white shadow-md hover:bg-slate-800 transition cursor-pointer"
+                >
+                  {inline ? "Finalizar y Cerrar Sección" : "Finalizar y Volver al Plano 2D"}
+                </button>
+              </div>
             </>
           )}
         </div>

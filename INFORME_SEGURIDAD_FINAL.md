@@ -1,9 +1,9 @@
-# 🔐 Informe Final de Auditoría de Seguridad — Proyecto WMS
+# 🔐 Informe Final de Auditoría de Seguridad — Proyecto WMS (v4, definitivo)
 
 **Fecha:** 2026-10-03
-**Alcance:** Monorepo completo — `apps/web` (Next.js 15 + @insforge/sdk), `apps/api` (NestJS + Prisma), backend InsForge (`https://jirv3k8h.us-east.insforge.app`), service worker PWA, configs de despliegue.
-**Metodología:** Auditoría de código estático (white-box) en 3 pasadas sucesivas: (1) autenticación, sesión, secretos y arquitectura de API; (2) servicios NestJS, emails, auditoría y modales; (3) integridad de stock, DTOs, operaciones/etiquetas ZPL, realtime, dependencias y configs de despliegue.
-**Limitaciones:** El shell de la máquina estuvo caído durante las 3 sesiones (error DLL de Git Bash). No se pudieron ejecutar: `npm audit`, `git log` (historial de secretos), ni los comandos del CLI de InsForge (`db policies`, `diagnose advisor`). Las verificaciones dependientes de RLS quedan marcadas como PENDIENTE.
+**Alcance:** Monorepo completo — `apps/web` (Next.js 15 + @insforge/sdk), `apps/api` (NestJS + Prisma), backend InsForge (`https://jirv3k8h.us-east.insforge.app`), PWA/service worker, configs de despliegue.
+**Metodología:** 4 pasadas white-box: (1) auth, sesión, secretos, arquitectura; (2) servicios NestJS, emails, auditoría; (3) integridad de stock, DTOs, ZPL, realtime, dependencias; (4) controladores restantes, anonimización real, escáner, validación de DTOs de movimientos.
+**Limitaciones:** Shell caído en todas las sesiones (error DLL de Git Bash). Pendientes: `npm audit`, historial de git, y verificación RLS de InsForge vía CLI.
 
 ---
 
@@ -11,143 +11,125 @@
 
 | Métrica | Valor |
 |---|---|
-| Hallazgos críticos | **8** |
-| Hallazgos altos | **9** |
-| Hallazgos medios | **7** |
-| Hallazgos bajos | **5+** |
-| Secretos activos expuestos en código | **3** (API key Resend real, anon key InsForge, api_key admin en OneDrive) |
-| Funciones de seguridad cosméticas (no operativas) | **3** (2FA, revocación de sesiones, anonimización RGPD) |
+| Críticos | **8** |
+| Altos | **8** |
+| Medios | **~8** |
+| Bajos | **~8** |
+| Secretos activos en código | **3** (API key Resend real, anon key InsForge, api_key admin en OneDrive) |
+| Funciones de seguridad cosméticas | **2** (2FA falso; revocación de sesiones no-op). RGPD: ver corrección §2 |
 
-**Veredicto:** La API NestJS está sólidamente construida (guards por rol, validación DTO, throttling, funciones Postgres atómicas para stock, filtro de excepciones sin fuga de internals). Sin embargo, la arquitectura real del sistema **la eluye por diseño**: el frontend hace fallback directo a la base de datos InsForge cuando NestJS deniega (403/401), el control de acceso efectivo depende de un RLS no verificado, la contraseña del usuario se guarda en texto plano en el navegador, y hay una API key de Resend activa ofuscada en base64 dentro del código. El riesgo dominante no es un bug puntual: es que **la autorización es decorativa en la práctica**.
+**Veredicto:** El backend NestJS es de calidad (guards por rol en controladores sensibles, DTOs con validación estricta, funciones Postgres atómicas para stock, excepciones sin fuga interna, anonimización RGPD real). El problema es estructural: **el frontend puede eludir todo ese backend** con su fallback directo a InsForge ante 403/401, y el perímetro efectivo queda en manos de un RLS jamás verificado. Sumado a una API key de Resend activa commitada y la contraseña en texto plano en localStorage, el sistema hoy depende de la buena fe de cualquier usuario autenticado.
 
 ---
 
-## 2. Evolución de las tres pasadas
+## 2. Corrección importante de la 4ª pasada (a favor del proyecto)
 
-| Pasada | Aporte | Nuevos hallazgos |
+**A6 "Anonimización RGPD falsa" → CORREGIDO.** La 2ª pasada reportó la anonimización como no-op basándose en el fallback del cliente (`lib/api.ts:940-942`). La 4ª pasada verificó el endpoint real de NestJS: **`POST /api/users/me/anonymize` SÍ anonimiza de verdad** (`users.service.ts:218-233`: renombra el perfil, desactiva la cuenta, sobreescribe el email en `auth.users` con queries parametrizadas y registra auditoría). El hallazgo se re-clasifica como **baja**: el fallback del cliente devuelve un mensaje de éxito falso cuando NestJS no está disponible — un problema de honestidad del UI, no de cumplimiento. Patrón que se repite: casi todo hallazgo "falso" del lado cliente tiene una implementación real en NestJS que el fallback ignora.
+
+**Nuevos hallazgos menores de la 4ª pasada:**
+- `POST /dashboard/refresh` sin `@Roles`: cualquier usuario autenticado fuerza el recálculo de vistas de dashboard (potencialmente costoso; abuso leve).
+- `POST /organizations` sin restricción: cualquier usuario autenticado puede crear organizaciones (revisar si es negocio intencional en un WMS single-tenant "Bodega Central").
+- Positivos verificados: DTOs de movimientos con validación estricta (`@IsInt @Min(1)` en quantity — `receive-stock.dto.ts`); `locations.controller` PATCH con roles ADMIN/SUPERVISOR/OPERATOR; `BarcodeScanner` procesa cámara/OCR localmente sin riesgo (solo seed demo hardcodeado); `CommandPalette` es solo navegación.
+
+---
+
+## 3. Evolución de las cuatro pasadas
+
+| Pasada | Enfoque | Aporte |
 |---|---|---|
-| 1ª | Autenticación, sesión, fallback, secretos web, config NestJS | C1–C6, A1–A7 |
-| 2ª | Servicios NestJS internos, emails, auditoría, modales, `.insforge/` | N1 (clave Resend), N2 (audit_logs anónimo), N3 (password por email), N4 (crear users desde cliente), N5 (SQL interpolado), N6 (CSV injection), N7 (varios) |
-| 3ª | Integridad de stock, DTOs, ZPL, realtime, dependencias, despliegue | F1 (política contraseñas débil), F2 (ZPL injection), F3 (realtime anónimo), F4 (refinamiento race condition), dependencia xlsx vulnerable |
+| 1ª | Auth, sesión, secretos web, config API | C1–C6, A1–A7 |
+| 2ª | Servicios NestJS, emails, auditoría, `.insforge/` | N1 (clave Resend), N2 (audit_logs anónimo), N3, N4, N5, N6 |
+| 3ª | Integridad stock, DTOs users, ZPL, realtime, deps | F1, F2, F3; refinó race condition (solo en fallback) |
+| 4ª | Controladores restantes, anonimización, escáner, DTOs movimientos | **Corrigió A6 (RGPD real)**; 2 menores; verificó locations/DTOs |
 
-**Refinamiento importante de la 3ª pasada:** la condición de carrera en inventario señalada en la 1ª pasada **solo existe en el camino de fallback del cliente**. El camino NestJS es atómico (funciones `wms_receive_stock_v2` / `wms_issue_stock_v2` / `wms_transfer_stock_v2` con manejo de locks `55P03` y stock insuficiente `P0001` — `movements.service.ts:15-100`). Esto agrava el hallazgo C2: el fallback no solo bypasea autorización, también degrada la integridad transaccional.
+Ningún hallazgo crítico fue retractado en 4 pasadas; uno alto (A6) fue corregido a baja tras verificar el código server-side.
 
 ---
 
-## 3. Hallazgos críticos (acción inmediata)
+## 4. Hallazgos críticos — acción inmediata
 
 ### C1. Contraseña en texto plano en localStorage — `apps/web/app/page.tsx:525`
-`localStorage.setItem('wms_remembered_credentials', JSON.stringify({ email, password }))`. Cualquier XSS, extensión del navegador, acceso físico o sincronización de perfil expone la credencial completa. **Remediación:** eliminar la función; "recordar" debe guardar solo el email.
+`wms_remembered_credentials = { email, password }` sin cifrar. XSS, extensiones, acceso físico o sync de perfil la exponen. **Fix:** recordar solo el email.
 
 ### C2. El frontend bypasea la autorización del backend — `apps/web/lib/api.ts:170-173`
-```js
-if (response.status === 403 || response.status === 401 || response.status === 404) {
-  return fallbackInsforge(...); // reintenta directo contra la BD
-}
-```
-Cada 403/401 de NestJS se reintenta como escritura/lectura directa a InsForge con el JWT del usuario. Anula el sistema de roles del NestJS **y** reemplaza las funciones atómicas de stock por read-modify-write sin transacción (condiciones de carrera). **Remediación:** eliminar el fallback para toda respuesta 4xx; los 403/401 deben ser definitivos.
+Todo 403/401/404 de NestJS se reintenta como acceso directo a InsForge con el JWT del usuario. Doble daño: anula el RolesGuard **y** reemplaza las funciones atómicas de stock por read-modify-write con condiciones de carrera (verificado en 3ª pasada: el camino NestJS es atómico, el fallback no). **Fix:** eliminar el fallback para 4xx.
 
 ### C3. Escalada de roles: `user_profiles` escribible desde el cliente — `apps/web/lib/api.ts:866-896`
-El cambio de rol/permisos/estado se envía como `PATCH` directo del navegador a `user_profiles`. Si el RLS lo permite, cualquier usuario se autoproclama ADMIN con un curl. **PENDIENTE VERIFICAR RLS** (ver §7). **Remediación:** RLS restrictivo + eliminar la ruta de escritura desde cliente.
+PATCH directo de rol/permisos/estado desde el navegador. Si el RLS lo permite → autoprivación de ADMIN con un curl. **PENDIENTE VERIFICAR RLS (§7).**
 
-### C4. 2FA falso — `apps/web/app/components/TwoFactorModal.tsx:17-23`
-Secreto TOTP hardcodeado (`JBSWY3DPEHPK3PXP`), QR placeholder, "verificación" que acepta cualquier código de 6 dígitos, códigos de respaldo fijos, cero participación del servidor. Genera falsa sensación de seguridad. **Remediación:** eliminar el modal o implementar TOTP real server-side.
+### C4. 2FA falso — `TwoFactorModal.tsx:17-23`
+Secreto TOTP hardcodeado, sin verificación server-side, acepta cualquier código de 6 dígitos. Falsa sensación de seguridad. **Fix:** quitar el modal o implementar TOTP real.
 
-### C5. `JWT_SECRET` con default conocido — `apps/api/src/auth/auth.service.ts:73`
-`config.get('JWT_SECRET', 'wms-secret')`. Sin la variable de entorno, los tokens de reset de contraseña se firman con un secreto commitado → forgeable → takeover de cualquier cuenta vía `/auth/reset-password`. Comparación de firma no constante en tiempo (menor). **Remediación:** fail-fast al arrancar sin `JWT_SECRET` fuerte; rotar el valor actual.
+### C5. `JWT_SECRET` con default conocido — `auth.service.ts:73`
+Sin la env var, los tokens de reset se firman con `'wms-secret'` → forgeables → takeover de cualquier cuenta vía `/auth/reset-password`. **Fix:** fail-fast + rotar.
 
-### C6. `/reports/*` sin restricción de rol — `apps/api/src/reports/reports.controller.ts`
-Con `RolesGuard` registrado pero sin ningún `@Roles(...)`, cualquier usuario autenticado (incl. VIEWER) puede: descargar inventario/movimientos completos, ejecutar `POST /reports/bulk/apply` (modifica stock masivamente) y `POST /reports/schedule/dispatch` (exfiltra datos por email a cualquier destinatario). **Remediación:** `@Roles('ADMIN','SUPERVISOR')` en todos; validar lista `recipients` contra dominio/miembros.
+### C6. `/reports/*` sin rol — `reports.controller.ts`
+Cualquier VIEWER puede: descargar inventario completo, ejecutar `bulk/apply` (modifica stock masivo) y `schedule/dispatch` (exfiltra datos por email a destinatario arbitrario). **Fix:** `@Roles('ADMIN','SUPERVISOR')` + whitelist de `recipients`.
 
-### N1. API key de Resend activa en el código — `apps/api/src/reports/reports.service.ts:166`
-```js
-const resendKey = Buffer.from("cmVfR1JaMkZlOGRfQ1NlcE0xWURkTHpTS3FXR2lOWTd6QUxD", "base64").toString("utf8");
-```
-Clave real ofuscada en base64 (el archivo está commitado → también está en el historial de git). Permite enviar phishing desde tu dominio y agotar tu cuota. **Remediación:** ROTAR HOY en dashboard de Resend → `RESEND_API_KEY` en env. Nota: el servicio ya la duplica correctamente vía `EmailService`; unificar.
+### N1. API key de Resend activa en código e historial — `reports.service.ts:166`
+Ofuscada en base64. El archivo está commitado → la clave está en el historial de git. Permite phishing desde tu dominio. **Fix: ROTAR HOY.**
 
-### N2. Log de auditoría escribible sin autenticación — `apps/web/app/components/SupportModal.tsx:123-132`
-Inserta en `audit_logs` usando solo la anon key (`Authorization: Bearer <anonKey>`), sin JWT. Si el POST tiene éxito en producción, cualquier persona de internet falsifica el "registro inmutable" de auditoría — y constituye evidencia de que el RLS permite escritura anónima (lo que haría C3 explotable). **Remediación:** RLS que niegue INSERT anónimo; tickets solo con JWT server-side.
+### N2. `audit_logs` escribible sin autenticación — `SupportModal.tsx:123-132`
+INSERT con solo la anon key. Si funciona en producción, cualquiera falsifica la bitácora — y es indicador de RLS permisivo (haría C3 explotable). **Fix:** RLS + solo JWT server-side.
 
 ---
 
-## 4. Hallazgos altos
+## 5. Hallazgos altos
 
-| ID | Hallazgo | Evidencia | Remediación |
-|---|---|---|---|
-| A1 | Rol ADMIN por defecto en cliente si falla la carga de perfil | `lib/api.ts:207` | Default `VIEWER`; denegar en caso de duda |
-| A2 | "Cerrar sesión en todos los dispositivos" es no-op (solo loguea) | `auth.service.ts:137-147` | Blacklist por `jti` / versionado de token |
-| A3 | Timeout de inactividad 100% cliente, bypasseable con un setInterval en consola | `InactivityTimerModal.tsx` | Expiración server-side; token de vida corta |
-| A4 | Anon key de InsForge hardcodeada como fallback (commitada) | `lib/insforge.ts:5`, `lib/api.ts:28`, `SupportModal.tsx:102`, `users.service.ts:58` | Rotar; solo env vars |
-| A5 | `audit_logs` legible por cualquier usuario vía fallback | `lib/api.ts:898-915` | RLS lectura solo ADMIN |
-| A6 | Anonimización RGPD falsa (devuelve mensaje sin hacer nada) | `lib/api.ts:940-942` | Implementar real o quitar la UI/legal |
-| A7 | Token de reset en query string del email (logs, historial, Referer) | `email.service.ts:51` | Path/fragmento + una sola vista |
-| N3 | Contraseña inicial en texto plano por email al crear usuario | `users.service.ts:135`, `email.service.ts:90-95` | Enlace de primer login con token de un solo uso |
-| N4 | Creación de usuarios en InsForge Auth desde el cliente | `lib/api.ts:832-851` | Solo server-side con `@Roles('ADMIN')` |
+| ID | Hallazgo | Evidencia |
+|---|---|---|
+| A1 | Rol ADMIN por defecto en cliente si falla el perfil | `lib/api.ts:207` |
+| A2 | "Cerrar sesión en todos los dispositivos" no revoca nada (solo audita) | `auth.service.ts:137-147` |
+| A3 | Timeout de inactividad 100% cliente (bypass con setInterval en consola) | `InactivityTimerModal.tsx` |
+| A4 | Anon key hardcodeada como fallback en 4 archivos (commitada) | `insforge.ts:5`, `api.ts:28`, `SupportModal.tsx:102`, `users.service.ts:58` |
+| A5 | `audit_logs` legible por cualquiera vía fallback | `api.ts:898-915` |
+| A7 | Token de reset en query string del email | `email.service.ts:51` |
+| N3 | Contraseña inicial en texto plano por email | `users.service.ts:135`, `email.service.ts:90-95` |
+| N4 | Creación de usuarios en InsForge Auth desde el cliente | `api.ts:832-851` |
 
----
+## 6. Medios
 
-## 5. Hallazgos medios
+- **N5.** `$executeRawUnsafe` con interpolación `'${userId}'` — `users.service.ts:93-95`. Parametrizar.
+- **N6.** CSV/Excel injection sin neutralizar `= + - @` — `reports.service.ts:375-390`.
+- **F1.** Política de contraseñas: `MinLength(6)` en CreateUserDto vs 8 en reset; sin complejidad.
+- **F3.** Realtime publicable con anon key (amplificación de re-fetches) — `syncEvents.ts:62-63`.
+- Swagger público sin gate — `main.ts:51-58`. · CORS `*.vercel.app` con credentials — `main.ts:44`. · Sin CSP/HSTS en web; helmet sin CSP en API. · `GET /movements` y `/audit-logs` sin scope de organización. · Sentry `tracesSampleRate 1.0` + DSN en 3 sitios (puede capturar URLs con el token de A7).
 
-- **N5.** SQL con interpolación de string (`$executeRawUnsafe` con `'${userId}'`) — `users.service.ts:93-95`. Explotabilidad baja (origen interno) pero es el único raw no parametrizado del proyecto. Parametrizar.
-- **N6.** CSV/Excel injection: el export no neutraliza prefijos `=`, `+`, `-`, `@` — `reports.service.ts:375-390`. Un nombre de producto malicioso ejecuta fórmulas al abrir el reporte en Excel. Prefijar `'` o espacio.
-- **F1.** Política de contraseñas débil e inconsistente: `CreateUserDto` exige `MinLength(6)` (`users/dto/create-user.dto.ts:13`) mientras el reset exige 8 (`auth.service.ts:116`). Sin complejidad ni chequeo de brechas. Unificar en ≥10 con haveibeenpwned opcional.
-- **F3.** Canal realtime `wms_warehouse_sync` publicable con anon key — `lib/syncEvents.ts:62-63`. Cualquiera puede disparar re-fetches masivos en todos los clientes conectados (amplificación). Publicar solo server-side.
-- **Swagger público** sin gate de entorno — `main.ts:51-58`.
-- **CORS permite cualquier `*.vercel.app` con credentials** — `main.ts:44`. Eliminar el comodín.
-- **Sin cabeceras de seguridad** en el frontend: sin CSP, X-Frame-Options, HSTS (`next.config.mjs`); helmet con `contentSecurityPolicy: false` en API (`main.ts:25-29`).
-- **Endpoints de lectura sin scope de organización** (`GET /movements`, `GET /audit-logs`): en multi-tenant, cualquier usuario lee todo.
-- **Sentry `tracesSampleRate: 1.0` + DSN hardcodeado en 3 sitios**: puede capturar URLs con tokens (A7) — `sentry.client.config.ts:3`, `SupportModal.tsx:159-161`.
-- **Health endpoint filtra mensajes de error de la BD** — `health.controller.ts:24-36`.
-- **Forgot-password sin throttle propio** (bombardeo de email); `webOrigin` del reset tomado de env sin whitelist estricta.
+## 7. Bajos
 
-## 6. Hallazgos bajos / hardening
+- **A6 (corregido):** fallback del cliente finge éxito de anonimización RGPD (el endpoint real sí funciona — `users.service.ts:218-233`).
+- **F2.** ZPL injection en etiquetas (nombre/categoría interpolados) — `operations.service.ts:268-289`.
+- `xlsx@0.18.5` con CVE-2023-30533 y CVE-2024-22363 (npm congelado; API ya usa exceljs).
+- `POST /dashboard/refresh` y `POST /organizations` sin rol (4ª pasada).
+- `/health` filtra errores de BD — `health.controller.ts:24-36`. · forgot-password sin throttle propio. · PII `yisusxat@gmail.com` en código. · `ForgotPasswordModal` default `localhost:3001`. · `.insforge/project.json` (api_key admin) en carpeta OneDrive. · `script.js` raíz sin trackear. · Sin `middleware.ts` (cero auth de borde). · Token reset no valida campo `type`.
 
-- **F2.** ZPL injection en etiquetas: `title`/`subtitle` (nombre/categoría de producto, controlables por usuario) se interpolan sin escape en ZPL para impresoras Zebra — `operations.service.ts:268-289`. Sanitizar `^` o usar `^FH`.
-- **F4.** (Refinamiento) La condición de carrera de stock existe **solo** en el fallback cliente→InsForge; el camino NestJS es atómico. Refuerza C2.
-- **xlsx@0.18.5** (npm, sin actualizar): CVE-2023-30533 (prototype pollution) y CVE-2024-22363 (ReDoS). La API ya usa `exceljs`; alinear el frontend o migrar a SheetJS desde su CDN oficial. *(npm audit no ejecutable — verificar.)*
-- `GET /operations/*` sin `@Roles` (solo lectura; aceptable pero documentarlo).
-- PII en código: `yisusxat@gmail.com` como destinatario por defecto — `ReportsPanel.tsx:109`, `reports.controller.ts:62`.
-- `ForgotPasswordModal` apunta a `localhost:3001` por defecto — `ForgotPasswordModal.tsx:11`.
-- `.insforge/project.json` con `api_key` de administración (acceso SQL completo) dentro de carpeta sincronizada a OneDrive. Considerar mover el workspace fuera de OneDrive.
-- `script.js` en la raíz (utilidad de re-estilado, sin trackear): no commitar.
-- No existe `middleware.ts` en el frontend: cero autenticación de borde; todo depende del cliente.
+## ✅ Verificado y correcto (4 pasadas)
 
-## ✅ Verificado y correcto
-
-`AuthGuard` valida el token contra InsForge server-side (no confía en el payload); `RolesGuard` correcto en `users`/`products`/`movements`; funciones Postgres atómicas para stock con manejo de locks; `ValidationPipe({whitelist:true})` + DTOs; ThrottlerGuard global; `HttpExceptionFilter` sin fuga de stack traces; queries raw parametrizadas (salvo N5); contraseñas con bcrypt vía `pgcrypto`; `offlineSync.ts` sin tokens; `sw.js` no cachea mutaciones; wrangler/`next.config` sin secretos; `.gitignore` cubre `.env*` y `.insforge`; respuesta de forgot-password no enumera emails.
+AuthGuard valida token server-side contra InsForge; RolesGuard correcto en users/products/movements/locations; DTOs estrictos (`@IsUUID`, `@IsInt @Min(1)`); funciones Postgres atómicas para stock (locks 55P03, stock P0001); ValidationPipe whitelist; ThrottlerGuard; HttpExceptionFilter sin fugas; queries raw parametrizadas (salvo N5); bcrypt vía pgcrypto; **anonimización RGPD real**; offlineSync sin tokens; sw.js no cachea mutaciones; configs de deploy limpias; `.gitignore` correcto; forgot-password no enumera emails.
 
 ---
 
-## 7. Verificaciones pendientes (requieren shell funcional)
+## 8. Verificaciones pendientes (shell)
 
 ```bash
-# 1. RLS — confirma o descarta C3 y N2 (lo más importante del informe)
 npx -y @insforge/cli login
-npx -y @insforge/cli db policies        # ¿UPDATE en user_profiles / INSERT en audit_logs para anónimos o usuarios normales?
+npx -y @insforge/cli db policies        # C3 y N2: ¿UPDATE user_profiles / INSERT audit_logs anónimo?
 npx -y @insforge/cli diagnose advisor --category security
-npx -y @insforge/cli metadata --json    # buckets públicos, config de auth
-
-# 2. Dependencias
+npx -y @insforge/cli metadata --json
 npm audit --workspaces
-
-# 3. Historial de secretos (la clave Resend y la anon key ya están commitadas)
-git log --all -p -S "cmVfR1JaMkZlOGRf" --oneline | head -5
-git log --all -p -S "anon_8c78b5a48a1c" --oneline | head -5
+git log --all -p -S "cmVfR1JaMkZlOGRf" --oneline | head -5   # historial clave Resend
+git log --all -p -S "anon_8c78b5a48a1c" --oneline | head -5   # historial anon key
 ```
 
-## 8. Plan de remediación priorizado
+## 9. Plan de remediación
 
-**HOY (día 1):**
-1. Rotar API key de Resend (N1) y moverla a env. 2. Eliminar guardado de contraseña en localStorage (C1). 3. `@Roles` en `/reports/*` + validar `recipients` (C6). 4. Fail-fast sin `JWT_SECRET` (C5). 5. Eliminar el modal 2FA falso (C4).
+**HOY:** 1) Rotar clave Resend (N1). 2) Quitar contraseña de localStorage (C1). 3) `@Roles` en `/reports/*` + validar recipients (C6). 4) Fail-fast sin `JWT_SECRET` (C5). 5) Quitar modal 2FA (C4).
 
-**SEMANA 1-2:**
-6. Eliminar el fallback 403→InsForge (C2) — el cambio de mayor impacto estructural. 7. RLS: solo service-role escribe `audit_logs`; solo ADMIN modifica `user_profiles` (C3, N2, A5). 8. Quitar creación de usuarios desde el cliente (N4). 9. Default `VIEWER` en el cliente (A1).
+**SEMANA 1-2:** 6) Eliminar fallback 403→InsForge (C2 — el cambio estructural clave). 7) RLS: service-role única vía de escritura a `audit_logs`; ADMIN único escritor de `user_profiles` (C3, N2, A5). 8) Users solo server-side (N4). 9) Default VIEWER (A1).
 
-**MES 1:**
-10. Revocación real de sesiones + expiración server-side (A2, A3). 11. Onboarding sin contraseña por email (N3) + política de contraseñas unificada ≥10 (F1). 12. Cabeceras CSP/HSTS en `next.config.mjs`; CSP real en helmet; Swagger solo dev; CORS sin `*.vercel.app`. 13. CSV injection (N6) y ZPL (F2). 14. Token de reset fuera de query string (A7). 15. Rotar anon key y limpiarla del código (A4).
+**MES 1:** 10) Revocación real de sesiones + expiración server-side (A2, A3). 11) Onboarding sin password por email + política unificada ≥10 (N3, F1). 12) CSP/HSTS, Swagger dev-only, CORS sin comodín. 13) CSV/ZPL injection (N6, F2). 14) Reset token fuera de query string (A7). 15) Rotar anon key (A4). 16) Éxito falso del fallback RGPD (A6).
 
-**TRIMESTRE:**
-16. Anonimización RGPD real (A6). 17. Scope multi-organización en endpoints de lectura. 18. Migrar `xlsx` → `exceljs`/SheetJS CDN. 19. Migrar workspace fuera de OneDrive o excluir `.insforge`. 20. TOTP real como 2FA.
+**TRIMESTRE:** 17) TOTP real. 18) Scope multi-org en lecturas. 19) Migrar xlsx. 20) Workspace fuera de OneDrive. 21) Throttle específico en forgot-password/refresh.
 
 ---
-*Informe generado por auditoría de código asistida. Los hallazgos marcados PENDIENTE requieren verificación con el CLI de InsForge y npm audit antes de cerrar el plan de remediación.*
+*Informe v4 definitivo. Hallazgos C3/N2 quedan condicionados a la verificación RLS (§8). Generado por auditoría de código white-box asistida.*

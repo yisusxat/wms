@@ -351,6 +351,47 @@ test.describe('2. Componentes de Vista de Bodega (2D y 3D)', () => {
     await expect(page.getByText('Total Posiciones')).toBeVisible();
     await expect(page.getByRole('button', { name: /Plano 2D Oficial/i })).toBeVisible();
   });
+
+  test('WarehouseMappingView: Pre-Reporte y Confirmación de Modificaciones', async ({ page }) => {
+    await loginAndNavigate(page, 'Mapeo');
+
+    await expect(page.getByRole('heading', { name: 'Mapeo y Conciliación Física de Almacén' })).toBeVisible();
+
+    // Select position A-P-01-01
+    const locBtn = page.locator('button[title*="A-P-01-01"]').first();
+    if (await locBtn.isVisible()) {
+      await locBtn.click();
+    }
+
+    // Open edit form if available
+    const editBtn = page.getByRole('button', { name: /Modificar Posición|Editar/i }).first();
+    if (await editBtn.isVisible()) {
+      await editBtn.click();
+      const saveDraftBtn = page.getByRole('button', { name: /Guardar en Borrador/i });
+      if (await saveDraftBtn.isVisible()) {
+        await saveDraftBtn.click();
+      }
+      // Close the location audit popup modal so we can interact with the background view
+      const closePopupBtn = page.getByTitle('Cerrar ventana');
+      if (await closePopupBtn.isVisible()) {
+        await closePopupBtn.click();
+      }
+    }
+
+    // Check Pre-Report navigation
+    const preReportBtn = page.getByRole('button', { name: /Revisar Pre-Reporte|Cerrar Mapeo y Revisar/i }).first();
+    if (await preReportBtn.isVisible()) {
+      await preReportBtn.click();
+      await expect(page.getByText('Pre-Reporte de Conciliación de Mapeo')).toBeVisible();
+      await expect(page.getByRole('button', { name: 'Confirmar y Aplicar Modificaciones' })).toBeVisible();
+      await expect(page.getByRole('button', { name: '← Volver al Plano' })).toBeVisible();
+
+      // Test confirming and applying modifications
+      await page.getByRole('button', { name: 'Confirmar y Aplicar Modificaciones' }).click();
+      await expect(page.getByText('Reporte Oficial de Auditoría y Mapeo de Almacén')).toBeVisible();
+      await expect(page.getByText('✓ Sincronizado')).toBeVisible();
+    }
+  });
 });
 
 test.describe('3. Catálogo de SKUs e Importación/Exportación', () => {
@@ -523,13 +564,10 @@ test.describe('7. Modales de Soporte, Legal, Auditoría y Seguridad', () => {
     await page.getByRole('button', { name: 'Entendido' }).click();
   });
 
-  test('TwoFactorModal: Flujo de activación 2FA TOTP con códigos de respaldo', async ({ page }) => {
+  test('TwoFactorModal: Stub deshabilitado por seguridad (Hallazgo C4 INFORME_SEGURIDAD_FINAL)', async ({ page }) => {
+    // El modal de 2FA simulado en cliente fue retirado en cumplimiento del hallazgo C4
     await loginAndNavigate(page);
-
-    await page.getByRole('button', { name: /2FA/i }).first().click();
-    await expect(page.getByRole('heading', { name: 'Autenticación en Dos Pasos (2FA)' })).toBeVisible();
-    await expect(page.getByText('Ya escaneé el código → Continuar')).toBeVisible();
-    await page.locator('.fixed').getByRole('button', { name: '✕', exact: true }).click();
+    await expect(page.getByRole('button', { name: /^2FA$/i })).not.toBeVisible();
   });
 
   test('BarcodeScanner: Escáner universal con fallback y conmutación a modo manual', async ({ page }) => {

@@ -46,9 +46,43 @@ export class EmailService {
     }
   }
 
+  async sendReportEmail(
+    to: string[],
+    subject: string,
+    html: string,
+    attachment: { filename: string; base64: string },
+  ): Promise<{ ok: boolean; emailId?: string; error?: string }> {
+    if (!this.resend) {
+      this.logger.warn('RESEND_API_KEY not found. Report email skipped.');
+      return { ok: false, error: 'Servicio de email no configurado (falta RESEND_API_KEY)' };
+    }
+
+    try {
+      const { data, error } = await this.resend.emails.send({
+        from: this.fromEmail,
+        to,
+        subject,
+        html,
+        attachments: [{ filename: attachment.filename, content: attachment.base64 }],
+      });
+
+      if (error) {
+        this.logger.error(`Failed to send report email: ${error.message}`, error);
+        return { ok: false, error: error.message };
+      }
+
+      this.logger.log(`Report email sent to ${to.join(', ')} [ID: ${data?.id}]`);
+      return { ok: true, emailId: data?.id };
+    } catch (err) {
+      this.logger.error('Exception sending report email', err);
+      return { ok: false, error: (err as Error)?.message ?? 'unknown error' };
+    }
+  }
+
   async sendPasswordResetEmail(to: string, resetToken: string, name?: string): Promise<boolean> {
     const webOrigin = this.config?.get<string>('WEB_ORIGIN') ?? process.env.WEB_ORIGIN ?? 'http://localhost:3000';
-    const resetUrl = `${webOrigin}/?resetToken=${resetToken}&email=${encodeURIComponent(to)}`;
+    // Fase 3.5: el token va en el path, no en query string (evita historial, logs y Referer)
+    const resetUrl = `${webOrigin}/reset/${resetToken}`;
 
     const html = `
       <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 600px; margin: 0 auto; padding: 24px; color: #1e293b;">
@@ -76,8 +110,15 @@ export class EmailService {
     return this.sendEmail(to, 'Restablece tu contraseña - WMS', html);
   }
 
-  async sendWelcomeEmail(to: string, orgName: string, tempPassword?: string, name?: string): Promise<boolean> {
+  async sendWelcomeEmail(
+    to: string,
+    orgName: string,
+    name?: string,
+    inviteToken?: string,
+  ): Promise<boolean> {
     const webOrigin = this.config?.get<string>('WEB_ORIGIN') ?? process.env.WEB_ORIGIN ?? 'http://localhost:3000';
+    // Fase 3.3: invitación por enlace de un solo uso — ninguna contraseña viaja por email
+    const inviteUrl = inviteToken ? `${webOrigin}/reset/${inviteToken}` : null;
 
     const html = `
       <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 600px; margin: 0 auto; padding: 24px; color: #1e293b;">
@@ -87,20 +128,20 @@ export class EmailService {
         <h2 style="color: #0f172a; margin-top: 0;">¡Bienvenido al Equipo!</h2>
         <p>Hola <strong>${name || 'Colaborador'}</strong>,</p>
         <p>Has sido dado de alta en el sistema de gestión de almacén para la organización <strong>${orgName}</strong>.</p>
-        ${tempPassword ? `
+        ${inviteUrl ? `
           <div style="background-color: #f1f5f9; border-left: 4px solid #2563eb; padding: 14px; margin: 20px 0; border-radius: 4px;">
-            <p style="margin: 0; font-size: 14px;"><strong>Tus credenciales de acceso:</strong></p>
-            <p style="margin: 4px 0 0 0; font-size: 13px;">Correo: <code>${to}</code></p>
-            <p style="margin: 4px 0 0 0; font-size: 13px;">Contraseña inicial: <code>${tempPassword}</code></p>
+            <p style="margin: 0; font-size: 14px;"><strong>Define tu contraseña de acceso:</strong></p>
+            <p style="margin: 6px 0 0 0; font-size: 13px;">Usuario: <code>${to}</code></p>
+            <p style="margin: 6px 0 0 0; font-size: 13px;">El enlace es válido por 24 horas y sirve una sola vez.</p>
           </div>
+          <p style="margin: 28px 0; text-align: center;">
+            <a href="${inviteUrl}" style="background-color: #2563eb; color: #ffffff; padding: 12px 28px; text-decoration: none; border-radius: 8px; font-weight: 600; display: inline-block;">
+              Definir mi contraseña
+            </a>
+          </p>
         ` : ''}
-        <p style="margin: 28px 0; text-align: center;">
-          <a href="${webOrigin}" style="background-color: #2563eb; color: #ffffff; padding: 12px 28px; text-decoration: none; border-radius: 8px; font-weight: 600; display: inline-block;">
-            Ingresar al Panel WMS
-          </a>
-        </p>
         <p style="font-size: 12px; color: #94a3b8; margin-top: 32px; border-top: 1px solid #e2e8f0; padding-top: 16px;">
-          Por favor cambia tu contraseña una vez que hayas iniciado sesión por primera vez.
+          Si tú no esperabas este correo, puedes ignorarlo de forma segura.
         </p>
       </div>
     `;

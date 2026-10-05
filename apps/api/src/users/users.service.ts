@@ -1,6 +1,8 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { randomBytes } from 'node:crypto';
 import { PrismaService } from '../prisma/prisma.service';
+import { AuthService } from '../auth/auth.service';
 import { EmailService } from '../email/email.service';
 import { AuditService } from '../audit/audit.service';
 import { CreateUserDto } from './dto/create-user.dto';
@@ -12,6 +14,7 @@ export class UsersService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly config: ConfigService,
+    private readonly auth: AuthService,
     private readonly emailService: EmailService,
     private readonly audit: AuditService,
   ) {}
@@ -58,6 +61,14 @@ export class UsersService {
       'anon_8c78b5a48a1c49627477ca316a70504fab071593359304c6f8484186628ad952',
     );
 
+    // Fase 3.3: si el admin no define contraseña, se genera una aleatoria interna.
+    // En ningún caso la contraseña viaja por email: el usuario recibe un enlace
+    // de un solo uso (24h) para definir la suya propia.
+    const initialPassword =
+      dto.password && dto.password.length >= 10
+        ? dto.password
+        : randomBytes(18).toString('base64url');
+
     // 1. Register in InsForge Auth
     const res = await fetch(`${insforgeUrl}/api/auth/users`, {
       method: 'POST',
@@ -68,7 +79,7 @@ export class UsersService {
       },
       body: JSON.stringify({
         email: dto.email,
-        password: dto.password,
+        password: initialPassword,
         name: dto.name,
       }),
     });
@@ -131,8 +142,9 @@ export class UsersService {
         },
       });
 
-      // 6. Send welcome email via Resend
-      await this.emailService.sendWelcomeEmail(dto.email, defaultOrg.name, dto.password, dto.name);
+      // 6. Send welcome email via Resend (invitación con enlace, sin contraseña)
+      const inviteToken = this.auth.createPasswordResetToken(userId, dto.email, 24 * 60);
+      await this.emailService.sendWelcomeEmail(dto.email, defaultOrg.name, dto.name, inviteToken);
     }
 
     // 7. Audit log

@@ -1,6 +1,7 @@
 import { Injectable, BadRequestException } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { PrismaService } from "../prisma/prisma.service";
+import { EmailService } from "../email/email.service";
 import * as ExcelJS from "exceljs";
 
 export type ReportFormat = "xlsx" | "csv" | "json";
@@ -28,6 +29,7 @@ export interface DryRunResult {
 export class ReportsService {
   constructor(
     private readonly prisma: PrismaService,
+    private readonly emailService: EmailService,
     private readonly config?: ConfigService
   ) {}
 
@@ -167,25 +169,10 @@ export class ReportsService {
       reportData = await this.generateBreakRiskReport(format, organizationId);
     }
 
-    const resendKey =
-      this.config?.get<string>("RESEND_API_KEY") || process.env.RESEND_API_KEY;
-
-    if (!resendKey) {
-      throw new BadRequestException(
-        "Servicio de correo no configurado (falta variable de entorno RESEND_API_KEY)."
-      );
-    }
-
-    const fromEmail =
-      this.config?.get<string>("EMAIL_FROM") ||
-      process.env.EMAIL_FROM ||
-      "WMS Enterprise <onboarding@resend.dev>";
-
-    const emailPayload = {
-      from: fromEmail,
-      to: recipients,
-      subject: `[WMS Reporte Automático] ${reportData.filename}`,
-      html: `
+    const result = await this.emailService.sendReportEmail(
+      recipients,
+      `[WMS Reporte Automático] ${reportData.filename}`,
+      `
         <div style="font-family: sans-serif; padding: 20px; color: #1e293b;">
           <h2 style="color: #1e3a8a;">📊 Reporte Automatizado de Bodega</h2>
           <p>Adjunto encontrarás el informe programado generado por el sistema WMS Enterprise.</p>
@@ -198,30 +185,14 @@ export class ReportsService {
           <p style="margin-top: 25px; font-size: 12px; color: #64748b;">Sistema de Gestión de Almacenes · WMS Enterprise</p>
         </div>
       `,
-      attachments: [
-        {
-          filename: reportData.filename,
-          content: reportData.buffer.toString("base64"),
-        },
-      ],
-    };
+      { filename: reportData.filename, base64: reportData.buffer.toString("base64") },
+    );
 
-    const res = await fetch("https://api.resend.com/emails", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${resendKey}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify(emailPayload),
-    });
-
-    if (!res.ok) {
-      const err = await res.text();
-      throw new BadRequestException(`Fallo al enviar correo por Resend: ${err}`);
+    if (!result.ok) {
+      throw new BadRequestException(`Fallo al enviar correo por Resend: ${result.error}`);
     }
 
-    const data = await res.json();
-    return { success: true, emailId: data.id };
+    return { success: true, emailId: result.emailId };
   }
 
   // ─── CARGA MASIVA: DRY-RUN (VALIDACIÓN SIN TOCAR BD) ───

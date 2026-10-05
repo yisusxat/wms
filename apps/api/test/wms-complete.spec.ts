@@ -640,7 +640,7 @@ describe('ReportsService', () => {
 
   beforeEach(() => {
     prisma = makePrisma();
-    service = new ReportsService(prisma as never);
+    service = new ReportsService(prisma as never, {} as never);
   });
 
   // ─── DryRun importación masiva ───
@@ -1109,7 +1109,7 @@ describe('Flujos E2E simulados', () => {
 
   it('Flujo completo: Despacho → Ajuste de merma → Reporte', async () => {
     const movementsService = new MovementsService(prisma as never);
-    const reportsService = new ReportsService(prisma as never);
+    const reportsService = new ReportsService(prisma as never, {} as never);
 
     prisma.$queryRaw
       .mockResolvedValueOnce([{ movementId: 'e2e-issue-1' }])
@@ -1137,7 +1137,7 @@ describe('Flujos E2E simulados', () => {
   });
 
   it('Flujo completo: Importación masiva DryRun → Apply', async () => {
-    const reportsService = new ReportsService(prisma as never);
+    const reportsService = new ReportsService(prisma as never, {} as never);
     const movementsService = new MovementsService(prisma as never);
 
     // DryRun

@@ -15,11 +15,12 @@ import {
   Sparkles,
   Loader2,
 } from 'lucide-react';
-import { CurrentUser } from '../../lib/api';
+import { apiFetch, CurrentUser } from '../../lib/api';
 
 type SupportModalProps = {
   isOpen: boolean;
   onClose: () => void;
+  token?: string | null;
   user: { email?: string } | null;
   profile: CurrentUser | null;
   currentTab?: string;
@@ -30,6 +31,7 @@ type SupportModalProps = {
 export function SupportModal({
   isOpen,
   onClose,
+  token,
   user,
   profile,
   currentTab = 'dashboard',
@@ -95,63 +97,40 @@ export function SupportModal({
 
     console.log('Technical report generated:', report);
 
-    // 1. Primary Engine: Persistent Storage & Automated Notification Trigger via InsForge PostgreSQL
+    // 1. Primary Engine: persistencia autenticada vía API NestJS (Fase 2.3 —
+    // ya no se escribe directo a audit_logs con la anon key)
     let dbSuccess = false;
-    try {
-      const insforgeUrl = process.env.NEXT_PUBLIC_INSFORGE_URL || 'https://jirv3k8h.us-east.insforge.app';
-      const anonKey = process.env.NEXT_PUBLIC_INSFORGE_ANON_KEY || 'anon_8c78b5a48a1c49627477ca316a70504fab071593359304c6f8484186628ad952';
-      const dbRecord = {
-        action: 'SUPPORT_TICKET_CREATED',
-        entity: 'SUPPORT_TICKET',
-        user_agent: userAgent || 'Web Browser',
-        details: {
-          subject,
-          category,
-          description,
-          section: tabName,
-          tab: tabKey,
-          warehouse: warehouseName,
-          user: user?.email ?? 'anonymous',
-          role: profile?.role ?? 'VIEWER',
-          url: currentUrl,
-          screenResolution,
-          sentryEventId,
-          timestamp: new Date().toISOString(),
-        },
-      };
-
-      const dbRes = await fetch(`${insforgeUrl}/api/database/records/audit_logs`, {
-        method: 'POST',
-        headers: {
-          apikey: anonKey,
-          Authorization: 'Bearer ' + anonKey,
-          'Content-Type': 'application/json',
-          Prefer: 'return=representation',
-        },
-        body: JSON.stringify([dbRecord]),
-      });
-
-      if (dbRes.ok) {
+    if (token) {
+      try {
+        await apiFetch('/support/tickets', token, {
+          method: 'POST',
+          body: JSON.stringify({
+            subject,
+            category,
+            description,
+            section: tabName,
+            warehouse: warehouseName,
+          }),
+        });
         dbSuccess = true;
         details.push({
-          channel: 'Base de Datos (InsForge)',
+          channel: 'Base de Datos (API)',
           status: 'ok',
-          detail: 'Ticket persistido en audit_logs',
+          detail: 'Ticket persistido con sesión autenticada',
         });
-      } else {
-        const errTxt = await dbRes.text().catch(() => '');
+      } catch (dbErr: any) {
+        console.warn('Support ticket API error:', dbErr);
         details.push({
-          channel: 'Base de Datos (InsForge)',
+          channel: 'Base de Datos (API)',
           status: 'fail',
-          detail: errTxt.slice(0, 60) || 'Error al persistir',
+          detail: (dbErr?.message || 'Error de conexión').slice(0, 60),
         });
       }
-    } catch (dbErr: any) {
-      console.warn('InsForge direct audit log error:', dbErr);
+    } else {
       details.push({
-        channel: 'Base de Datos (InsForge)',
+        channel: 'Base de Datos (API)',
         status: 'fail',
-        detail: dbErr.message || 'Error de conexión',
+        detail: 'Sin sesión activa: no es posible registrar el ticket',
       });
     }
 

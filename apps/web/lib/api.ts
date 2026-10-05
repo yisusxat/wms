@@ -27,6 +27,21 @@ const rawInsforgeUrl = process.env.NEXT_PUBLIC_INSFORGE_URL ?? 'https://jirv3k8h
 const insforgeUrl = rawInsforgeUrl.replace(/-\w+\.us-east/, '.us-east').replace(/\/$/, '');
 const insforgeAnonKey = process.env.NEXT_PUBLIC_INSFORGE_ANON_KEY ?? 'anon_8c78b5a48a1c49627477ca316a70504fab071593359304c6f8484186628ad952';
 
+// MODO ESTRICTO (PLAN_SEGURIDAD.md, Fase 2.1): con NEXT_PUBLIC_STRICT_API=1,
+// ninguna escritura viaja directa a InsForge — todas exigen la API NestJS
+// (donde vive la autorización real por roles). Lecturas sí pueden caer al
+// fallback mientras el backend no implemente el endpoint.
+const STRICT_API = process.env.NEXT_PUBLIC_STRICT_API === '1';
+
+function assertFallbackWritesAllowed(path: string): void {
+  if (STRICT_API) {
+    throw new Error(
+      `Escritura no permitida sin API configurada (${path}). Configura NEXT_PUBLIC_API_URL; el acceso directo a la base de datos está deshabilitado.`
+    );
+  }
+  console.warn(`[WMS] Escritura vía fallback (modo no-estricto): ${path}`);
+}
+
 export type Page<T> = { items: T[]; total: number; page: number; pageSize: number };
 export type Product = { id: string; sku: string; name: string; unit: string; active: boolean; barcode?: string; category?: string };
 export type LocationRack = {
@@ -154,8 +169,14 @@ export async function apiFetch<T>(path: string, token: string, init?: RequestIni
         }
         return json as T;
       }
-      // If endpoint doesn't exist on NestJS backend (404) or fails with 4xx/5xx
-      if (response.status !== 404 && response.status >= 400 && response.status < 500) {
+      const isWrite = Boolean(requestInit?.method && requestInit.method.toUpperCase() !== 'GET');
+      // 404: solo las lecturas pueden caer al fallback; en escrituras es un error real
+      if (response.status === 404) {
+        if (isWrite) {
+          throw new Error('Operación no disponible en la API (404).');
+        }
+        // lectura no implementada en NestJS → continúa al fallback de solo lectura
+      } else if (response.status >= 400 && response.status < 500) {
         const payload = await response.json().catch(() => null);
         const errMsg = Array.isArray(payload?.message) ? payload.message.join(', ') : (payload?.message ?? `Error (${response.status})`);
         // If the error was pageSize validation from an older backend, fall back to InsForge computation
@@ -166,19 +187,31 @@ export async function apiFetch<T>(path: string, token: string, init?: RequestIni
         if (errMsg.toLowerCase().includes('stock') || errMsg.toLowerCase().includes('insuficiente') || errMsg.toLowerCase().includes('cantidad')) {
           throw new Error(errMsg);
         }
-        // 401 Unauthorized / 403 Forbidden: nunca hacer fallback, lanzar error inmediatamente
-        if ([401, 403].includes(response.status)) {
-          throw new Error(errMsg || (response.status === 401 ? 'Sesión expirada o no autorizada' : 'Acceso denegado: permisos insuficientes'));
+        // 401/403: jamás hay fallback — el cliente debe reflejar la decisión de autorización del backend
+        throw new Error(errMsg || (
+          response.status === 401 ? 'Sesión expirada o no autorizada'
+          : response.status === 403 ? 'Acceso denegado: permisos insuficientes'
+          : `Error (${response.status})`
+        ));
+      } else if (response.status >= 500) {
+        // 5xx: nunca reintentar una escritura contra InsForge (riesgo de duplicar una operación ya aplicada)
+        if (isWrite) {
+          throw new Error(`Error del servidor (${response.status}). La operación no fue aplicada.`);
         }
-        throw new Error(errMsg);
+        // lectura: caer al fallback
       }
     } catch (err: any) {
-      if (requestPath.startsWith('/movements/') || requestPath.startsWith('/locations/')) {
+      const msg = err?.message ?? '';
+      const isNetworkError = msg.includes('Failed to fetch') || msg.includes('NetworkError') || msg.includes('fetch failed');
+      // Los errores HTTP lanzados arriba (401/403/404/5xx) se propagan SIEMPRE:
+      // el catch anterior los redirigía al fallback y anulaba los roles del backend
+      if (!isNetworkError) throw err;
+      // Fallo de red genuino: solo en modo no-estricto se permite fallback de resiliencia;
+      // en modo estricto la cola offline del panel de movimientos se encarga del reintento.
+      if (!STRICT_API && (requestPath.startsWith('/movements/') || requestPath.startsWith('/locations/'))) {
         return fallbackInsforge<T>(requestPath, token, requestInit);
       }
-      if (err?.message && !err.message.includes('Failed to fetch') && !err.message.includes('NetworkError') && !err.message.includes('fetch failed')) {
-        throw err;
-      }
+      throw err;
     }
   }
 
@@ -599,6 +632,7 @@ async function fallbackInsforge<T>(path: string, token: string, init?: RequestIn
 
   if (cleanPath === '/products') {
     if ((init?.method === 'PUT' || init?.method === 'PATCH') && init.body) {
+      assertFallbackWritesAllowed('/products');
       const parsed = JSON.parse(init.body as string);
       const query = parsed.id ? `id=eq.${parsed.id}` : (parsed.sku ? `sku=eq.${parsed.sku}` : '');
       const res = await fetch(`${insforgeUrl}/api/database/records/products?${query}`, {
@@ -614,6 +648,7 @@ async function fallbackInsforge<T>(path: string, token: string, init?: RequestIn
     }
 
     if (init?.method === 'POST' && init.body) {
+      assertFallbackWritesAllowed('/products');
       const parsed = JSON.parse(init.body as string);
       const bodyArray = Array.isArray(parsed) ? parsed : [parsed];
       const res = await fetch(`${insforgeUrl}/api/database/records/products`, {
@@ -701,6 +736,7 @@ async function fallbackInsforge<T>(path: string, token: string, init?: RequestIn
   }
 
   if (cleanPath.startsWith('/movements/') && init?.method === 'POST') {
+    assertFallbackWritesAllowed('/movements');
     const subpath = cleanPath.replace('/movements/', '');
     const parsed = init.body ? JSON.parse(init.body as string) : {};
     const typeMap: Record<string, string> = {
@@ -874,6 +910,7 @@ async function fallbackInsforge<T>(path: string, token: string, init?: RequestIn
   }
 
   if (cleanPath.startsWith('/locations/') && (init?.method === 'PATCH' || init?.method === 'PUT')) {
+    assertFallbackWritesAllowed('/locations');
     const rawLocId = cleanPath.replace('/locations/', '').split('/')[0];
     const locationId = resolveLocationUuid(rawLocId) || rawLocId;
     const parsed = init.body ? JSON.parse(init.body as string) : {};
@@ -897,6 +934,7 @@ async function fallbackInsforge<T>(path: string, token: string, init?: RequestIn
   if (cleanPath === '/users') {
 
     if (init?.method === 'POST' && init.body) {
+      assertFallbackWritesAllowed('/users');
       const parsed = JSON.parse(init.body as string);
       // Register in InsForge Auth
       const authRes = await fetch(`${insforgeUrl}/api/auth/users`, {
@@ -929,6 +967,7 @@ async function fallbackInsforge<T>(path: string, token: string, init?: RequestIn
   }
 
   if (cleanPath.startsWith('/users/')) {
+    assertFallbackWritesAllowed('/users');
     const parts = cleanPath.split('/');
     const userId = parts[2];
     const action = parts[3]; // 'role', 'status', 'permissions'
@@ -979,10 +1018,6 @@ async function fallbackInsforge<T>(path: string, token: string, init?: RequestIn
     return mapped as unknown as T;
   }
 
-  if (cleanPath === '/auth/revoke-all') {
-    return { message: 'Todas las sesiones activas han sido invalidadas.' } as T;
-  }
-
   if (cleanPath === '/organizations/current' || cleanPath === '/organizations') {
     const res = await fetch(`${insforgeUrl}/api/database/records/organizations?limit=1`, { headers });
     const rows = res.ok ? await res.json().catch(() => []) : [];
@@ -994,16 +1029,7 @@ async function fallbackInsforge<T>(path: string, token: string, init?: RequestIn
         userRole: 'VIEWER',
       } as T;
     }
-    return {
-      id: 'a1b2c3d4-e5f6-7a8b-9c0d-1e2f3a4b5c6d',
-      name: 'Bodega Central',
-      slug: 'bodega-central',
-      userRole: 'VIEWER',
-    } as T;
-  }
-
-  if (cleanPath === '/users/me/anonymize') {
-    return { message: 'Cuenta anonimizada conforme a RGPD.' } as T;
+    throw new Error('Organización no disponible: no hay datos en la base de datos y la API principal no está configurada.');
   }
 
   if (cleanPath.startsWith('/operations/labels/location/')) {
