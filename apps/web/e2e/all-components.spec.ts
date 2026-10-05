@@ -564,10 +564,13 @@ test.describe('7. Modales de Soporte, Legal, Auditoría y Seguridad', () => {
     await page.getByRole('button', { name: 'Entendido' }).click();
   });
 
-  test('TwoFactorModal: Stub deshabilitado por seguridad (Hallazgo C4 INFORME_SEGURIDAD_FINAL)', async ({ page }) => {
-    // El modal de 2FA simulado en cliente fue retirado en cumplimiento del hallazgo C4
+  test('TwoFactorModal: Flujo de activación 2FA TOTP con códigos de respaldo', async ({ page }) => {
     await loginAndNavigate(page);
-    await expect(page.getByRole('button', { name: /^2FA$/i })).not.toBeVisible();
+
+    await page.getByRole('button', { name: /2FA/i }).first().click();
+    await expect(page.getByRole('heading', { name: 'Autenticación en Dos Pasos (2FA)' })).toBeVisible();
+    await expect(page.getByText('Ya escaneé el código → Continuar')).toBeVisible();
+    await page.locator('.fixed').getByRole('button', { name: '✕', exact: true }).click();
   });
 
   test('BarcodeScanner: Escáner universal con fallback y conmutación a modo manual', async ({ page }) => {

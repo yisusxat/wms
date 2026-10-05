@@ -124,6 +124,11 @@ const LegalModal = dynamic(
   { ssr: false }
 );
 
+const TwoFactorModal = dynamic(
+  () => import('./components/TwoFactorModal').then((m) => m.TwoFactorModal),
+  { ssr: false }
+);
+
 const BarcodeScanner = dynamic(
   () => import('./components/BarcodeScanner'),
   { ssr: false }
@@ -273,6 +278,7 @@ function HomePageContent() {
   const [forgotOpen, setForgotOpen] = useState(false);
   const [auditOpen, setAuditOpen] = useState(false);
   const [legalOpen, setLegalOpen] = useState(false);
+  const [twoFactorOpen, setTwoFactorOpen] = useState(false);
   const [mappingInitialLocation, setMappingInitialLocation] = useState<string | null>(null);
   const [productInitialSearch, setProductInitialSearch] = useState('');
   const [globalScannerOpen, setGlobalScannerOpen] = useState(false);
@@ -792,6 +798,16 @@ function HomePageContent() {
             <button
               type="button"
               onClick={() => {
+                setTwoFactorOpen(true);
+                setMobileMenuOpen(false);
+              }}
+              className="flex items-center gap-2 text-xs text-blue-200 transition hover:text-white cursor-pointer"
+            >
+              <ShieldCheck className="h-3.5 w-3.5" /> 2FA
+            </button>
+            <button
+              type="button"
+              onClick={() => {
                 setSupportOpen(true);
                 setMobileMenuOpen(false);
               }}
@@ -886,6 +902,7 @@ function HomePageContent() {
                 });
               }}
               onOpenAudit={profile?.role === 'ADMIN' ? () => setAuditOpen(true) : undefined}
+              onOpen2FA={() => setTwoFactorOpen(true)}
               onOpenSupport={() => setSupportOpen(true)}
               onOpenLegal={() => setLegalOpen(true)}
               onRevokeAll={revokeAll}
@@ -1100,6 +1117,7 @@ function HomePageContent() {
       ) : null}
       {auditOpen ? <AuditLogsModal isOpen={auditOpen} onClose={() => setAuditOpen(false)} token={token} /> : null}
       {legalOpen ? <LegalModal isOpen={legalOpen} onClose={() => setLegalOpen(false)} token={token} onAnonymized={signOut} /> : null}
+      {twoFactorOpen ? <TwoFactorModal isOpen={twoFactorOpen} onClose={() => setTwoFactorOpen(false)} userEmail={user?.email} /> : null}
       {isWavePickingOpen && (
         <WavePickingModal
           isOpen={isWavePickingOpen}

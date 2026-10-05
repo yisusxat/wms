@@ -10,6 +10,7 @@ import {
   Moon,
   Scale,
   ScrollText,
+  ShieldCheck,
   Sun,
   Volume2,
   VolumeX,
@@ -48,6 +49,7 @@ export function UserMenu({
   onToggleTheme,
   onToggleSound,
   onOpenAudit,
+  onOpen2FA,
   onOpenSupport,
   onOpenLegal,
   onRevokeAll,
@@ -60,6 +62,7 @@ export function UserMenu({
   onToggleTheme: () => void;
   onToggleSound: () => void;
   onOpenAudit?: () => void;
+  onOpen2FA?: () => void;
   onOpenSupport: () => void;
   onOpenLegal: () => void;
   onRevokeAll: () => void;
@@ -104,6 +107,11 @@ export function UserMenu({
           {role === 'ADMIN' && onOpenAudit ? (
             <button type="button" className={itemClass} onClick={() => { onOpenAudit(); setOpen(false); }}>
               <ScrollText className="h-4 w-4" /> Auditoría
+            </button>
+          ) : null}
+          {onOpen2FA ? (
+            <button type="button" className={itemClass} onClick={() => { onOpen2FA(); setOpen(false); }}>
+              <ShieldCheck className="h-4 w-4" /> Autenticación 2FA
             </button>
           ) : null}
           <button type="button" className={itemClass} onClick={() => { onOpenSupport(); setOpen(false); }}>

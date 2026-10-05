@@ -114,21 +114,21 @@ export function SupportModal({
         });
         dbSuccess = true;
         details.push({
-          channel: 'Base de Datos (API)',
+          channel: 'Base de Datos (InsForge)',
           status: 'ok',
           detail: 'Ticket persistido con sesión autenticada',
         });
       } catch (dbErr: any) {
         console.warn('Support ticket API error:', dbErr);
         details.push({
-          channel: 'Base de Datos (API)',
+          channel: 'Base de Datos (InsForge)',
           status: 'fail',
           detail: (dbErr?.message || 'Error de conexión').slice(0, 60),
         });
       }
     } else {
       details.push({
-        channel: 'Base de Datos (API)',
+        channel: 'Base de Datos (InsForge)',
         status: 'fail',
         detail: 'Sin sesión activa: no es posible registrar el ticket',
       });
