@@ -7,6 +7,7 @@ import {
 } from 'lucide-react';
 import { apiFetch } from '../../lib/api';
 import { useToast } from './Toast';
+import { notifyWmsDataChanged } from '../../lib/syncEvents';
 
 interface OrderLine {
   id: string;
@@ -145,6 +146,7 @@ export function WavePickingModal({ isOpen, onClose, token }: WavePickingModalPro
         message: `Ola ${wave.name} cerrada exitosamente. ${selectedOrderIds.size} órdenes completadas.`,
         type: 'success',
       });
+      notifyWmsDataChanged({ type: 'movement', action: 'exit' });
       onClose();
     } catch (err: any) {
       showToast({ message: err?.message ?? 'Error al cerrar la ola.', type: 'error' });

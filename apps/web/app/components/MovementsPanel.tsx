@@ -1059,6 +1059,11 @@ export function MovementsPanel({
         isOpen={pickingOpen}
         onClose={() => setPickingOpen(false)}
         products={products}
+        onSuccess={() => {
+          void loadMovements();
+          onDataChanged?.();
+          notifyWmsDataChanged({ type: "all" });
+        }}
       />
     </section>
   );

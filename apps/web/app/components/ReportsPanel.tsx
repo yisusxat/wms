@@ -19,6 +19,7 @@ import {
   Check
 } from "lucide-react";
 import { useToast } from "./Toast";
+import { notifyWmsDataChanged } from "../../lib/syncEvents";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "https://wms-api-service.onrender.com";
 
@@ -226,6 +227,7 @@ export default function ReportsPanel({ token, organizationId, onDataChanged }: P
       setDryRunData(null);
       setBulkRawText("");
       onDataChanged?.();
+      notifyWmsDataChanged({ type: "all" });
     } catch (err) {
       showToast({ message: (err as Error).message, type: "error" });
     } finally {

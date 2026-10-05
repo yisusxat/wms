@@ -1185,6 +1185,8 @@ function Locations({ token, onError, refreshKey }: { token: string; onError: (va
     load();
   }, [load, refreshKey]);
 
+  useWmsRealtimeSync(load, [load]);
+
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
@@ -1224,6 +1226,8 @@ function Inventory({ token, onError, refreshKey }: { token: string; onError: (va
   useEffect(() => {
     load();
   }, [load, refreshKey]);
+
+  useWmsRealtimeSync(load, [load]);
 
   return (
     <div className="space-y-4">

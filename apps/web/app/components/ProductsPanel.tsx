@@ -3,6 +3,7 @@
 import { useState, useEffect, useMemo, useRef, FormEvent } from 'react';
 import dynamic from 'next/dynamic';
 import { apiFetch, CurrentUser, Page, Product } from '../../lib/api';
+import { useWmsRealtimeSync, notifyWmsDataChanged } from '../../lib/syncEvents';
 import { ProductImportModal, ProductExportMenu } from './ProductImportExportModal';
 import { TableSkeleton } from './Skeleton';
 import Icon from './Icon';
@@ -111,6 +112,11 @@ export function ProductsPanel({
     void load(search, page);
   }, [page, refreshKey]);
 
+  // Real-time synchronization across modules and windows
+  useWmsRealtimeSync(() => {
+    void load(search, page);
+  }, [search, page]);
+
   const handleClearSearch = () => {
     setSearch('');
     setIsFilterFromScan(false);
@@ -165,6 +171,7 @@ export function ProductsPanel({
       setShowAddForm(false);
       await load();
       onDataChanged?.();
+      notifyWmsDataChanged({ type: 'inventory' });
     } catch (e: any) {
       onError(e.message || 'Error al crear producto');
     } finally {
@@ -193,6 +200,7 @@ export function ProductsPanel({
       setEditingProduct(null);
       await load();
       onDataChanged?.();
+      notifyWmsDataChanged({ type: 'inventory' });
     } catch (e: any) {
       onError(e.message || 'Error al actualizar producto');
     } finally {
@@ -213,6 +221,7 @@ export function ProductsPanel({
       });
       await load();
       onDataChanged?.();
+      notifyWmsDataChanged({ type: 'inventory' });
     } catch (e: any) {
       onError(e.message || 'Error al cambiar estado');
     }
@@ -822,6 +831,7 @@ export function ProductsPanel({
         onSuccess={() => {
           void load();
           onDataChanged?.();
+          notifyWmsDataChanged({ type: 'inventory' });
         }}
       />
 
