@@ -23,6 +23,9 @@ interface Props {
   onClose: () => void;
   token: string;
   onSuccess: () => void;
+  initialSelectedLocationCodes?: Set<string>;
+  onOpenPickingWave?: () => void;
+  onOpenVisualPlanMode?: () => void;
 }
 
 interface DispatchedItemRecord {
@@ -83,7 +86,15 @@ function getProximityLabel(position: number): { label: string; badgeClass: strin
   return { label: "Fondo de Bodega", badgeClass: "bg-rose-100 text-rose-800 border-rose-200" };
 }
 
-export function Exit2DModal({ isOpen, onClose, token, onSuccess }: Props) {
+export function Exit2DModal({
+  isOpen,
+  onClose,
+  token,
+  onSuccess,
+  initialSelectedLocationCodes,
+  onOpenPickingWave,
+  onOpenVisualPlanMode,
+}: Props) {
   const { showToast } = useToast();
   const [items, setItems] = useState<InventoryLocationItem[]>([]);
   const [loading, setLoading] = useState(false);
@@ -128,11 +139,24 @@ export function Exit2DModal({ isOpen, onClose, token, onSuccess }: Props) {
           // Sort inventory items by proximity from closest to farthest
           list.sort(compareProximity);
           setItems(list);
+
+          // Pre-select items if initialSelectedLocationCodes was passed from 2D view
+          if (initialSelectedLocationCodes && initialSelectedLocationCodes.size > 0) {
+            const preselectedIds = new Set<string>();
+            list.forEach((item) => {
+              if (initialSelectedLocationCodes.has(item.location.code)) {
+                preselectedIds.add(item.id);
+              }
+            });
+            if (preselectedIds.size > 0) {
+              setSelectedItemIds(preselectedIds);
+            }
+          }
         })
         .catch(() => {})
         .finally(() => setLoading(false));
     }
-  }, [isOpen, token]);
+  }, [isOpen, token, initialSelectedLocationCodes]);
 
   // Filtered items based on search query
   const filteredItems = useMemo(() => {
@@ -383,6 +407,58 @@ export function Exit2DModal({ isOpen, onClose, token, onSuccess }: Props) {
           {/* STEP 1: SELECT ITEMS */}
           {step === "SELECT" && (
             <div className="p-4 sm:p-6 overflow-y-auto space-y-4 flex-1 text-sm">
+              {/* Quick Mode Switches: 2D Visual Map and S-Shape Wave Picking */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                <button
+                  type="button"
+                  onClick={() => {
+                    onClose();
+                    onOpenVisualPlanMode?.();
+                  }}
+                  className="flex items-center gap-2.5 p-3 rounded-xl border border-orange-200 dark:border-orange-800/60 bg-orange-50/80 dark:bg-orange-950/30 text-orange-950 dark:text-orange-200 hover:bg-orange-100 dark:hover:bg-orange-900/40 transition text-left cursor-pointer shadow-2xs"
+                >
+                  <span className="p-2 rounded-lg bg-orange-600 text-white shrink-0 shadow-xs">
+                    <Icon name="layers" size={16} />
+                  </span>
+                  <div>
+                    <p className="text-xs font-black">1. Selección Visual en Plano 2D</p>
+                    <p className="text-[10px] text-orange-800 dark:text-orange-300">
+                      Haz clic directamente en los casilleros del mapa en tiempo real
+                    </p>
+                  </div>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    onClose();
+                    onOpenPickingWave?.();
+                  }}
+                  className="flex items-center gap-2.5 p-3 rounded-xl border border-purple-200 dark:border-purple-800/60 bg-purple-50/80 dark:bg-purple-950/30 text-purple-950 dark:text-purple-200 hover:bg-purple-100 dark:hover:bg-purple-900/40 transition text-left cursor-pointer shadow-2xs"
+                >
+                  <span className="p-2 rounded-lg bg-purple-600 text-white shrink-0 shadow-xs">
+                    <Icon name="boxes" size={16} />
+                  </span>
+                  <div>
+                    <p className="text-xs font-black">2. Ola de Picking (S-Shape)</p>
+                    <p className="text-[10px] text-purple-800 dark:text-purple-300">
+                      Ruta óptima en serpentina, descuento y PDF
+                    </p>
+                  </div>
+                </button>
+              </div>
+
+              {initialSelectedLocationCodes && initialSelectedLocationCodes.size > 0 && (
+                <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-amber-300 bg-amber-50 dark:border-amber-800 dark:bg-amber-950/30 p-2.5 text-xs text-amber-900 dark:text-amber-200 font-bold">
+                  <span>
+                    📍 Se cargaron {initialSelectedLocationCodes.size} posición(es) seleccionadas previamente desde el Plano 2D.
+                  </span>
+                  <span className="text-[11px] font-mono text-amber-700 dark:text-amber-400">
+                    {Array.from(initialSelectedLocationCodes).join(", ")}
+                  </span>
+                </div>
+              )}
+
               {/* Scan Feedback Notification */}
               {scanFeedback && (
                 <div

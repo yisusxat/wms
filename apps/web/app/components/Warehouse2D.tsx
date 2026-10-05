@@ -16,6 +16,7 @@ import {
 import { useWmsRealtimeSync, notifyWmsDataChanged } from '../../lib/syncEvents';
 import { Entry2DModal } from './Entry2DModal';
 import { Exit2DModal } from './Exit2DModal';
+import { PickingModal } from './PickingModal';
 import { MappingModal } from './MappingModal';
 
 import Icon from './Icon';
@@ -98,9 +99,13 @@ export function Warehouse2D({ token, onError, onNavigate, onDataChanged, refresh
   const [orderAsc, setOrderAsc] = useState(true);
   const [entryModalOpen, setEntryModalOpen] = useState(false);
   const [exitModalOpen, setExitModalOpen] = useState(false);
+  const [pickingModalOpen, setPickingModalOpen] = useState(false);
   const [isEntrySelectionMode, setIsEntrySelectionMode] = useState(false);
   const [entryPositionsCount, setEntryPositionsCount] = useState<number>(1);
   const [entrySelectedCodes, setEntrySelectedCodes] = useState<Set<string>>(new Set());
+  const [isExitSelectionMode, setIsExitSelectionMode] = useState(false);
+  const [exitPositionsCount, setExitPositionsCount] = useState<number>(1);
+  const [exitSelectedCodes, setExitSelectedCodes] = useState<Set<string>>(new Set());
   const [successBanner, setSuccessBanner] = useState<string | null>(null);
   const [heatmapMode, setHeatmapMode] = useState(false);
   const [scannerOpen, setScannerOpen] = useState(false);
@@ -216,6 +221,24 @@ export function Warehouse2D({ token, onError, onNavigate, onDataChanged, refresh
   }, [locations, entrySelectedCodes]);
 
   const availableCount = stats.AVAILABLE ?? 0;
+  const occupiedCount = stats.OCCUPIED ?? 0;
+
+  // Array of Location objects corresponding to exitSelectedCodes
+  const exitSelectedLocations = useMemo(() => {
+    const map = new Map(locations.map((l) => [l.code, l]));
+    const list: Location[] = [];
+    for (const code of exitSelectedCodes) {
+      let loc = map.get(code) || map.get(normalizeLocationCode(code));
+      if (!loc) {
+        const parts = code.split('-');
+        if (parts.length === 4) {
+          loc = getLocation(parts[0], parts[1], parseInt(parts[2], 10), parseInt(parts[3], 10));
+        }
+      }
+      if (loc) list.push(loc);
+    }
+    return list;
+  }, [locations, exitSelectedCodes]);
 
   // Auto-select nearest available positions to the entrance
   const handleAutoSelectNearest = () => {
@@ -230,6 +253,23 @@ export function Warehouse2D({ token, onError, onNavigate, onDataChanged, refresh
     setEntrySelectedCodes(new Set(picked.map((l) => l.code)));
   };
 
+  // Auto-select nearest occupied positions with stock to the entrance for exit
+  const handleAutoSelectNearestExit = () => {
+    const occupied = locations.filter((l) => {
+      const inv =
+        inventoryMap.get(l.code) ||
+        inventoryMap.get(normalizeLocationCode(l.code)) ||
+        inventoryMap.get(l.id);
+      return (inv?.quantity || 0) > 0 || l.status === 'OCCUPIED';
+    });
+    const sorted = [...occupied].sort((a, b) => {
+      if (a.position !== b.position) return a.position - b.position;
+      return a.level - b.level;
+    });
+    const picked = sorted.slice(0, Math.max(1, exitPositionsCount));
+    setExitSelectedCodes(new Set(picked.map((l) => l.code)));
+  };
+
   // Catalog products for BarcodeScanner matcher
   const catalogProducts = useMemo(() => {
     const seen = new Set<string>();
@@ -241,6 +281,23 @@ export function Warehouse2D({ token, onError, onNavigate, onDataChanged, refresh
           sku: inv.product.sku || '',
           name: inv.product.name || '',
           barcode: (inv.product as any).barcode || '',
+        });
+      }
+    });
+    return list;
+  }, [inventoryMap]);
+
+  // Product objects for Wave Picking modal
+  const pickingProducts = useMemo(() => {
+    const seen = new Set<string>();
+    const list: Array<{ id: string; sku: string; name: string }> = [];
+    inventoryMap.forEach((inv) => {
+      if (inv.product && inv.product.id && !seen.has(inv.product.id)) {
+        seen.add(inv.product.id);
+        list.push({
+          id: inv.product.id,
+          sku: inv.product.sku || 'SKU-N/D',
+          name: inv.product.name || 'Sin nombre',
         });
       }
     });
@@ -265,6 +322,19 @@ export function Warehouse2D({ token, onError, onNavigate, onDataChanged, refresh
           return next;
         });
         setSuccessBanner(`Ubicación ${clean} añadida a la selección de entrada.`);
+        setTimeout(() => setSuccessBanner(null), 4000);
+        setScannerOpen(false);
+        return;
+      }
+
+      if (isExitSelectionMode) {
+        // In exit selection mode: add this location to the selection set
+        setExitSelectedCodes((prev) => {
+          const next = new Set(prev);
+          next.add(clean);
+          return next;
+        });
+        setSuccessBanner(`Ubicación ${clean} añadida a la selección de salida.`);
         setTimeout(() => setSuccessBanner(null), 4000);
         setScannerOpen(false);
         return;
@@ -391,6 +461,11 @@ export function Warehouse2D({ token, onError, onNavigate, onDataChanged, refresh
       ? Array.from(entrySelectedCodes).indexOf(loc.code) + 1
       : 0;
 
+    const isSelectedForExit = exitSelectedCodes.has(loc.code);
+    const selectedExitIndex = isSelectedForExit
+      ? Array.from(exitSelectedCodes).indexOf(loc.code) + 1
+      : 0;
+
     const invItem =
       inventoryMap.get(loc.code) ||
       inventoryMap.get(normalizeLocationCode(loc.code)) ||
@@ -408,13 +483,14 @@ export function Warehouse2D({ token, onError, onNavigate, onDataChanged, refresh
     } else if (!hasStock && loc.status === 'OCCUPIED') {
       effectiveStatus = 'AVAILABLE';
     }
+    const isEligibleForExit = effectiveStatus === 'OCCUPIED' || hasStock;
     const cfg = STATUS_CONFIG[effectiveStatus] ?? STATUS_CONFIG.AVAILABLE;
 
     let buttonBg = cfg.bg;
     let buttonBorder = cfg.border;
     let buttonOpacity = statusFilter !== 'all' && !matched ? 0.2 : 1;
 
-    if (heatmapMode && !isEntrySelectionMode) {
+    if (heatmapMode && !isEntrySelectionMode && !isExitSelectionMode) {
       if (loc.status === 'BLOCKED' || loc.status === 'MAINTENANCE') {
         buttonBg = '#64748B';
         buttonBorder = '#475569';
@@ -443,6 +519,18 @@ export function Warehouse2D({ token, onError, onNavigate, onDataChanged, refresh
       } else {
         buttonOpacity = 0.25;
       }
+    } else if (isExitSelectionMode) {
+      if (isEligibleForExit) {
+        if (isSelectedForExit) {
+          buttonBg = '#DC2626'; // Deep Red
+          buttonBorder = '#991B1B';
+        } else {
+          buttonBg = '#F97316'; // Vivid Orange with stock
+          buttonBorder = '#EA580C';
+        }
+      } else {
+        buttonOpacity = 0.25;
+      }
     } else if (isSelected) {
       buttonBorder = '#1E3A8A';
     }
@@ -465,6 +553,23 @@ export function Warehouse2D({ token, onError, onNavigate, onDataChanged, refresh
           }
           return next;
         });
+      } else if (isExitSelectionMode) {
+        if (!isEligibleForExit) return;
+        setExitSelectedCodes((prev) => {
+          const next = new Set(prev);
+          if (next.has(loc.code)) {
+            next.delete(loc.code);
+          } else {
+            if (exitPositionsCount === 1 && next.size === 1) {
+              return new Set([loc.code]);
+            }
+            if (next.size >= exitPositionsCount) {
+              setExitPositionsCount(next.size + 1);
+            }
+            next.add(loc.code);
+          }
+          return next;
+        });
       } else {
         setSelected(loc);
       }
@@ -474,9 +579,18 @@ export function Warehouse2D({ token, onError, onNavigate, onDataChanged, refresh
       <button
         key={`${aisle}-${rack}-${level}-${position}`}
         type="button"
-        disabled={isEntrySelectionMode && loc.status !== 'AVAILABLE'}
+        disabled={
+          (isEntrySelectionMode && loc.status !== 'AVAILABLE') ||
+          (isExitSelectionMode && !isEligibleForExit)
+        }
         title={
-          isEntrySelectionMode
+          isExitSelectionMode
+            ? isSelectedForExit
+              ? `✓ Posición ${loc.code} seleccionada (#S${selectedExitIndex}) para salida (${invQty}u). Clic para deseleccionar.`
+              : isEligibleForExit
+              ? `📦 Posición ${loc.code} con stock (${invQty}u ${invItem?.product?.sku || ''}). Clic para seleccionar para salida.`
+              : `🔒 Posición ${loc.code} (${cfg.label}) - Sin stock disponible para salida.`
+            : isEntrySelectionMode
             ? isSelectedForEntry
               ? `✓ Posición ${loc.code} seleccionada (#${selectedEntryIndex}). Clic para quitar.`
               : loc.status === 'AVAILABLE'
@@ -486,11 +600,17 @@ export function Warehouse2D({ token, onError, onNavigate, onDataChanged, refresh
         }
         style={{
           backgroundColor: buttonBg,
-          borderColor: isSelected || isSelectedForEntry ? '#1E3A8A' : buttonBorder,
+          borderColor: isSelected || isSelectedForEntry || isSelectedForExit ? '#1E3A8A' : buttonBorder,
           opacity: buttonOpacity,
         }}
         className={`relative flex h-8 w-8 items-center justify-center rounded-md text-[11px] font-extrabold text-white shadow-sm transition-all duration-150 focus:outline-none ${
-          isEntrySelectionMode
+          isExitSelectionMode
+            ? isEligibleForExit
+              ? isSelectedForExit
+                ? 'z-30 scale-110 ring-4 ring-rose-500 shadow-xl cursor-pointer'
+                : 'hover:z-20 hover:scale-125 hover:shadow-lg hover:ring-2 hover:ring-white border cursor-pointer'
+              : 'cursor-not-allowed border'
+            : isEntrySelectionMode
             ? loc.status === 'AVAILABLE'
               ? isSelectedForEntry
                 ? 'z-30 scale-110 ring-4 ring-blue-400 shadow-xl cursor-pointer'
@@ -501,7 +621,7 @@ export function Warehouse2D({ token, onError, onNavigate, onDataChanged, refresh
             : 'hover:z-20 hover:scale-125 hover:shadow-lg hover:ring-2 hover:ring-white border cursor-pointer'
         } ${highlighted ? 'z-30 scale-125 ring-4 ring-amber-400 animate-pulse shadow-xl' : ''}`}
         onMouseEnter={(e) => {
-          if (isEntrySelectionMode) return; // avoid tooltip overlap while picking squares
+          if (isEntrySelectionMode || isExitSelectionMode) return; // avoid tooltip overlap while picking squares
           const rect = e.currentTarget.getBoundingClientRect();
           const invItem =
             inventoryMap.get(loc.code) ||
@@ -518,7 +638,11 @@ export function Warehouse2D({ token, onError, onNavigate, onDataChanged, refresh
         onMouseLeave={() => setTooltip(null)}
         onClick={handleClick}
       >
-        {isEntrySelectionMode && isSelectedForEntry ? (
+        {isExitSelectionMode && isSelectedForExit ? (
+          <span className="drop-shadow-md select-none text-[10px] font-black">
+            S{selectedExitIndex}
+          </span>
+        ) : isEntrySelectionMode && isSelectedForEntry ? (
           <span className="drop-shadow-md select-none text-[10px] font-black">
             ✓{selectedEntryIndex}
           </span>
@@ -681,12 +805,13 @@ export function Warehouse2D({ token, onError, onNavigate, onDataChanged, refresh
                 setEntrySelectedCodes(new Set());
               } else {
                 setIsEntrySelectionMode(true);
+                setIsExitSelectionMode(false);
                 if (entrySelectedCodes.size === 0) {
                   setEntryPositionsCount(1);
                 }
               }
             }}
-            className={`flex items-center gap-1.5 rounded-lg px-3.5 py-1.5 text-xs font-semibold shadow-xs transition ${
+            className={`flex items-center gap-1.5 rounded-lg px-3.5 py-1.5 text-xs font-semibold shadow-xs transition cursor-pointer ${
               isEntrySelectionMode
                 ? 'bg-amber-600 text-white ring-2 ring-amber-300'
                 : 'bg-emerald-600 text-white hover:bg-emerald-700'
@@ -698,8 +823,43 @@ export function Warehouse2D({ token, onError, onNavigate, onDataChanged, refresh
           </button>
 
           <button
+            type="button"
+            onClick={() => {
+              if (isExitSelectionMode) {
+                setIsExitSelectionMode(false);
+                setExitSelectedCodes(new Set());
+              } else {
+                setIsExitSelectionMode(true);
+                setIsEntrySelectionMode(false);
+                if (exitSelectedCodes.size === 0) {
+                  setExitPositionsCount(1);
+                }
+              }
+            }}
+            className={`flex items-center gap-1.5 rounded-lg px-3.5 py-1.5 text-xs font-semibold shadow-xs transition cursor-pointer ${
+              isExitSelectionMode
+                ? 'bg-amber-600 text-white ring-2 ring-amber-300'
+                : 'bg-rose-600 text-white hover:bg-rose-700'
+            }`}
+            title="Seleccionar en tiempo real casilleros con inventario en el plano 2D para despacho"
+          >
+            <Icon name="arrow-up-right" size={14} />
+            <span>{isExitSelectionMode ? '✕ Salir Modo Salida 2D' : 'Salida en Plano 2D'}</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setPickingModalOpen(true)}
+            className="flex items-center gap-1.5 rounded-lg border border-purple-200 dark:border-purple-900 bg-purple-50 dark:bg-purple-950/40 px-3.5 py-1.5 text-xs font-semibold text-purple-900 dark:text-purple-300 hover:bg-purple-100 dark:hover:bg-purple-900/60 shadow-xs transition cursor-pointer"
+            title="Planificar ola de picking optimizada en serpentina (S-Shape) con recolección, descuento automático y PDF"
+          >
+            <Icon name="boxes" size={14} />
+            <span>Ola de Picking (S-Shape)</span>
+          </button>
+
+          <button
             onClick={() => setExitModalOpen(true)}
-            className="flex items-center gap-1.5 rounded-lg bg-red-600 px-3.5 py-1.5 text-xs font-semibold text-white hover:bg-red-700 shadow-xs transition"
+            className="flex items-center gap-1.5 rounded-lg bg-red-600 px-3.5 py-1.5 text-xs font-semibold text-white hover:bg-red-700 shadow-xs transition cursor-pointer"
             title="Seleccionar productos y generar reporte de salida"
           >
             <Icon name="arrow-right" size={14} />
@@ -947,6 +1107,198 @@ export function Warehouse2D({ token, onError, onNavigate, onDataChanged, refresh
                 <Icon name="check" size={14} />
                 <span>
                   Aceptar Selección ({entrySelectedCodes.size}) y Confirmar Productos →
+                </span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Interactive Selection Bar directly on the Official 2D Layout for EXIT / DISPATCH */}
+      {isExitSelectionMode && (
+        <div className="sticky top-2 z-40 rounded-3xl border-2 border-rose-600 bg-white/95 dark:bg-slate-900/95 p-4 shadow-2xl backdrop-blur-md transition-all animate-fadeIn">
+          {/* Header row */}
+          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-rose-100 dark:border-rose-950 pb-3">
+            <div className="flex items-center gap-2.5">
+              <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-rose-600 text-white text-base font-bold shadow-xs">
+                <Icon name="arrow-up-right" size={16} />
+              </span>
+              <div>
+                <h3 className="text-xs sm:text-sm font-black text-rose-950 dark:text-rose-100 uppercase tracking-wide">
+                  Modo Salida · Selección Directa en el Plano Oficial 2D
+                </h3>
+                <p className="text-[11px] text-rose-700 dark:text-rose-300 font-medium">
+                  Haz clic directamente sobre los casilleros naranjas con stock para seleccionar las posiciones a despachar.
+                </p>
+              </div>
+            </div>
+
+            {/* Target Quantity Selector and Progress */}
+            <div className="flex flex-wrap items-center gap-3">
+              <div className="flex items-center gap-2 rounded-xl border border-rose-200 dark:border-rose-800 bg-rose-50/80 dark:bg-rose-950/40 px-3 py-1.5 shadow-2xs">
+                <span className="text-xs font-extrabold text-rose-900 dark:text-rose-200">¿Cuántas posiciones requieres?</span>
+                <div className="flex items-center gap-1">
+                  <button
+                    type="button"
+                    onClick={() => setExitPositionsCount((c) => Math.max(1, c - 1))}
+                    className="flex h-6 w-6 items-center justify-center rounded-lg bg-white dark:bg-slate-800 border border-rose-200 dark:border-rose-800 text-xs font-bold text-rose-800 dark:text-rose-200 hover:bg-rose-100 transition shadow-2xs cursor-pointer"
+                  >
+                    -
+                  </button>
+                  <input
+                    type="number"
+                    min={1}
+                    max={occupiedCount || 148}
+                    value={exitPositionsCount}
+                    onChange={(e) => {
+                      const val = Math.max(1, parseInt(e.target.value) || 1);
+                      setExitPositionsCount(val);
+                    }}
+                    className="w-12 rounded-lg border border-rose-200 dark:border-rose-800 bg-white dark:bg-slate-800 py-0.5 text-center text-xs font-black text-rose-950 dark:text-white focus:outline-none focus:ring-1 focus:ring-rose-500"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setExitPositionsCount((c) => c + 1)}
+                    className="flex h-6 w-6 items-center justify-center rounded-lg bg-white dark:bg-slate-800 border border-rose-200 dark:border-rose-800 text-xs font-bold text-rose-800 dark:text-rose-200 hover:bg-rose-100 transition shadow-2xs cursor-pointer"
+                  >
+                    +
+                  </button>
+                </div>
+              </div>
+
+              {/* Progress Badge */}
+              <div
+                className={`flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-xs font-black shadow-2xs ${
+                  exitSelectedCodes.size >= exitPositionsCount
+                    ? 'bg-emerald-100 dark:bg-emerald-950/40 text-emerald-800 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800'
+                    : 'bg-amber-100 dark:bg-amber-950/40 text-amber-800 dark:text-amber-300 border border-amber-300 dark:border-amber-800'
+                }`}
+              >
+                {exitSelectedCodes.size >= exitPositionsCount ? (
+                  <Icon name="check" size={13} className="text-emerald-700" />
+                ) : (
+                  <Icon name="clock" size={13} className="text-amber-700" />
+                )}
+                <span>
+                  {exitSelectedCodes.size} de {exitPositionsCount} seleccionadas
+                </span>
+              </div>
+            </div>
+          </div>
+
+          {/* Chips and Actions */}
+          <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
+            {/* Selected Position Chips */}
+            <div className="flex flex-wrap items-center gap-1.5 flex-1 min-w-[280px]">
+              <span className="text-[11px] font-extrabold text-slate-500">Casilleros elegidos:</span>
+              {exitSelectedCodes.size === 0 ? (
+                <span className="text-xs italic text-slate-400">
+                  Ninguno seleccionado todavía. Haz clic en los casilleros naranjas del plano ↓
+                </span>
+              ) : (
+                Array.from(exitSelectedCodes).map((code, idx) => {
+                  const inv =
+                    inventoryMap.get(code) ||
+                    inventoryMap.get(normalizeLocationCode(code)) ||
+                    inventoryMap.get(code);
+                  return (
+                    <span
+                      key={code}
+                      className="inline-flex items-center gap-1.5 rounded-lg bg-rose-600 px-2.5 py-0.5 font-mono text-xs font-bold text-white shadow-xs animate-fadeIn"
+                    >
+                      <span className="text-[10px] text-rose-200">#S{idx + 1}</span>
+                      <span>{code}</span>
+                      {inv?.quantity ? (
+                        <span className="text-[10px] bg-rose-700 px-1 rounded text-rose-100">
+                          {inv.quantity}u {inv.product?.sku ? `· ${inv.product.sku}` : ''}
+                        </span>
+                      ) : null}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setExitSelectedCodes((prev) => {
+                            const next = new Set(prev);
+                            next.delete(code);
+                            return next;
+                          });
+                        }}
+                        className="ml-0.5 rounded text-rose-200 hover:text-white font-bold cursor-pointer"
+                        title="Quitar casillero"
+                      >
+                        ✕
+                      </button>
+                    </span>
+                  );
+                })
+              )}
+
+              {exitSelectedCodes.size > 0 && (
+                <button
+                  type="button"
+                  onClick={() => setExitSelectedCodes(new Set())}
+                  className="text-[11px] font-bold text-rose-600 hover:underline ml-2 cursor-pointer"
+                >
+                  Limpiar todas
+                </button>
+              )}
+            </div>
+
+            {/* Helper Auto-suggest, Wave Picking, Cancel and Confirmation button */}
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setScannerOpen(true)}
+                className="flex items-center gap-1.5 rounded-xl border border-orange-200 dark:border-orange-800 bg-orange-50 dark:bg-orange-950/30 px-3 py-1.5 text-xs font-bold text-orange-700 dark:text-orange-300 hover:bg-orange-100 transition shadow-2xs cursor-pointer active:scale-95"
+                title="Escanear etiqueta de casillero o posición física con cámara / OCR / manual"
+              >
+                <Icon name="scan-barcode" size={13} />
+                <span>Escanear Casillero</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={handleAutoSelectNearestExit}
+                className="flex items-center gap-1.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-3 py-1.5 text-xs font-bold text-slate-700 dark:text-slate-200 hover:bg-slate-100 transition shadow-2xs cursor-pointer"
+                title="Sugerir automáticamente las posiciones con inventario más cercanas al portón de entrada"
+              >
+                <Icon name="sparkles" size={13} className="text-amber-500" />
+                <span>Sugerir {exitPositionsCount} más cercanas</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setPickingModalOpen(true)}
+                className="flex items-center gap-1.5 rounded-xl border border-purple-200 dark:border-purple-800 bg-purple-50 dark:bg-purple-950/40 px-3 py-1.5 text-xs font-bold text-purple-700 dark:text-purple-300 hover:bg-purple-100 transition shadow-2xs cursor-pointer"
+                title="Cambiar a modo Ola de Picking S-Shape"
+              >
+                <Icon name="boxes" size={13} />
+                <span>⚡ Ola de Picking (S-Shape)</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setIsExitSelectionMode(false);
+                  setExitSelectedCodes(new Set());
+                }}
+                className="rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-1.5 text-xs font-bold text-slate-600 dark:text-slate-300 hover:bg-slate-50 transition cursor-pointer"
+              >
+                Cancelar
+              </button>
+
+              <button
+                type="button"
+                disabled={exitSelectedCodes.size === 0}
+                onClick={() => setExitModalOpen(true)}
+                className={`flex items-center gap-1.5 rounded-xl px-4 py-2 text-xs font-black shadow-md transition ${
+                  exitSelectedCodes.size > 0
+                    ? 'bg-rose-600 text-white hover:bg-rose-700 hover:scale-105 active:scale-95 cursor-pointer'
+                    : 'bg-slate-200 dark:bg-slate-800 text-slate-400 cursor-not-allowed'
+                }`}
+              >
+                <Icon name="arrow-right" size={14} />
+                <span>
+                  Continuar a Despacho ({exitSelectedCodes.size} casilleros) →
                 </span>
               </button>
             </div>
@@ -1594,6 +1946,30 @@ export function Warehouse2D({ token, onError, onNavigate, onDataChanged, refresh
         isOpen={exitModalOpen}
         onClose={() => setExitModalOpen(false)}
         token={token}
+        initialSelectedLocationCodes={exitSelectedCodes}
+        onOpenPickingWave={() => {
+          setExitModalOpen(false);
+          setPickingModalOpen(true);
+        }}
+        onOpenVisualPlanMode={() => {
+          setExitModalOpen(false);
+          setIsExitSelectionMode(true);
+        }}
+        onSuccess={() => {
+          refreshLocations();
+          setExitSelectedCodes(new Set());
+          setIsExitSelectionMode(false);
+          onDataChanged?.();
+          notifyWmsDataChanged({ type: 'movement', action: 'exit' });
+        }}
+      />
+
+      {/* 6. S-Shape Wave Picking Modal */}
+      <PickingModal
+        isOpen={pickingModalOpen}
+        onClose={() => setPickingModalOpen(false)}
+        token={token}
+        products={pickingProducts}
         onSuccess={() => {
           refreshLocations();
           onDataChanged?.();

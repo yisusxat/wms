@@ -57,6 +57,7 @@ import {
   Filter,
   Truck,
   ArrowDownLeft,
+  ArrowUpRight,
   EyeOff,
   Focus,
   Crosshair,
@@ -130,6 +131,7 @@ export type IconName =
   | "map"
   | "map-pin"
   | "arrow-down-left"
+  | "arrow-up-right"
   | "arrow-left-right"
   | "package"
   | "eye-off"
@@ -204,6 +206,7 @@ const iconMap: Record<IconName, React.ComponentType<LucideProps>> = {
   map: MapPin,
   "map-pin": MapPin,
   "arrow-down-left": ArrowDownLeft,
+  "arrow-up-right": ArrowUpRight,
   "arrow-left-right": ArrowLeftRight,
   package: Package,
   "eye-off": EyeOff,
